@@ -3,49 +3,60 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Layout, Loader2 } from "lucide-react";
 
 const API_BASE = "http://localhost:8000";
 
-function apiHeaders(token: string) {
-    return {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json"
-    };
-}
-
-import { TEMPLATE_PRESETS } from "../templatePresets";
+// ── Starter design JSON (empty canvas with one row) ────────────────────────
+const EMPTY_DESIGN = {
+    theme: {
+        background: "#f3f4f6",
+        contentWidth: 600,
+        fontFamily: "Arial, sans-serif",
+        primaryColor: "#4f46e5",
+    },
+    rows: [
+        {
+            id: "row-1",
+            settings: { backgroundColor: "#ffffff", paddingTop: 30, paddingBottom: 30 },
+            columns: [
+                {
+                    id: "col-1",
+                    width: 100,
+                    blocks: [
+                        { id: "blk-1", type: "text", props: { content: "Start editing your email here…", fontSize: 16, align: "center", color: "#6B7280" } },
+                    ],
+                },
+            ],
+        },
+    ],
+};
 
 export default function NewTemplatePage() {
     const { token, isLoading: authLoading } = useAuth();
     const router = useRouter();
-
-    const [selectedMode, setSelectedMode] = useState<"rich_text" | "grapesjs">("rich_text");
     const [creating, setCreating] = useState(false);
 
     const handleCreate = async () => {
         setCreating(true);
-
         try {
             const res = await fetch(`${API_BASE}/templates`, {
                 method: "POST",
-                headers: apiHeaders(token!),
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
                 body: JSON.stringify({
                     name: "Untitled Template",
                     subject: "",
                     category: "marketing",
-                    mjml_json: { editor: selectedMode },
-                    compiled_html: "<div><p><br></p></div>"
-                })
+                    design_json: EMPTY_DESIGN,
+                    compiled_html: "<p>Loading…</p>",
+                    template_type: "block",
+                    schema_version: "2.0.0",
+                }),
             });
 
             if (res.ok) {
                 const data = await res.json();
-                if (selectedMode === "rich_text") {
-                    router.push(`/templates/${data.id}/editor`);
-                } else {
-                    router.push(`/templates/${data.id}/builder`);
-                }
+                router.push(`/templates/${data.id}/block`);
             } else {
                 alert("Failed to create template");
             }
@@ -57,106 +68,54 @@ export default function NewTemplatePage() {
         }
     };
 
-    // Styles
     const colors = {
-        primary: "#3B82F6",
+        primary: "#4f46e5",
         bg: "#0A0A0B",
         text: "#F3F4F6",
         textSecondary: "#9CA3AF",
         border: "#374151",
-        selected: "rgba(59, 130, 246, 0.1)",
-        selectedBorder: "#3B82F6",
-        cardBg: "#111113"
+        cardBg: "#111113",
     };
 
-    if (authLoading) return <div>Loading...</div>;
+    if (authLoading) return <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", color: "#666" }}><Loader2 size={24} /></div>;
 
     return (
-        <div style={{ maxWidth: "800px", margin: "40px auto", fontFamily: "Inter, sans-serif", padding: "0 20px" }}>
+        <div style={{ maxWidth: "600px", margin: "60px auto", fontFamily: "Inter, sans-serif", padding: "0 20px" }}>
             <button
                 onClick={() => router.back()}
-                style={{ display: "flex", alignItems: "center", gap: "4px", background: "none", border: "none", cursor: "pointer", color: colors.textSecondary, marginBottom: "24px" }}
+                style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", color: colors.textSecondary, marginBottom: 24 }}
             >
                 <ChevronLeft size={16} /> Back
             </button>
 
-            <div style={{ textAlign: "center", marginBottom: "40px" }}>
-                <h1 style={{ fontSize: "28px", fontWeight: 600, marginBottom: "8px", color: colors.text }}>Create New Template</h1>
-                <p style={{ color: colors.textSecondary, fontSize: "15px" }}>Choose how you want to build your email.</p>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "32px", maxWidth: "600px", margin: "0 auto 32px auto" }}>
-                {/* Option 1: Basic Rich Text */}
-                <div
-                    onClick={() => setSelectedMode("rich_text")}
-                    style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "20px",
-                        border: `2px solid ${selectedMode === "rich_text" ? colors.selectedBorder : colors.border}`,
-                        borderRadius: "12px",
-                        cursor: "pointer",
-                        padding: "24px",
-                        backgroundColor: selectedMode === "rich_text" ? colors.selected : colors.cardBg,
-                        transition: "all 0.2s"
-                    }}
-                >
-                    <div style={{ padding: "16px", backgroundColor: selectedMode === "rich_text" ? "rgba(59, 130, 246, 0.2)" : "#1F2937", borderRadius: "12px", color: selectedMode === "rich_text" ? colors.primary : colors.textSecondary }}>
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4h16v3" /><path d="M9 20h6" /><path d="M12 4v16" /></svg>
-                    </div>
-                    <div>
-                        <h3 style={{ fontSize: "17px", fontWeight: 600, margin: "0 0 6px 0", color: colors.text }}>
-                            Basic Email (Rich Text)
-                        </h3>
-                        <p style={{ fontSize: "14px", color: colors.textSecondary, margin: 0, lineHeight: "1.5" }}>
-                            A simple, continuous text editor. Great for plain-text style campaigns, announcements, or personal messages.
-                        </p>
-                    </div>
+            <div style={{ textAlign: "center", marginBottom: 40 }}>
+                <div style={{ width: 64, height: 64, borderRadius: 16, background: "rgba(79,70,229,0.15)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+                    <Layout size={28} color={colors.primary} />
                 </div>
-
-                {/* Option 2: Visual Drag and Drop */}
-                <div
-                    onClick={() => setSelectedMode("grapesjs")}
-                    style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "20px",
-                        border: `2px solid ${selectedMode === "grapesjs" ? colors.selectedBorder : colors.border}`,
-                        borderRadius: "12px",
-                        cursor: "pointer",
-                        padding: "24px",
-                        backgroundColor: selectedMode === "grapesjs" ? colors.selected : colors.cardBg,
-                        transition: "all 0.2s"
-                    }}
-                >
-                    <div style={{ padding: "16px", backgroundColor: selectedMode === "grapesjs" ? "rgba(59, 130, 246, 0.2)" : "#1F2937", borderRadius: "12px", color: selectedMode === "grapesjs" ? colors.primary : colors.textSecondary }}>
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><rect x="7" y="7" width="3" height="9" /><rect x="14" y="7" width="3" height="5" /></svg>
-                    </div>
-                    <div>
-                        <h3 style={{ fontSize: "17px", fontWeight: 600, margin: "0 0 6px 0", color: colors.text }}>
-                            Drag & Drop Template
-                        </h3>
-                        <p style={{ fontSize: "14px", color: colors.textSecondary, margin: 0, lineHeight: "1.5" }}>
-                            Build complex, beautiful layouts visually with blocks, columns, and custom styling.
-                        </p>
-                    </div>
-                </div>
+                <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 10, color: colors.text }}>Create New Template</h1>
+                <p style={{ color: colors.textSecondary, fontSize: 15, lineHeight: 1.6, maxWidth: 420, margin: "0 auto" }}>
+                    Build beautiful, responsive emails with our structured drag &amp; drop editor. Add rows, columns, and content blocks visually.
+                </p>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "center" }}>
-                <button
-                    onClick={handleCreate}
-                    disabled={creating}
-                    style={{
-                        padding: "14px 32px", backgroundColor: colors.primary, color: "white",
-                        border: "none", borderRadius: "8px", fontSize: "15px", fontWeight: 500,
-                        cursor: creating ? "default" : "pointer", opacity: creating ? 0.7 : 1,
-                        width: "100%", maxWidth: "600px"
-                    }}
-                >
-                    {creating ? "Creating..." : "Continue to Editor"}
-                </button>
-            </div>
+            <button
+                onClick={handleCreate}
+                disabled={creating}
+                style={{
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                    width: "100%", padding: "16px 32px",
+                    background: `linear-gradient(135deg, ${colors.primary}, #7c3aed)`,
+                    color: "#fff", border: "none", borderRadius: 10,
+                    fontSize: 16, fontWeight: 600, cursor: creating ? "default" : "pointer",
+                    opacity: creating ? 0.7 : 1, transition: "opacity 0.2s",
+                }}
+            >
+                {creating ? <><Loader2 size={18} /> Creating…</> : "Create & Open Editor"}
+            </button>
+
+            <p style={{ textAlign: "center", marginTop: 16, fontSize: 12, color: "#4B5563" }}>
+                Row → Column → Block structured editor with live preview
+            </p>
         </div>
     );
 }

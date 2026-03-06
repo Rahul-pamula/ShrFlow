@@ -258,39 +258,34 @@ Each phase has TWO parts:
 ─────────────────────────────────────────
 🏗 PHASE 5 — Delivery Engine ✅ DONE
   [BACKEND]
-  ✔ Worker loop (DB polling)
-  ✔ SMTP send
-  ✔ Retry + dead-letter queue
-  ☐ Unsubscribe link injected automatically into every email
-  ☐ Physical business address in email footer (CAN-SPAM)
-  ☐ Hard bounce → auto-mark contact as "bounced"
-  ☐ Spam complaint → auto-mark contact as "unsubscribed"
-  ☐ Daily send limit enforcement
+  ✔ Worker loop (RabbitMQ consumer)
+  ✔ SMTP send via Mailtrap/SES
+  ✔ Retry + dead-letter queue (nack on failure)
+  ✔ Unsubscribe link injected automatically into every email (HMAC-signed token)
+  ✔ Physical business address in email footer (CAN-SPAM compliant)
+  ✔ Hard bounce → auto-mark contact as "bounced" (POST /webhooks/bounce + /webhooks/ses)
+  ✔ Spam complaint → auto-mark contact as "unsubscribed" (POST /webhooks/spam + /webhooks/ses)
+  ✔ Daily send limit enforcement (per-tenant, resets at midnight, 429 on breach)
+  ✔ Suppressed contacts (bounced/unsubscribed) excluded from all future campaigns automatically
+
+  [FRONTEND]
+  ✔ Unsubscribe landing page (/unsubscribe?status=success)
+      → Clean glassmorphism page: "You have been unsubscribed."
+  ✔ Re-subscribe option on unsubscribe page (email input → POST /resubscribe)
+
+  [MOVED TO PHASE 7 — Advanced Delivery]
   ☐ Email Sending Reputation Isolation:
       → Track per-tenant reputation score (bounce rate, spam rate)
       → Auto-suspend tenant if bounce_rate > 5% or spam_rate > 0.3%
       → Move risky tenants to lower priority delivery queue
-      → CRITICAL to prevent one bad tenant from destroying shared IP reputation
   ☐ List Hygiene Automation:
       → Auto-suppress emails that bounced 3x in 30 days
       → Re-engagement campaign trigger for 6-month inactive contacts
-      → Sunset policy: Mark as 'inactive' after 12 months, and suppress from future campaigns unless manually re-activated.
-          - Confirmation modal: "This contact is inactive. Send a re-engagement email? (Yes / No / Permanently Suppress)"
+      → Sunset policy: Mark as 'inactive' after 12 months
   ☐ Warm-up throttle for new tenants:
       → First 3 days: limit to 50 emails/hour
-      → Day 4–7: 200 emails/hour
-      → Day 8+: full speed
-      → Protects shared IP reputation from dirty/cold lists
-
-  [FRONTEND]
-  ☐ Unsubscribe landing page (/unsubscribe?token=xxx)
-      → Clean, friendly page: "You have been unsubscribed."
-  ☐ Re-subscribe option on unsubscribe page
-  ☐ Campaign throttle status display:
-      → If campaign is under warm-up limit, show status: "⏳ Throttled"
-      → NOT "Stuck" or "Failed" — users must know it's intentionally slow
-      → Show: "Sending at 50/hr — 94 hours remaining" so user is informed
-      → IMPORTANT: 5,000 emails ÷ 50/hr = 100 hours — user must know this upfront
+      → Day 4–7: 200 emails/hour → Day 8+: full speed
+  ☐ Campaign throttle status display in UI ("Sending at 50/hr — 94 hours remaining")
 
 ─────────────────────────────────────────
 🏗 PHASE 6 — Observability & Analytics

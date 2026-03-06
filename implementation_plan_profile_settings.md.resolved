@@ -1,0 +1,333 @@
+# Account Settings — Enterprise Architecture Plan
+
+> **Scope:** Maps the enterprise Account Settings specification against our existing platform.
+> **Current phase:** Phase 5 complete. Phase 6 (Analytics) is next.
+> **Account Settings fits as:** Phase 7.5 (settings required before Phase 8 admin work) 
+> Split into 3 sub-phases: **8A (Core Settings)**, **8B (Security & Compliance)**, **8C (Sender Identity)**
+
+---
+
+## What We Already Have (Don't Rebuild)
+
+| Spec Section | Status | Where |
+|---|---|---|
+| User signup / login | ✅ Done | [auth.py](file:///Users/pamula/Desktop/email_engine/platform/api/routes/auth.py), Phase 1 |
+| JWT-based multi-tenancy | ✅ Done | [jwt_middleware.py](file:///Users/pamula/Desktop/email_engine/platform/api/utils/jwt_middleware.py), Phase 1 |
+| Tenant isolation (RLS) | ✅ Done | [schema.sql](file:///Users/pamula/Desktop/email_engine/scripts/schema.sql), Phase 1 |
+| Unsubscribe link in every email | ✅ Done | [email_sender.py](file:///Users/pamula/Desktop/email_engine/platform/worker/email_sender.py), Phase 5 |
+| Physical address in footer | ✅ Done | [email_sender.py](file:///Users/pamula/Desktop/email_engine/platform/worker/email_sender.py) (hardcoded, Phase 5) |
+| Daily send limit | ✅ Done | [campaigns.py](file:///Users/pamula/Desktop/email_engine/platform/api/routes/campaigns.py), Phase 5 |
+| Bounce → contact suppression | ✅ Done | [webhooks.py](file:///Users/pamula/Desktop/email_engine/platform/api/routes/webhooks.py), Phase 5 |
+| Re-subscribe mechanism | ✅ Done | [unsubscribe.py](file:///Users/pamula/Desktop/email_engine/platform/api/routes/unsubscribe.py), Phase 5 |
+| Tenant status enforcement | ✅ Done | `require_active_tenant` middleware |
+
+---
+
+## Priority Classification
+
+| Priority | Meaning |
+|---|---|
+| 🔴 **P0 — Build Now** | Required for handover. Legally or operationally blocking. |
+| 🟡 **P1 — Build Phase 8** | Enterprise must-have. Needed before selling to businesses. |
+| 🟢 **P2 — Build Phase 11+** | Nice-to-have. Build after core is stable. |
+| ⬛ **P3 — Future** | Complex, low ROI at current scale. Document only. |
+
+---
+
+## Section 1 — Personal Profile
+
+> A user's personal identity layer. Decoupled from the Tenant (org).
+
+| Feature | Priority | What To Build | Already Have? |
+|---|---|---|---|
+| First name / Last name edit | 🔴 P0 | PATCH `/auth/me` + profile page UI | No — only at signup |
+| Primary email change (with re-verification loop) | 🟡 P1 | Email change endpoint + verification email | No |
+| Profile avatar upload | 🟢 P2 | Upload to Supabase Storage + CDN link | No |
+| Local timezone preference | 🔴 P0 | `users.timezone` field + dropdown in profile | No |
+| Date/time format preference | 🟢 P2 | Display-only locale setting | No |
+| MFA / TOTP (Google Authenticator) | 🟡 P1 | TOTP setup flow + verify on login | No |
+| Active session management (revoke devices) | 🟡 P1 | Sessions table + revoke endpoint | No |
+| Communication preferences | 🟢 P2 | Checkbox array mapping to notification DB | No |
+
+**What to build for P0:**
+- `PATCH /auth/me` → update name, timezone
+- Profile settings page in Next.js (`/settings/profile`)
+- Store `timezone` column on `users` table
+
+---
+
+## Section 2 — Organization & Workspace
+
+> The tenant's company identity. Linked to CAN-SPAM compliance (physical address).
+
+| Feature | Priority | What To Build | Already Have? |
+|---|---|---|---|
+| Legal organization name | 🔴 P0 | `tenants.company_name` field + settings UI | Partial — name exists |
+| **Physical postal address** (CAN-SPAM) | 🔴 P0 | Address fields on `tenants` table, inject into footer | Hardcoded "123 Main St" — needs to be dynamic |
+| Industry / Vertical | 🟢 P2 | `tenants.industry` dropdown | No |
+| Global timezone + currency | 🔴 P0 | `tenants.timezone`, `tenants.currency` | No |
+| Default UTM parameters | 🟡 P1 | `tenants.utm_source/medium/campaign` + URL rewrite at send time | No |
+| Parent/Child hierarchy (sub-accounts) | ⬛ P3 | Complex. Needs `tenants.parent_tenant_id` relational tree | No |
+| Identity tracking toggle | 🟡 P1 | Boolean on tenant → inject tracking pixels at send | No |
+| Data sharing opt-out | 🟢 P2 | Boolean on tenant | No |
+
+**Critical P0:** Dynamic physical address injection. Currently hardcoded in [email_sender.py](file:///Users/pamula/Desktop/email_engine/platform/worker/email_sender.py). Must be pulled from `tenants.business_address` before go-live.
+
+---
+
+## Section 3 — Identity & Access Management (IAM)
+
+### 3A — Role-Based Access Control (RBAC)
+
+Current state: we have `tenant_users.role` but only `owner` is enforced. Other roles are not checked on API endpoints.
+
+| Role | Priority | What To Build |
+|---|---|---|
+| **Owner** | ✅ Exists | Already used in `tenant_users.role` |
+| **Admin** | 🔴 P0 | Add role check middleware. Admin can manage users, not billing/delete |
+| **Campaign Manager** | 🟡 P1 | Can send campaigns, view analytics, manage audience |
+| **Content Editor** | 🟡 P1 | Can create templates, cannot send |
+| **Viewer / Analyst** | 🟡 P1 | Read-only on all pages |
+
+**What to build for P0:**
+- `require_role(roles: List[str])` middleware (wraps `require_active_tenant`)
+- Invite users to workspace UI (`POST /auth/invite-user`)
+- Team members page in settings (`/settings/team`)
+- Role selector dropdown on invite
+
+### 3B — SSO / SAML
+
+| Feature | Priority | Notes |
+|---|---|---|
+| SAML 2.0 / Google / Microsoft Entra | ⬛ P3 | Very complex. Not needed for MVP. Enterprise-only feature |
+| JIT Provisioning | ⬛ P3 | Depends on SAML |
+
+### 3C — Audit Logs
+
+| Feature | Priority | What To Build |
+|---|---|---|
+| Log critical actions (send campaign, delete, invite) | 🟡 P1 | `audit_logs` table: actor, action, target, timestamp, IP |
+| View audit log in settings UI | 🟡 P1 | `/settings/audit-log` — filterable table |
+| Export audit log CSV | 🟢 P2 | Async CSV export |
+
+### 3D — Network Security
+
+| Feature | Priority | Notes |
+|---|---|---|
+| IP Allowlist for API | ⬛ P3 | Nginx layer config — enterprise only |
+| IP Allowlist for Login | ⬛ P3 | Middleware check on auth endpoints |
+| Session timeout config | 🟡 P1 | JWT expiry as env var. UI input for custom value |
+
+---
+
+## Section 4 — Sender Identity (SPF / DKIM / DMARC / BIMI)
+
+**This is already listed in our Phase 7.5 as "Domain Verification page".**
+
+| Feature | Priority | What To Build |
+|---|---|---|
+| Custom sending domain input | 🔴 P0 | `tenants.sending_domain` field |
+| DNS record generation (SPF, DKIM) | 🔴 P0 | Display TXT records tenant must add to their DNS |
+| DNS verification check | 🔴 P0 | Background poll DNS, verify records exist → mark domain as verified |
+| DKIM key generation per-tenant | 🟡 P1 | Generate RSA keypair per tenant, store private key securely |
+| DMARC setup guide | 🔴 P0 | Show recommended DMARC record, explain policy levels |
+| Custom Return-Path | 🟡 P1 | CNAME for bounce handling (`bounces.theirdomain.com`) |
+| BIMI (logo in Gmail inbox) | 🟢 P2 | Complex prerequisite chain: DMARC p=reject → VMC → SVG Tiny PS |
+
+**Architecture for Domain Verification:**
+```
+UI: /settings/domain
+  User enters: mycompany.com
+  Backend generates:
+    SPF TXT record: "v=spf1 include:ourplatform.com ~all"
+    DKIM TXT record: "v=DKIM1; k=rsa; p=<public_key_for_this_tenant>"
+    DMARC TXT record: "v=DMARC1; p=none; rua=mailto:dmarc@platform.com"
+  User adds these to their DNS registrar
+  Backend polls DNS every hour → when all 3 resolved → domain status = "verified"
+  Worker uses tenant's domain (From: name@mycompany.com) instead of shared domain
+```
+
+---
+
+## Section 5 — Deliverability Optimization
+
+| Feature | Priority | What To Build | Already Have? |
+|---|---|---|---|
+| Daily send limit | ✅ Done | — | Yes, Phase 5 |
+| Warm-up scheduling (50→200→full over 30 days) | 🟡 P1 | `tenants.warmup_day`, cron to increment | No (in Phase 7) |
+| Smart sending / fatigue management (16hr cooldown) | 🟡 P1 | Pre-dispatch query: has contact received email in last N hours? | No |
+
+---
+
+## Section 6 — Global Compliance & Data Privacy
+
+| Feature | Priority | What To Build |
+|---|---|---|
+| Default opt-out type (one-click vs. preference center) | 🔴 P0 | `tenants.unsubscribe_type` toggle + custom preference center URL |
+| **GDPR: Data Portability export** (subscriber's full history) | 🟡 P1 | Async export job: contacts + events + opens + clicks → JSON/CSV |
+| **GDPR: Right to Erasure** (delete a specific contact + all their data) | 🟡 P1 | `DELETE /contacts/{id}/gdpr-erase` → cascade all events, opens, clicks |
+| GDPR: Data Retention Policy (auto-delete after X months) | 🟢 P2 | `tenants.retention_months` + scheduled cron job |
+| CASL: Double opt-in toggle | 🟡 P1 | `tenants.require_double_optin` — adds verification step to subscribe forms |
+| CCPA: "Do Not Sell" link in footer | 🟢 P2 | Toggle + URL field → injected to email footer |
+| Data Processing Agreement (DPA) digital signing | 🟢 P2 | Display DPA, capture signature (checkbox + timestamp) |
+
+---
+
+## Section 7 — Subscriber Preference Center
+
+Current: Binary unsubscribe only. No preference center.
+
+| Feature | Priority | What To Build |
+|---|---|---|
+| Preference center page (tenant-branded) | 🟡 P1 | `/preferences?token=xxx` — subscriber self-service |
+| Email frequency controls (daily/weekly/monthly) | 🟡 P1 | `contacts.email_frequency` field + filter at send time |
+| Temporary pause (30/60 days) | 🟡 P1 | `contacts.paused_until` date field + suppression filter |
+| Content category opt-in | 🟢 P2 | `contacts.subscribed_categories` JSONB array |
+| Global opt-out master toggle | 🔴 P0 | Already done (unsubscribe) |
+
+---
+
+## Section 8 — Billing & Financial Telemetry
+
+**Phase 9 in our plan handles Stripe. This section maps to it.**
+
+| Feature | Priority | What To Build |
+|---|---|---|
+| Current plan + usage display (progress bars) | 🔴 P0 | `/settings/billing` — Shows contacts used, emails sent this month |
+| Upgrade plan flow | 🔴 P0 | Plan comparison table → "Contact Us" / Stripe checkout |
+| Metered overage toggle | 🟡 P1 | `tenants.allow_overage` boolean + overage billing hook |
+| Invoice download | 🟡 P1 | Phase 9 (Stripe) |
+| Tax ID / VAT fields | 🟢 P2 | `tenants.tax_id` field |
+| Dunning management (retry on payment fail) | 🟡 P1 | Stripe webhook → retry logic |
+
+---
+
+## Section 9 — API Keys & Webhooks
+
+**Phase 11 in our plan. Already architected.**
+
+| Feature | Priority | What To Build |
+|---|---|---|
+| API key generation | 🟡 P1 | `api_keys` table (store hash only, show once) |
+| Scoped permissions per key | 🟡 P1 | `api_keys.scopes` JSONB array |
+| Key revocation (1-click) | 🟡 P1 | `DELETE /api-keys/{id}` |
+| Webhook URL configuration | 🟡 P1 | `webhooks` table + event subscription checkboxes |
+| Webhook HMAC signing | 🟡 P1 | Same pattern as unsubscribe token (already built) |
+| Webhook retry on failure | 🟡 P1 | Exponential backoff: 10s → 1min → 5min → 1hr → disable |
+| Conditional webhook filters | 🟢 P2 | Key-value filter builder |
+
+---
+
+## Implementation Plan — Recommended Phase Order
+
+```
+Phase 6  → Analytics + Tracking (NEXT - already planned)
+Phase 7  → Plan limits + Usage page (already planned)
+
+[Account Settings — split into 3 sub-phases]
+
+Phase 8A — Settings Core (2–3 weeks)
+  ✦ Profile page (name, timezone)
+  ✦ Organization page (company name, physical address → fixes CAN-SPAM issue!)
+  ✦ Team members (invite, assign roles, RBAC middleware)
+  ✦ Billing/Usage page (plan + progress bars)
+  ✦ Domain Verification page (SPF/DKIM/DMARC DNS record display + verify)
+
+Phase 8B — Security & Compliance (2 weeks)
+  ✦ Audit logs (table + settings UI)
+  ✦ GDPR tools (data export, right-to-erasure endpoint)
+  ✦ CASL double opt-in toggle
+  ✦ Preference center page (/preferences?token=...)
+  ✦ Session timeout configuration
+
+Phase 8C — Developer Tools (2 weeks)
+  ✦ API key management page
+  ✦ Webhook configuration page
+  ✦ DKIM key generation per-tenant
+  ✦ Smart sending / fatigue management
+
+Phase 9  → Stripe payments (already planned)
+```
+
+---
+
+## Database Changes Required for Account Settings
+
+```sql
+-- Users (personal profile)
+ALTER TABLE users ADD COLUMN timezone TEXT DEFAULT 'UTC';
+ALTER TABLE users ADD COLUMN date_format TEXT DEFAULT 'MM/DD/YYYY';
+ALTER TABLE users ADD COLUMN avatar_url TEXT;
+
+-- Tenants (organization + CAN-SPAM fix)
+ALTER TABLE tenants ADD COLUMN company_name TEXT;
+ALTER TABLE tenants ADD COLUMN business_address TEXT;  -- fixes hardcoded "123 Main St"
+ALTER TABLE tenants ADD COLUMN business_city TEXT;
+ALTER TABLE tenants ADD COLUMN business_state TEXT;
+ALTER TABLE tenants ADD COLUMN business_zip TEXT;
+ALTER TABLE tenants ADD COLUMN business_country TEXT;
+ALTER TABLE tenants ADD COLUMN industry TEXT;
+ALTER TABLE tenants ADD COLUMN currency TEXT DEFAULT 'USD';
+ALTER TABLE tenants ADD COLUMN utm_source TEXT;
+ALTER TABLE tenants ADD COLUMN utm_medium TEXT;
+ALTER TABLE tenants ADD COLUMN utm_campaign TEXT;
+ALTER TABLE tenants ADD COLUMN unsubscribe_type TEXT DEFAULT 'one-click';
+ALTER TABLE tenants ADD COLUMN require_double_optin BOOLEAN DEFAULT false;
+ALTER TABLE tenants ADD COLUMN retention_months INTEGER DEFAULT 24;
+ALTER TABLE tenants ADD COLUMN sending_domain TEXT;
+ALTER TABLE tenants ADD COLUMN domain_verified BOOLEAN DEFAULT false;
+ALTER TABLE tenants ADD COLUMN warmup_day INTEGER DEFAULT 0;
+
+-- Contacts (preference center)
+ALTER TABLE contacts ADD COLUMN email_frequency TEXT DEFAULT 'no_preference';
+ALTER TABLE contacts ADD COLUMN paused_until TIMESTAMPTZ;
+ALTER TABLE contacts ADD COLUMN subscribed_categories JSONB;
+
+-- New tables
+CREATE TABLE audit_logs (
+  id UUID PRIMARY KEY, tenant_id UUID, user_id UUID, action TEXT,
+  target TEXT, target_id TEXT, metadata JSONB, ip_address TEXT,
+  user_agent TEXT, created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE api_keys (
+  id UUID PRIMARY KEY, tenant_id UUID, name TEXT, key_hash TEXT,
+  scopes JSONB, last_used_at TIMESTAMPTZ, created_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ
+);
+
+CREATE TABLE webhooks (
+  id UUID PRIMARY KEY, tenant_id UUID, url TEXT, events JSONB,
+  secret TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMPTZ
+);
+```
+
+---
+
+## Settings Navigation Structure (Frontend)
+
+```
+/settings
+  ├── /settings/profile          — Name, email, timezone, avatar, MFA
+  ├── /settings/organization     — Company name, address, industry, timezone
+  ├── /settings/team             — Invite users, roles, remove members
+  ├── /settings/domain           — Sending domain, SPF/DKIM/DMARC setup
+  ├── /settings/billing          — Plan, usage bars, upgrade button
+  ├── /settings/compliance       — GDPR tools, CASL toggle, data retention
+  ├── /settings/audit-log        — Filterable action history
+  ├── /settings/api-keys         — Generate, view, revoke keys
+  └── /settings/webhooks         — Configure webhook URLs + event subscriptions
+```
+
+---
+
+## What NOT to Build Now (P3 — Document and Defer)
+
+| Feature | Reason to Defer |
+|---|---|
+| SAML/SSO federation | Requires $5K+/year for SAML testing infrastructure. Only needed for enterprise sales. |
+| BIMI logo in Gmail | Requires paid VMC certificate ($1,500+/year). Only after DMARC p=reject at 100%. |
+| IP allowlist for login | Complex gateway layer. Not needed until SOC2 audit. |
+| Parent/child sub-accounts | Major DB architecture change. Only needed for agency/franchise clients. |
+| Microservices | Only needed after 5+ engineer team. Monolith handles 100K/day fine. |
+| AI spam subject scanner | ML model. Phase 12 or later. |

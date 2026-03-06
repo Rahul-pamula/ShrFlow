@@ -1,116 +1,168 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Check, Search, Users, Loader2 } from "lucide-react";
+import { Check, Users, Loader2, AlertCircle, FileSpreadsheet, Globe } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-// MOCK DATA until we wire up the API
-// In real implementation, this comes from GET /contacts/lists (which we need to build or mock)
-// For now, we'll fetch actual contacts or use a placeholder list logic
 
 export default function Step2Audience({ data, updateData, onNext, onBack }: any) {
     const { token } = useAuth();
     const [loading, setLoading] = useState(true);
-    const [lists, setLists] = useState<any[]>([]);
-    const [search, setSearch] = useState("");
+    const [totalContacts, setTotalContacts] = useState(0);
+    const [batches, setBatches] = useState<any[]>([]);
+    const [error, setError] = useState("");
 
     useEffect(() => {
-        // Fetch Lists (Mocking logic for now as we didn't explicitly build LIST CRUD yet in Phase 1)
-        // We will just show "All Contacts" as the default option
-        const fetchLists = async () => {
+        const fetchData = async () => {
+            if (!token) return;
             try {
-                // In a real app, GET /contacts/lists
-                // For now, we simulate one main list "All Subscribers"
-                await new Promise(r => setTimeout(r, 600));
-                setLists([
-                    { id: "all", name: "All Subscribers", count: 12450, type: "Master List" },
-                    { id: "segment_vip", name: "VIP Customers", count: 850, type: "Segment" },
-                    { id: "segment_active", name: "Active Last 30 Days", count: 3200, type: "Segment" },
+                const [statsRes, batchRes] = await Promise.all([
+                    fetch('http://127.0.0.1:8000/contacts/stats', { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch('http://127.0.0.1:8000/contacts/batches', { headers: { 'Authorization': `Bearer ${token}` } }),
                 ]);
+                if (!statsRes.ok || !batchRes.ok) throw new Error("Failed to fetch audience data");
+
+                const stats = await statsRes.json();
+                const batchData = await batchRes.json();
+
+                setTotalContacts(stats.total_contacts || 0);
+                // Only show completed batches with at least 1 import
+                setBatches((batchData.data || []).filter((b: any) => b.status === 'completed' && b.imported_count > 0));
             } catch (err) {
-                console.error(err);
+                setError("Could not load audience data.");
             } finally {
                 setLoading(false);
             }
         };
-        fetchLists();
-    }, []);
+        fetchData();
+    }, [token]);
 
-    const filtered = lists.filter(l => l.name.toLowerCase().includes(search.toLowerCase()));
+    const select = (id: string, name: string) => {
+        updateData({ listId: id, listName: name });
+    };
+
+    const AudienceCard = ({ id, name, count, subtitle, icon }: any) => {
+        const isSelected = data.listId === id;
+        return (
+            <div
+                onClick={() => select(id, name)}
+                style={{
+                    padding: '18px 20px', borderRadius: '10px', cursor: 'pointer',
+                    border: `1px solid ${isSelected ? 'rgba(59, 130, 246, 0.5)' : 'rgba(63, 63, 70, 0.35)'}`,
+                    background: isSelected ? 'rgba(59, 130, 246, 0.07)' : 'rgba(24, 24, 27, 0.4)',
+                    transition: 'all 0.2s ease',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px'
+                }}
+            >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{
+                        width: '42px', height: '42px', borderRadius: '10px', flexShrink: 0,
+                        background: isSelected ? 'rgba(59, 130, 246, 0.15)' : 'rgba(63, 63, 70, 0.3)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                        {icon}
+                    </div>
+                    <div>
+                        <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#FAFAFA', margin: 0 }}>{name}</h3>
+                        <p style={{ fontSize: '12px', color: '#71717A', margin: '2px 0 0' }}>
+                            <span style={{ color: isSelected ? '#60A5FA' : '#A1A1AA', fontWeight: 600 }}>
+                                {count.toLocaleString()}
+                            </span>
+                            {' '}{subtitle}
+                        </p>
+                    </div>
+                </div>
+                <div style={{ flexShrink: 0 }}>
+                    {isSelected ? (
+                        <div style={{
+                            width: '24px', height: '24px', borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }}>
+                            <Check size={13} color="white" />
+                        </div>
+                    ) : (
+                        <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid rgba(63,63,70,0.4)' }} />
+                    )}
+                </div>
+            </div>
+        );
+    };
 
     return (
-        <div className="p-8">
-            <h2 className="text-xl font-semibold text-slate-800 mb-2">Select Audience</h2>
-            <p className="text-sm text-slate-500 mb-6">Who should receive this campaign?</p>
-
-            {/* Search */}
-            <div className="relative max-w-md mb-6">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                    type="text"
-                    placeholder="Search lists/segments..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+        <div style={{ padding: '36px' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px' }}>
+                <div style={{
+                    width: '40px', height: '40px', borderRadius: '10px',
+                    background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.2)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                    <Users size={18} color="#3B82F6" />
+                </div>
+                <div>
+                    <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#FAFAFA', margin: 0 }}>Select Audience</h2>
+                    <p style={{ fontSize: '13px', color: '#71717A', margin: 0 }}>Choose who receives this campaign — all contacts or a specific import batch</p>
+                </div>
             </div>
 
-            {/* Lists Grid */}
             {loading ? (
-                <div className="flex justify-center py-12">
-                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
+                    <Loader2 size={28} color="#3B82F6" style={{ animation: 'spin 1s linear infinite' }} />
+                </div>
+            ) : error ? (
+                <div style={{ padding: '14px 16px', background: 'rgba(69, 10, 10, 0.3)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', color: '#EF4444', fontSize: '13px' }}>
+                    <AlertCircle size={15} /> {error}
+                </div>
+            ) : totalContacts === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', border: '1px dashed rgba(63, 63, 70, 0.4)', borderRadius: '10px' }}>
+                    <Users size={32} color="#52525B" style={{ margin: '0 auto 12px' }} />
+                    <p style={{ color: '#71717A', fontSize: '14px', marginBottom: '4px' }}>No contacts in your account yet.</p>
+                    <p style={{ color: '#52525B', fontSize: '12px' }}>Go to <strong style={{ color: '#A1A1AA' }}>Contacts</strong> → Upload CSV first.</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filtered.map(list => {
-                        const isSelected = data.listId === list.id;
-                        return (
-                            <div
-                                key={list.id}
-                                onClick={() => updateData({ listId: list.id, listName: list.name })}
-                                className={`
-                                    relative p-4 rounded-lg border-2 cursor-pointer transition-all
-                                    ${isSelected
-                                        ? 'border-blue-600 bg-blue-50'
-                                        : 'border-slate-200 hover:border-blue-300 bg-white'}
-                                `}
-                            >
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`p-2 rounded-lg ${isSelected ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'}`}>
-                                            <Users className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <h3 className={`font-medium ${isSelected ? 'text-blue-900' : 'text-slate-900'}`}>{list.name}</h3>
-                                            <p className="text-xs text-slate-500">{list.count.toLocaleString()} contacts • {list.type}</p>
-                                        </div>
-                                    </div>
-                                    {isSelected && (
-                                        <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
-                                            <Check className="w-4 h-4 text-white" />
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '360px', overflowY: 'auto', paddingRight: '4px' }}>
+
+                    {/* === ALL CONTACTS === */}
+                    <p style={{ fontSize: '11px', fontWeight: 600, color: '#52525B', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 4px' }}>Entire List</p>
+                    <AudienceCard
+                        id="all"
+                        name="All Contacts"
+                        count={totalContacts}
+                        subtitle="subscribers in your account"
+                        icon={<Globe size={18} color={data.listId === 'all' ? '#3B82F6' : '#71717A'} />}
+                    />
+
+                    {/* === IMPORT BATCHES === */}
+                    {batches.length > 0 && (
+                        <>
+                            <p style={{ fontSize: '11px', fontWeight: 600, color: '#52525B', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '12px 0 4px' }}>Import Batches</p>
+                            {batches.map(batch => (
+                                <AudienceCard
+                                    key={batch.id}
+                                    id={`batch:${batch.id}`}
+                                    name={batch.file_name.replace(/\.[^.]+$/, '')}
+                                    count={batch.imported_count}
+                                    subtitle={`contacts · Imported ${new Date(batch.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                                    icon={<FileSpreadsheet size={18} color={data.listId === `batch:${batch.id}` ? '#3B82F6' : '#71717A'} />}
+                                />
+                            ))}
+                        </>
+                    )}
                 </div>
             )}
 
-            <div className="mt-10 flex justify-between">
-                <button onClick={onBack} className="text-slate-600 font-medium hover:text-slate-900 px-4 py-2">
-                    Back
+            {/* Footer */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '32px', paddingTop: '24px', borderTop: '1px solid rgba(63, 63, 70, 0.3)' }}>
+                <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#71717A', fontSize: '14px', cursor: 'pointer', padding: '8px 4px' }}>
+                    ← Back
                 </button>
                 <button
                     onClick={onNext}
-                    disabled={!data.listId}
-                    className={`
-                        px-6 py-2.5 rounded-lg text-sm font-medium transition-colors
-                        ${data.listId
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'bg-slate-100 text-slate-400 cursor-not-allowed'}
-                    `}
+                    disabled={!data.listId || totalContacts === 0}
+                    className={data.listId && totalContacts > 0 ? 'btn-premium' : ''}
+                    style={(!data.listId || totalContacts === 0) ? { padding: '10px 20px', background: 'rgba(63,63,70,0.3)', border: '1px solid rgba(63,63,70,0.4)', borderRadius: '8px', color: '#52525B', fontSize: '14px', cursor: 'not-allowed' } : {}}
                 >
-                    Next Step
+                    Next Step →
                 </button>
             </div>
         </div>

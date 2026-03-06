@@ -1,8 +1,16 @@
 cd platform/api
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-cd platform/services
-python worker.py
+
+/Users/pamula/Desktop/email_engine/.venv/bin/uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
 
 cd platform/client
 npm run dev
+
+cd platform/worker
+python email_sender.py
+
+mailtrap testing
+cd platform/services
+python worker.py

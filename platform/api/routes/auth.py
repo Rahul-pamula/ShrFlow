@@ -10,7 +10,7 @@ Features:
 - JWT-based authentication
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 import bcrypt
@@ -22,6 +22,9 @@ import os
 import httpx
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+# Import the global limiter from shared module
+from utils.rate_limiter import limiter
 
 # JWT Configuration
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
@@ -87,7 +90,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 # === Routes ===
 
 @router.post("/signup", response_model=AuthResponse)
-async def signup(request: SignupRequest):
+@limiter.limit("5/minute")
+async def signup(request: Request, body_request: SignupRequest):
     """
     Create a new user account and tenant.
     
@@ -103,7 +107,7 @@ async def signup(request: SignupRequest):
     from utils.supabase_client import db
     
     # Check if email already exists
-    existing_user = db.client.table("users").select("id").eq("email", request.email).execute()
+    existing_user = db.client.table("users").select("id").eq("email", body_request.email).execute()
     
     if existing_user.data:
         raise HTTPException(
@@ -116,15 +120,15 @@ async def signup(request: SignupRequest):
     tenant_id = str(uuid.uuid4())
     
     # Hash password
-    password_hash = hash_password(request.password)
+    password_hash = hash_password(body_request.password)
     
     try:
         # 1. Create user
         user_data = {
             "id": user_id,
-            "email": request.email,
+            "email": body_request.email,
             "password_hash": password_hash,
-            "full_name": request.full_name,
+            "full_name": body_request.full_name,
             "email_verified": False,
             "is_active": True,
             "created_at": datetime.utcnow().isoformat()
@@ -135,7 +139,7 @@ async def signup(request: SignupRequest):
         # 2. Create tenant (status: onboarding)
         tenant_data = {
             "id": tenant_id,
-            "email": request.email,  # Required by existing schema
+            "email": body_request.email,  # Required by existing schema
             "status": "onboarding",
             "created_at": datetime.utcnow().isoformat()
         }
@@ -167,7 +171,7 @@ async def signup(request: SignupRequest):
         token_data = {
             "user_id": user_id,
             "tenant_id": tenant_id,
-            "email": request.email,
+            "email": body_request.email,
             "role": "owner"
         }
         
@@ -192,7 +196,7 @@ async def signup(request: SignupRequest):
         }).execute()
         
         # Fire and forget sending email
-        await send_email_verification(request.email, verify_token)
+        await send_email_verification(body_request.email, verify_token)
         
         return AuthResponse(
             user_id=user_id,
@@ -219,7 +223,8 @@ async def signup(request: SignupRequest):
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(request: LoginRequest):
+@limiter.limit("5/minute")
+async def login(request: Request, body_request: LoginRequest):
     """
     Authenticate an existing user.
     
@@ -239,7 +244,7 @@ async def login(request: LoginRequest):
     from utils.supabase_client import db
     
     # Get user by email
-    user_result = db.client.table("users").select("*").eq("email", request.email).execute()
+    user_result = db.client.table("users").select("*").eq("email", body_request.email).execute()
     
     if not user_result.data:
         raise HTTPException(
@@ -250,7 +255,7 @@ async def login(request: LoginRequest):
     user = user_result.data[0]
     
     # Verify password
-    if not verify_password(request.password, user["password_hash"]):
+    if not verify_password(body_request.password, user["password_hash"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
@@ -499,30 +504,40 @@ async def process_oauth_user(email: str, full_name: str, provider: str):
             "created_at": datetime.utcnow().isoformat()
         }).execute()
         
-        # Create tenant
-        db.client.table("tenants").insert({
+        # Create tenant (upsert to handle cases where tenant email already exists)
+        tenant_result = db.client.table("tenants").upsert({
             "id": tenant_id,
             "email": email,
             "status": "onboarding",
             "created_at": datetime.utcnow().isoformat()
-        }).execute()
+        }, on_conflict="email").execute()
         
-        # Link user to tenant
-        db.client.table("tenant_users").insert({
-            "tenant_id": tenant_id,
-            "user_id": user_id,
-            "role": "owner",
-            "joined_at": datetime.utcnow().isoformat()
-        }).execute()
+        # If tenant already existed, use its actual ID
+        if tenant_result.data:
+            tenant_id = tenant_result.data[0]["id"]
         
-        # Setup onboarding state
-        db.client.table("onboarding_progress").insert({
-            "tenant_id": tenant_id,
-            "stage_basic_info": False,
-            "stage_compliance": False,
-            "stage_intent": False,
-            "started_at": datetime.utcnow().isoformat()
-        }).execute()
+        # Link user to tenant (skip if already linked)
+        try:
+            db.client.table("tenant_users").insert({
+                "tenant_id": tenant_id,
+                "user_id": user_id,
+                "role": "owner",
+                "joined_at": datetime.utcnow().isoformat()
+            }).execute()
+        except Exception:
+            pass  # Already linked
+        
+        # Setup onboarding state (skip if already exists)
+        try:
+            db.client.table("onboarding_progress").insert({
+                "tenant_id": tenant_id,
+                "stage_basic_info": False,
+                "stage_compliance": False,
+                "stage_intent": False,
+                "started_at": datetime.utcnow().isoformat()
+            }).execute()
+        except Exception:
+            pass  # Already exists
         
         tenant_status = "onboarding"
         role = "owner"

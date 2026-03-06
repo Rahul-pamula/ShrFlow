@@ -45,6 +45,24 @@ class CampaignSnapshotResponse(CampaignSnapshotBase):
 
 class SendRequest(BaseModel):
     """Request body for sending a campaign"""
-    target_list_id: Optional[UUID] = None
+    target_list_id: Optional[str] = None   # "all" | "batch:{uuid}"
     test_emails: Optional[List[str]] = None
-    # Future: segment_id, exclusion_list_id
+
+class CampaignDispatchBase(BaseModel):
+    campaign_id: UUID
+    subscriber_id: UUID
+    status: str = Field(default="PENDING") # PENDING, PROCESSING, DISPATCHED, FAILED, CANCELLED
+    ses_message_id: Optional[str] = None
+    error_log: Optional[str] = None
+
+class CampaignDispatchCreate(CampaignDispatchBase):
+    pass
+
+class CampaignDispatchResponse(CampaignDispatchBase):
+    id: UUID
+    sent_at: Optional[datetime] = None
+    open_count: int = 0
+    click_count: int = 0
+
+    class Config:
+        from_attributes = True

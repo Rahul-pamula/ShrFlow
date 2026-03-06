@@ -82,14 +82,16 @@ export default function TemplatesPage() {
                     name: preset.name,
                     subject: `${preset.name} - Edit subject`,
                     category: preset.category,
-                    mjml_json: preset.design || {},
-                    compiled_html: preset.compiledHtml || "<div>Start designing your email...</div>"
+                    design_json: preset.design || {},
+                    compiled_html: "<p>Loading…</p>",
+                    template_type: "block",
+                    schema_version: "2.0.0"
                 })
             });
 
             if (res.ok) {
                 const data = await res.json();
-                router.push(`/templates/${data.id}/builder`);
+                router.push(`/templates/${data.id}/block`);
             } else {
                 alert("Failed to create template from preset");
             }
@@ -102,11 +104,7 @@ export default function TemplatesPage() {
     };
 
     const handleEdit = (id: string, editorType?: string) => {
-        if (editorType === "rich_text") {
-            router.push(`/templates/${id}/editor`);
-        } else {
-            router.push(`/templates/${id}/builder`);
-        }
+        router.push(`/templates/${id}/block`);
     };
 
     const handleDuplicate = async (e: React.MouseEvent, id: string) => {

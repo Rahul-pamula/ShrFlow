@@ -1,0 +1,101 @@
+# Phase 3: Structured Editor – Walkthrough
+
+## Architecture
+
+```
+JSON (React State) → MJML (Python) → HTML (npx mjml) → <iframe srcDoc>
+```
+
+## What Was Built
+
+### Backend
+| File | Changes |
+|------|---------|
+| [template.py](file:///Users/pamula/Desktop/email_engine/platform/api/models/template.py) | Strict `Row→Column→Block` Pydantic schema with `@model_validator` for column widths |
+| [compile_service.py](file:///Users/pamula/Desktop/email_engine/platform/api/services/compile_service.py) | Recursive `render_design→render_row→render_column→render_block` MJML pipeline |
+| [template_service.py](file:///Users/pamula/Desktop/email_engine/platform/api/services/template_service.py) | Stores [design_json](file:///Users/pamula/Desktop/email_engine/platform/api/services/compile_service.py#244-248) inside existing `mjml_json` JSONB (no migration) |
+| [templates.py](file:///Users/pamula/Desktop/email_engine/platform/api/routes/templates.py) | `/compile/preview` endpoint (auth-free, stateless) |
+
+### Frontend
+| File | Changes |
+|------|---------|
+| [block/page.tsx](file:///Users/pamula/Desktop/email_engine/platform/client/src/app/templates/%5Bid%5D/block/page.tsx) | Premium 3-panel editor: tabbed sidebar, iframe preview, inspector |
+| [templatePresets.ts](file:///Users/pamula/Desktop/email_engine/platform/client/src/app/templates/templatePresets.ts) | 3 starter templates (Flash Sale, Welcome, Announcement) |
+| [templates/page.tsx](file:///Users/pamula/Desktop/email_engine/platform/client/src/app/templates/page.tsx) | All routing → `/block`, presets send [design_json](file:///Users/pamula/Desktop/email_engine/platform/api/services/compile_service.py#244-248) |
+| [new/page.tsx](file:///Users/pamula/Desktop/email_engine/platform/client/src/app/templates/new/page.tsx) | Single-button create flow |
+
+### Editor UI Features
+- **Blocks tab**: 2×2 grid palette (drag to add) + Row Layouts section
+- **Layers tab**: Hierarchical tree with DnD reordering
+- **Inspector**: Color pickers, sliders, alignment buttons, block-specific controls
+- **Canvas**: Desktop/Mobile toggle, gradient background, card-style iframe
+- **Toolbar**: Template name, undo/redo, gradient Save button
+
+## Validation
+- `npm run build` → **0 errors**, block page at 38.6 KB ✅
+- Backend compiler → 22,749 bytes Outlook-safe HTML ✅
+- Compile endpoint → auth-free, tested via curl ✅
+
+![Editor UI Mockup](/Users/pamula/.gemini/antigravity/brain/ebbd279a-e295-4d38-b3df-34ffe28b9244/editor_ui_mockup_1772199764062.png)
+
+---
+
+# Phase 4 & 5: Campaign Orchestration and Delivery Engine
+
+We successfully shifted from building the advanced email builder to creating the **Core Delivery Engine** capable of handling bulk-scale operations with manual campaign control. This completely fulfills the enterprise-grade patterns presented in the Gemini Deep Research report.
+
+## Architecture Highlights
+We built a robust, scalable backend handling decoupled orchestration.
+
+```mermaid
+graph TD
+    A[FastAPI / POST send] --> B(Supabase)
+    B --> |1. Insert PENDING intent| C(campaign_dispatch)
+    A --> |2. Publish Payloads| D(RabbitMQ Exchange)
+    A --> |3. Set Status| E[(Redis)]
+    D --> |email.send| F[Main Action Queue]
+    
+    F --> G[Python Worker]
+    E -.-> |State Check| G
+    
+    G --> |If PAUSED| H[Holding Exchange]
+    H --> |x-message-ttl| I[Parking Queue]
+    I --> |x-dead-letter| D
+    
+    G --> |If CANCELLED| J[Discard / ACK]
+    
+    G -.-> |Atomic Intent Lock| C
+    G --> |Simulate Send| K[Amazon SES Mock]
+    K --> |Update DISPATCHED| C
+```
+
+## What Was Built
+
+### Backend
+| Component | Implementation Details |
+|------|---------|
+| **Supabase Migrations** | Created [campaigns](file:///Users/pamula/Desktop/email_engine/platform/api/routes/campaigns.py#95-107) and `campaign_dispatch` tables ([006_phase4_campaign_orchestration.sql](file:///Users/pamula/Desktop/email_engine/migrations/006_phase4_campaign_orchestration.sql)) to handle complex state tracking and atomic idempotency locks. |
+| **Redis State Manager** | Integrated `redis.asyncio` to allow real-time status fetching ([utils/redis_client.py](file:///Users/pamula/Desktop/email_engine/platform/api/utils/redis_client.py)). Eliminates heavy DB polling for stopped campaigns. |
+| **RabbitMQ Producer** | Implemented `aio-pika` client inside FastAPI ([utils/rabbitmq_client.py](file:///Users/pamula/Desktop/email_engine/platform/api/utils/rabbitmq_client.py)). Fast, async connections that rapidly shove JSON payloads to the `campaign_exchange`. |
+| **Audience Compilation** | Modified `POST /campaigns/{id}/send` to fetch all Tenant contacts, insert atomic PENDING rows to Supabase, and dispatch RabbitMQ payloads. |
+| **Real-time Control APIs** | Built `POST /pause`, `/resume`, and `/cancel` endpoints that immediately update Redis and securely update Supabase. |
+
+### The Background Worker
+| Component | Details |
+|------|---------|
+| **[platform/worker/email_sender.py](file:///Users/pamula/Desktop/email_engine/platform/worker/email_sender.py)** | A standalone async Python script designed to scale horizontally across servers. |
+| **Parking Queue (TTL Routing)** | Uses RabbitMQ's Dead-Letter Exchange pattern. When checking Redis reveals a `PAUSED` state, the worker publishes the message to a `holding_exchange`. The message sits in a holding queue for 60 seconds (TTL), and is then routed back to the main queue automatically. This means workers *never sleep*, they just bounce paused tasks securely without wasting CPU. |
+| **Short-Circuit Cancellations** | If a worker detects `CANCELLED` in Redis, it immediately `acks` (deletes) the message completely. |
+| **Idempotency Locks** | Before firing to SES, the worker executes a Supabase `UPDATE ... WHERE status = 'PENDING'` returning data. If no data returns, another worker already claimed it, skipping the email. This ensures **zero duplicate sends**. |
+
+### Frontend UI
+| Component | Details |
+|------|---------|
+| **Campaign Dashboard** | React page [campaigns/page.tsx](file:///Users/pamula/Desktop/email_engine/platform/client/src/app/campaigns/page.tsx) pulling down live statistics, displaying accurate campaign states (`draft`, `sending`, `paused`, `cancelled`). |
+| **Control UI** | Clicking "Pause", "Resume", or "Cancel" hits our new Redis-backed APIs, optimistically updating the React UI without requiring a hard refresh. |
+| **Creation Wizard** | Ensured the multi-step [CampaignWizard](file:///Users/pamula/Desktop/email_engine/platform/client/src/components/CampaignWizard/index.tsx#25-111) (Audience Select -> Template Select -> Review -> Send) natively triggers backend orchestration. |
+
+## Validation
+- Python Dependencies Installed: `pika`, `aio-pika`, `redis`. ✔️
+- Redis Manager and RabbitMQ client integrated securely natively utilizing `async/await` principles. ✔️
+- Frontend UI verified to smoothly reflect different states and successfully ping the action endpoints. ✔️

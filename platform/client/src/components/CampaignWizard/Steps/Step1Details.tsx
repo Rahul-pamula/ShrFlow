@@ -1,65 +1,104 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
+import { useState } from "react";
+import { FileText, Calendar } from "lucide-react";
 
-interface StepProps {
-    data: any;
-    updateData: (data: any) => void;
-    onNext: () => void;
-    onBack?: () => void;
-}
+export default function Step1Details({ data, updateData, onNext }: any) {
+    const [errors, setErrors] = useState<any>({});
 
-export default function Step1Details({ data, updateData, onNext }: StepProps) {
+    const validate = () => {
+        const e: any = {};
+        if (!data.name.trim()) e.name = "Campaign name is required";
+        if (!data.subject.trim()) e.subject = "Subject line is required";
+        return e;
+    };
 
-    const isValid = data.name.length > 0 && data.subject.length > 0;
+    const handleNext = () => {
+        const e = validate();
+        if (Object.keys(e).length > 0) { setErrors(e); return; }
+        onNext();
+    };
+
+    const inputStyle = (hasError: boolean) => ({
+        width: '100%',
+        padding: '10px 14px',
+        background: 'rgba(9, 9, 11, 0.8)',
+        border: `1px solid ${hasError ? 'rgba(239, 68, 68, 0.5)' : 'rgba(63, 63, 70, 0.4)'}`,
+        borderRadius: '8px',
+        color: '#FAFAFA',
+        fontSize: '14px',
+        outline: 'none',
+        transition: 'border-color 0.2s',
+    });
+
+    const labelStyle = {
+        display: 'block',
+        fontSize: '13px',
+        fontWeight: 500,
+        color: '#A1A1AA',
+        marginBottom: '6px',
+    };
 
     return (
-        <div className="p-8">
-            <h2 className="text-xl font-semibold text-slate-800 mb-6">Campaign Details</h2>
-
-            <div className="space-y-6 max-w-2xl">
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                        Campaign Name
-                    </label>
-                    <input
-                        type="text"
-                        value={data.name}
-                        onChange={(e) => updateData({ name: e.target.value })}
-                        placeholder="e.g. March Newsletter"
-                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <p className="text-xs text-slate-500 mt-1">
-                        Internal name, not visible to recipients.
-                    </p>
+        <div style={{ padding: '36px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px' }}>
+                <div style={{
+                    width: '40px', height: '40px', borderRadius: '10px',
+                    background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.2)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                    <FileText size={18} color="#3B82F6" />
                 </div>
-
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                        Subject Line
-                    </label>
-                    <input
-                        type="text"
-                        value={data.subject}
-                        onChange={(e) => updateData({ subject: e.target.value })}
-                        placeholder="e.g. Big News! 50% Off Everything"
-                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#FAFAFA', margin: 0 }}>Campaign Details</h2>
+                    <p style={{ fontSize: '13px', color: '#71717A', margin: 0 }}>Set the name and subject line</p>
                 </div>
             </div>
 
-            <div className="mt-10 flex justify-end">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div>
+                    <label style={labelStyle}>Campaign Name *</label>
+                    <input
+                        type="text"
+                        placeholder="e.g. Summer Sale 2024"
+                        value={data.name}
+                        onChange={(e) => { updateData({ name: e.target.value }); setErrors((p: any) => ({ ...p, name: '' })); }}
+                        style={inputStyle(!!errors.name)}
+                    />
+                    {errors.name && <p style={{ fontSize: '12px', color: '#EF4444', marginTop: '4px' }}>{errors.name}</p>}
+                </div>
+
+                <div>
+                    <label style={labelStyle}>Email Subject Line *</label>
+                    <input
+                        type="text"
+                        placeholder="e.g. Don't miss our biggest sale of the year!"
+                        value={data.subject}
+                        onChange={(e) => { updateData({ subject: e.target.value }); setErrors((p: any) => ({ ...p, subject: '' })); }}
+                        style={inputStyle(!!errors.subject)}
+                    />
+                    {errors.subject && <p style={{ fontSize: '12px', color: '#EF4444', marginTop: '4px' }}>{errors.subject}</p>}
+                    <p style={{ fontSize: '12px', color: '#52525B', marginTop: '4px' }}>This is what recipients will see in their inbox</p>
+                </div>
+
+                <div>
+                    <label style={labelStyle}><Calendar size={13} style={{ display: 'inline', marginRight: '4px' }} />Schedule (optional)</label>
+                    <input
+                        type="datetime-local"
+                        value={data.scheduledAt || ''}
+                        onChange={(e) => updateData({ scheduledAt: e.target.value || null })}
+                        style={{ ...inputStyle(false), colorScheme: 'dark' }}
+                    />
+                    <p style={{ fontSize: '12px', color: '#52525B', marginTop: '4px' }}>Leave empty to send immediately</p>
+                </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '32px', paddingTop: '24px', borderTop: '1px solid rgba(63, 63, 70, 0.3)' }}>
                 <button
-                    onClick={onNext}
-                    disabled={!isValid}
-                    className={`
-                        flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-colors
-                        ${isValid
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'bg-slate-100 text-slate-400 cursor-not-allowed'}
-                    `}
+                    onClick={handleNext}
+                    className="btn-premium"
                 >
-                    Next Step <ArrowRight className="w-4 h-4" />
+                    Next Step →
                 </button>
             </div>
         </div>

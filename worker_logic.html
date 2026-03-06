@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Email Worker Architecture</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 40px; }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #2980b9; margin-top: 30px; }
+        h3 { color: #16a085; }
+        .box { background: #f8f9fa; border-left: 4px solid #3498db; padding: 15px; margin-bottom: 20px; border-radius: 4px; }
+        .success { border-left-color: #2ecc71; }
+        .warning { border-left-color: #f39c12; }
+        code { background: #eee; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+        ul { margin-bottom: 20px; }
+        li { margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>Email Worker Architecture (PostgreSQL as a Queue)</h1>
+    
+    <p>This document explains the architecture for processing email campaigns in the background using Python background scripts (Workers) and PostgreSQL. This avoids the need for complex external tools like Redis or Kafka at this startup scale.</p>
+
+    <hr>
+
+    <h2>Simple Explanation in Telugu (Tanglish)</h2>
+    
+    <p>Mana system lo thousands of emails elaa velthayo step-by-step ikkada vundi:</p>
+
+    <div class="box">
+        <h3>Step 1: User Input (Send Button Clicked)</h3>
+        <ul>
+            <li>User vachi "Send to 10,000 people" ani click chestharu.</li>
+            <li>Frontend (Next.js) nunchi Backend (FastAPI) ki request velthundi.</li>
+            <li>Backend ventane pani kosam user ni aagipomani cheppakunda, PostgreSQL database loni <code>email_tasks</code> table lo <strong>10,000 rows ni "PENDING" status to create chestundi</strong>.</li>
+            <li>Create avagane Frontend ki "Done" ani cheppesthundi. User ki ventane Progress bar (0/10000) kanipistundi.</li>
+        </ul>
+    </div>
+
+    <div class="box warning">
+        <h3>Step 2: Background Workers Holding the Load (The Magic)</h3>
+        <p>Asalu email pampedi ee background scripts (workers) ye:</p>
+        <ul>
+            <li>Manam server lo 3, ledha anthakante ekkuva "Worker Scripts" (Background Python processes) ni on chestham.</li>
+            <li>Anni workers okey sari database meeda padithe oka user ki 3 sarlu same email vellipothundhi kadha? Ala avvakunda PostgreSQL lo <strong><code>SKIP LOCKED</code></strong> ane special command vadutham.</li>
+            <li><strong>Worker 1</strong> velli DB ni aduguthundi: "Naku first 50 PENDING emails ivvu, inkenduku padithe valu lock cheyyaku".</li>
+            <li>DB 1st 50 isthundi. Ventane <strong>Worker 2</strong> velli inko 50 emails techkuntundi, avi old vatitho match avvavu.</li>
+            <li>Workers aakali meeda padi aa 50 emails ni fast ga Amazon SES (Email pampise network) ki pamputhayi.</li>
+            <li>SES nunchi response ochaka (Sent ayyinda, Bounce ayinda), DB loki ochi aa rows ni <strong>"PENDING" nunchi "SENT" leda "FAILED" ga marchesuthayi</strong>.</li>
+            <li>Idi every 2 seconds ki automatic ga loop lo jarugutu ne untundi, till aa 10,000 emails aypoyentha varaku.</li>
+        </ul>
+    </div>
+
+    <div class="box success">
+        <h3>Step 3: User Dashboard (Watching Progress)</h3>
+        <ul>
+            <li>Worker aa lopala aa 10,000 emails processing chestunappudu, mana website (Next.js) every 3-5 seconds ki backend ni "Yenti progress entha aypoindi" ani background lo aduguthundi.</li>
+            <li>Adi DB lo lekkesi 3000 emails "SENT" ayyayi ani number isthe, User ki beautiful progress bar 30% daggara move avvuthundi.</li>
+        </ul>
+    </div>
+
+    <h2>Deeni valla upayogalu?</h2>
+    <ul>
+        <li><strong>Crash Proof:</strong> System eppudu crash avvadu (Entha mandiki push kottina, load antha queue lone pothundi, server hand ivvadu).</li>
+        <li><strong>Cost Effective:</strong> Kotha kotha tools like Redis / Celery maintain chese pani lekunda, already unna database ne queue ga clever ga vadeskumuntunnam!</li>
+    </ul>
+
+</body>
+</html>

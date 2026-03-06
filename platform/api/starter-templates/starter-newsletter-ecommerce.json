@@ -1,0 +1,271 @@
+{
+    "theme": {
+        "background": "#f3f4f6",
+        "contentWidth": 600,
+        "fontFamily": "Arial, sans-serif",
+        "primaryColor": "#4f46e5"
+    },
+    "rows": [
+        {
+            "id": "row-hero",
+            "settings": {
+                "backgroundColor": "#111827",
+                "paddingTop": 40,
+                "paddingBottom": 40
+            },
+            "columns": [
+                {
+                    "id": "col-hero",
+                    "width": 100,
+                    "blocks": [
+                        {
+                            "id": "hero-title",
+                            "type": "text",
+                            "props": {
+                                "content": "🔥 Midnight Flash Sale",
+                                "fontSize": 32,
+                                "color": "#ffffff",
+                                "align": "center",
+                                "bold": true
+                            }
+                        },
+                        {
+                            "id": "hero-subtitle",
+                            "type": "text",
+                            "props": {
+                                "content": "Up to 50% OFF for the next 24 hours",
+                                "fontSize": 18,
+                                "color": "#d1d5db",
+                                "align": "center"
+                            }
+                        },
+                        {
+                            "id": "hero-button",
+                            "type": "button",
+                            "props": {
+                                "text": "Shop Now",
+                                "url": "https://yourstore.com",
+                                "backgroundColor": "#4f46e5",
+                                "color": "#ffffff",
+                                "align": "center",
+                                "borderRadius": 6,
+                                "padding": 12
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "row-divider",
+            "settings": {
+                "backgroundColor": "#ffffff",
+                "paddingTop": 20,
+                "paddingBottom": 20
+            },
+            "columns": [
+                {
+                    "id": "col-divider",
+                    "width": 100,
+                    "blocks": [
+                        {
+                            "id": "divider-1",
+                            "type": "divider",
+                            "props": {
+                                "color": "#e5e7eb",
+                                "thickness": 1
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "row-products",
+            "settings": {
+                "backgroundColor": "#ffffff",
+                "paddingTop": 20,
+                "paddingBottom": 40
+            },
+            "columns": [
+                {
+                    "id": "col-product-1",
+                    "width": 50,
+                    "blocks": [
+                        {
+                            "id": "product-img-1",
+                            "type": "image",
+                            "props": {
+                                "src": "https://via.placeholder.com/250",
+                                "alt": "Product 1",
+                                "align": "center"
+                            }
+                        },
+                        {
+                            "id": "product-title-1",
+                            "type": "text",
+                            "props": {
+                                "content": "Premium Sneakers",
+                                "fontSize": 18,
+                                "bold": true,
+                                "align": "center"
+                            }
+                        },
+                        {
+                            "id": "product-price-1",
+                            "type": "text",
+                            "props": {
+                                "content": "$79.99",
+                                "fontSize": 16,
+                                "color": "#4f46e5",
+                                "align": "center"
+                            }
+                        },
+                        {
+                            "id": "product-btn-1",
+                            "type": "button",
+                            "props": {
+                                "text": "Buy Now",
+                                "url": "https://yourstore.com/product1",
+                                "backgroundColor": "#111827",
+                                "color": "#ffffff",
+                                "align": "center",
+                                "borderRadius": 4,
+                                "padding": 10
+                            }
+                        }
+                    ]
+                },
+                {
+                    "id": "col-product-2",
+                    "width": 50,
+                    "blocks": [
+                        {
+                            "id": "product-img-2",
+                            "type": "image",
+                            "props": {
+                                "src": "https://via.placeholder.com/250",
+                                "alt": "Product 2",
+                                "align": "center"
+                            }
+                        },
+                        {
+                            "id": "product-title-2",
+                            "type": "text",
+                            "props": {
+                                "content": "Smart Watch",
+                                "fontSize": 18,
+                                "bold": true,
+                                "align": "center"
+                            }
+                        },
+                        {
+                            "id": "product-price-2",
+                            "type": "text",
+                            "props": {
+                                "content": "$129.99",
+                                "fontSize": 16,
+                                "color": "#4f46e5",
+                                "align": "center"
+                            }
+                        },
+                        {
+                            "id": "product-btn-2",
+                            "type": "button",
+                            "props": {
+                                "text": "Buy Now",
+                                "url": "https://yourstore.com/product2",
+                                "backgroundColor": "#111827",
+                                "color": "#ffffff",
+                                "align": "center",
+                                "borderRadius": 4,
+                                "padding": 10
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "row-social",
+            "settings": {
+                "backgroundColor": "#f9fafb",
+                "paddingTop": 30,
+                "paddingBottom": 30
+            },
+            "columns": [
+                {
+                    "id": "col-social",
+                    "width": 100,
+                    "blocks": [
+                        {
+                            "id": "social-title",
+                            "type": "text",
+                            "props": {
+                                "content": "Follow Us",
+                                "fontSize": 16,
+                                "align": "center"
+                            }
+                        },
+                        {
+                            "id": "social-icons",
+                            "type": "social",
+                            "props": {
+                                "align": "center",
+                                "icons": [
+                                    {
+                                        "platform": "facebook",
+                                        "url": "https://facebook.com"
+                                    },
+                                    {
+                                        "platform": "instagram",
+                                        "url": "https://instagram.com"
+                                    },
+                                    {
+                                        "platform": "twitter",
+                                        "url": "https://twitter.com"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "row-footer",
+            "settings": {
+                "backgroundColor": "#111827",
+                "paddingTop": 20,
+                "paddingBottom": 20
+            },
+            "columns": [
+                {
+                    "id": "col-footer",
+                    "width": 100,
+                    "blocks": [
+                        {
+                            "id": "footer-text",
+                            "type": "text",
+                            "props": {
+                                "content": "You are receiving this email because you subscribed to our newsletter.",
+                                "fontSize": 12,
+                                "color": "#9ca3af",
+                                "align": "center"
+                            }
+                        },
+                        {
+                            "id": "unsubscribe",
+                            "type": "text",
+                            "props": {
+                                "content": "<a href='{{unsubscribe_url}}' style='color:#4f46e5;'>Unsubscribe</a>",
+                                "fontSize": 12,
+                                "align": "center"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
@@ -175,6 +175,10 @@ export default function ContactsPage() {
     const [importResult, setImportResult] = useState<any>(null);
     const [uploading, setUploading] = useState(false);
 
+    // Phase 7.5: Job progress polling
+    const [jobProgress, setJobProgress] = useState<{ id: string; progress: number; status: string; processed_items: number; total_items: number; failed_items: number } | null>(null);
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
     // Helper to get mapped column or empty
     const getMappedCol = (target: string) => {
         return Object.entries(columnMappings).find(([_, v]) => v === target)?.[0] || "";
@@ -306,10 +310,34 @@ export default function ContactsPage() {
             });
             if (res.ok) {
                 const data = await res.json();
-                setImportResult(data);
-                setUploadStep(4);
-                fetchStats();
-                fetchContacts();
+                // Phase 7.5: async job — start polling
+                if (data.job_id) {
+                    setJobProgress({ id: data.job_id, progress: 0, status: 'pending', processed_items: 0, total_items: rowCount, failed_items: 0 });
+                    setUploadStep(3); // New: progress polling step
+                    // Start polling
+                    pollRef.current = setInterval(async () => {
+                        try {
+                            const jr = await fetch(`${API_BASE}/contacts/jobs/${data.job_id}`, { headers: apiHeaders(token!) });
+                            if (jr.ok) {
+                                const job = await jr.json();
+                                setJobProgress({ id: job.id, progress: job.progress, status: job.status, processed_items: job.processed_items || 0, total_items: job.total_items || rowCount, failed_items: job.failed_items || 0 });
+                                if (job.status === 'completed' || job.status === 'failed') {
+                                    if (pollRef.current) clearInterval(pollRef.current);
+                                    setImportResult({ success: (job.processed_items || 0) - (job.failed_items || 0), failed: job.failed_items || 0, batch_id: data.batch_id });
+                                    setUploadStep(4);
+                                    fetchStats();
+                                    fetchContacts();
+                                }
+                            }
+                        } catch { /* polling error, will retry */ }
+                    }, 2000);
+                } else {
+                    // Fallback: legacy synchronous response
+                    setImportResult(data);
+                    setUploadStep(4);
+                    fetchStats();
+                    fetchContacts();
+                }
             } else {
                 const err = await res.json();
                 alert(err.detail || "Import failed");
@@ -319,6 +347,7 @@ export default function ContactsPage() {
     };
 
     const resetUpload = () => {
+        if (pollRef.current) clearInterval(pollRef.current);
         setShowUpload(false);
         setUploadStep(1);
         setFile(null);
@@ -326,6 +355,7 @@ export default function ContactsPage() {
         setRowCount(0);
         setColumnMappings({});
         setImportResult(null);
+        setJobProgress(null);
     };
 
     // ===== Delete Operations =====
@@ -726,7 +756,14 @@ export default function ContactsPage() {
                                         <td style={{ padding: "10px 16px", color: colors.text, fontWeight: 500 }}>
                                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                                                 <FileText style={{ width: "14px", height: "14px", color: colors.textSecondary }} />
-                                                {b.file_name}
+                                                <Link
+                                                    href={`/contacts/batch/${b.id}`}
+                                                    style={{ color: colors.accent, textDecoration: "none", fontWeight: 500 }}
+                                                    onMouseEnter={e => (e.currentTarget.style.textDecoration = "underline")}
+                                                    onMouseLeave={e => (e.currentTarget.style.textDecoration = "none")}
+                                                >
+                                                    {b.file_name}
+                                                </Link>
                                             </div>
                                         </td>
                                         <td style={{ padding: "10px 16px", color: colors.success, fontWeight: 500 }}>{b.imported_count}</td>
@@ -972,6 +1009,47 @@ export default function ContactsPage() {
                                         {uploading ? "Importing..." : "Import Contacts"}
                                     </button>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Step 3: Progress Polling (Phase 7.5) */}
+                        {uploadStep === 3 && jobProgress && (
+                            <div style={{ textAlign: "center", padding: "20px 0" }}>
+                                <div style={{
+                                    width: "48px", height: "48px", borderRadius: "50%",
+                                    background: `conic-gradient(${colors.accent} ${jobProgress.progress * 3.6}deg, var(--bg-hover) 0deg)`,
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    margin: "0 auto 16px", position: "relative" as const
+                                }}>
+                                    <div style={{
+                                        width: "38px", height: "38px", borderRadius: "50%",
+                                        backgroundColor: "var(--bg-card)",
+                                        display: "flex", alignItems: "center", justifyContent: "center",
+                                        fontSize: "12px", fontWeight: 700, color: colors.accent
+                                    }}>
+                                        {jobProgress.progress}%
+                                    </div>
+                                </div>
+                                <h3 style={{ fontSize: "16px", fontWeight: 600, color: colors.text, margin: "0 0 8px" }}>
+                                    Processing Import...
+                                </h3>
+                                <p style={{ fontSize: "13px", color: colors.textSecondary, margin: "0 0 16px" }}>
+                                    {jobProgress.processed_items.toLocaleString()} / {jobProgress.total_items.toLocaleString()} contacts processed
+                                </p>
+                                {/* Progress bar */}
+                                <div style={{
+                                    height: "6px", backgroundColor: "var(--bg-hover)", borderRadius: "3px",
+                                    overflow: "hidden", marginBottom: "12px"
+                                }}>
+                                    <div style={{
+                                        height: "100%", width: `${jobProgress.progress}%`,
+                                        backgroundColor: colors.accent, borderRadius: "3px",
+                                        transition: "width 500ms ease"
+                                    }} />
+                                </div>
+                                <p style={{ fontSize: "11px", color: colors.textSecondary, fontStyle: "italic" }}>
+                                    Do not close this window. Your contacts are being processed in the background.
+                                </p>
                             </div>
                         )}
 

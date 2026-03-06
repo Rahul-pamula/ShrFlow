@@ -85,16 +85,20 @@ class ContactService:
         tenant_id: str,
         page: int = 1,
         limit: int = 20,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        batch_id: Optional[str] = None
     ) -> Dict:
         """
-        Get paginated contacts with optional search
+        Get paginated contacts with optional search and batch filter.
         """
         offset = (page - 1) * limit
         
         query = db.client.table("contacts")\
             .select("id, email, first_name, last_name, custom_fields, tags, status, created_at", count="exact")\
             .eq("tenant_id", tenant_id)
+        
+        if batch_id:
+            query = query.eq("import_batch_id", batch_id)
         
         if search:
             query = query.or_(f"email.ilike.%{search}%,first_name.ilike.%{search}%,last_name.ilike.%{search}%")

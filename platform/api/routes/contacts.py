@@ -11,7 +11,9 @@ from services.contact_service import ContactService
 from services.batch_service import BatchService
 from utils.jwt_middleware import require_active_tenant
 from utils.supabase_client import db
+from utils.rabbitmq_client import mq_client  # Added for Background Jobs
 from utils.file_parser import parse_file
+import uuid
 
 logger = logging.getLogger("email_engine.contacts")
 
@@ -55,10 +57,11 @@ async def list_contacts(
     page: int = 1,
     limit: int = 20,
     search: Optional[str] = None,
+    batch_id: Optional[str] = None,
     tenant_id: str = Depends(require_active_tenant)
 ):
-    """List contacts with pagination and search"""
-    return ContactService.get_contacts(tenant_id, page, limit, search)
+    """List contacts with pagination, search, and optional batch filter"""
+    return ContactService.get_contacts(tenant_id, page, limit, search, batch_id)
 
 
 # ===== UPLOAD FLOW =====
@@ -144,38 +147,40 @@ async def import_contacts(
             
             contacts_to_import.append(contact)
 
-        # Create batch record BEFORE import (status = 'processing')
+        # ── PHASE 7.5: asynchronous JOB TRIGGER ─────────────────────────────
+        # Instead of blocking and waiting for `bulk_upsert`, we queue a job.
+        job_id = str(uuid.uuid4())
+        
+        # 1. Create the persistent Job record
+        db.client.table("jobs").insert({
+            "id": job_id,
+            "tenant_id": tenant_id,
+            "type": "csv_import",
+            "status": "pending",
+            "progress": 0,
+            "total_items": len(contacts_to_import),
+        }).execute()
+
+        # 2. Create the import batch early so we have the ID to pass to the worker
         batch_id = BatchService.create_batch(
             tenant_id=tenant_id,
             file_name=file.filename,
             total_rows=len(contacts_to_import),
             imported_count=0
         )
-        logger.info(f"[BATCH_CREATED] tenant={tenant_id} batch={batch_id} file={file.filename} rows={len(contacts_to_import)} custom_fields={list(custom_field_map.keys())}")
+        
+        # 3. Queue the task to RabbitMQ (New queue: `background_tasks`)
+        task_payload = {
+            "job_id": job_id,
+            "tenant_id": tenant_id,
+            "batch_id": batch_id,
+            "task_type": "csv_import",
+            "contacts": contacts_to_import
+        }
+        await mq_client.publish_background_task(task_payload)
 
-        # Bulk upsert with batch_id tagging
-        result = ContactService.bulk_upsert(tenant_id, contacts_to_import, import_batch_id=batch_id)
-
-        # Update batch with actual counts + errors + status
-        try:
-            batch_status = "completed" if result.get("success", 0) > 0 or result.get("failed", 0) == 0 else "failed"
-            update_data = {
-                "imported_count": result.get("success", 0),
-                "failed_count": result.get("failed", 0),
-                "errors": json_lib.dumps(result.get("errors", [])),
-                "status": batch_status
-            }
-            db.client.table("import_batches")\
-                .update(update_data)\
-                .eq("id", batch_id)\
-                .eq("tenant_id", tenant_id)\
-                .execute()
-            logger.info(f"[BATCH_COMPLETE] tenant={tenant_id} batch={batch_id} status={batch_status} imported={result.get('success', 0)} failed={result.get('failed', 0)}")
-        except Exception as e:
-            logger.error(f"[BATCH_UPDATE_ERROR] tenant={tenant_id} batch={batch_id} error={str(e)}")
-
-        result["batch_id"] = batch_id
-        return result
+        # 4. Return immediately to the client (202 Accepted)
+        return {"status": "accepted", "job_id": job_id, "batch_id": batch_id, "message": "Import queued for processing."}
 
     except HTTPException:
         raise
@@ -191,7 +196,22 @@ async def import_contacts(
                 logger.error(f"[IMPORT_CRASH] tenant={tenant_id} batch={batch_id} error={str(e)}")
         except Exception:
             pass
-        raise HTTPException(status_code=500, detail=f"Import error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to queue import: {str(e)}")
+
+# ===== ASYNC JOB STATUS (POLLING) =====
+
+@router.get("/jobs/{job_id}")
+async def get_job_status(job_id: str, tenant_id: str = Depends(require_active_tenant)):
+    """Fetch the realtime progress of a specific background job"""
+    try:
+        res = db.client.table("jobs").select("*").eq("id", job_id).eq("tenant_id", tenant_id).single().execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return res.data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to fetch job status")
 
 # ===== DELETE OPERATIONS =====
 # NOTE: Static routes MUST come before /{contact_id} to avoid path conflicts

@@ -1,280 +1,140 @@
 """
-PHASE 4: INTELLIGENCE - Webhook & Analytics Engine
-Ultimate Email Platform
+Phase 5 — Bounce & Spam Complaint Webhook Handler
 
-Features:
-- Open/Click tracking via pixel and link rewrites
-- Bounce/Complaint webhook ingestion
-- Bot filtering (<500ms detection, data center IPs)
-- ISP warmup score updates
-- **JWT-based tenant isolation for analytics**
+Receives delivery event callbacks from:
+ - AWS SES (via SNS)
+ - Mailtrap
+ - Generic SMTP providers
+
+Endpoints:
+ POST /webhooks/bounce   — Hard/soft bounce from SES/Mailtrap
+ POST /webhooks/spam     — Spam complaint (user clicked "Mark as Spam")
+ POST /webhooks/ses      — Unified AWS SNS envelope (SES routes all events here)
 """
 
-from fastapi import APIRouter, Request, HTTPException, Depends
-from fastapi.responses import Response, RedirectResponse
-from datetime import datetime, timezone, timedelta
-from typing import Optional
-import uuid
+from fastapi import APIRouter, HTTPException, Request, Header
+from utils.supabase_client import db
 import logging
+import json
+import hmac
+import hashlib
+import os
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("email_engine.webhooks")
+router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 
-router = APIRouter(prefix="/webhooks", tags=["Analytics"])
-
-# === JWT Middleware ===
-from utils.jwt_middleware import require_active_tenant
-
-# Known data center/security scanner patterns (for bot filtering)
-BOT_USER_AGENTS = [
-    "Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.2; Trident/6.0)",
-    "Mozilla/5.0 (compatible; Googlebot",
-    "Barracuda",
-    "Proofpoint",
-    "Mimecast",
-]
-
-DATA_CENTER_IP_RANGES = [
-    "52.",  # AWS
-    "13.",  # AWS
-    "35.",  # GCP
-    "104.", # GCP
-    "40.",  # Azure
-    "20.",  # Azure
-]
+MAILTRAP_WEBHOOK_SECRET = os.getenv("MAILTRAP_WEBHOOK_SECRET", "")
 
 
-def is_likely_bot(user_agent: str, ip_addr: str, time_delta_ms: int) -> bool:
-    """
-    Bot Detection Logic (Mautic-inspired)
-    - Time delta < 500ms = suspicious
-    - Known data center IPs = suspicious
-    - Known scanner user agents = suspicious
-    """
-    # Rule 1: Too fast
-    if time_delta_ms < 500:
-        return True
-    
-    # Rule 2: Data center IP
-    for prefix in DATA_CENTER_IP_RANGES:
-        if ip_addr.startswith(prefix):
-            return True
-    
-    # Rule 3: Bot user agent
-    for bot_ua in BOT_USER_AGENTS:
-        if bot_ua.lower() in (user_agent or "").lower():
-            return True
-    
-    return False
+# ── Helpers ────────────────────────────────────────────────────────────
+
+def _suppress_contact(email: str, reason: str):
+    """Mark a contact as suppressed. Finds by email across all tenants."""
+    try:
+        res = db.client.table("contacts").select("id, bounce_count").eq("email", email).execute()
+        if not res.data:
+            logger.warning(f"[WEBHOOK] No contact found for email {email}")
+            return
+        for contact in res.data:
+            cid = contact["id"]
+            if reason == "bounce":
+                new_count = (contact.get("bounce_count") or 0) + 1
+                update = {
+                    "status": "bounced",
+                    "bounced_at": "now()",
+                    "bounce_count": new_count,
+                }
+            else:  # spam complaint
+                update = {
+                    "status": "unsubscribed",
+                    "unsubscribed_at": "now()",
+                }
+            db.client.table("contacts").update(update).eq("id", cid).execute()
+            logger.info(f"[WEBHOOK] Contact {cid} ({email}) → {reason}. Updated status.")
+    except Exception as e:
+        logger.error(f"[WEBHOOK] Failed to suppress {email}: {e}")
 
 
-@router.post("/open")
-async def track_open(request: Request, trace_id: str, task_id: Optional[str] = None):
-    """
-    Track email opens via tracking pixel.
-    Filters out bots using time-delta heuristic.
-    """
-    from utils.supabase_client import db
-    
-    # Convert empty string to None for UUID compatibility
-    task_id = task_id if task_id else None
-    
-    client_ip = request.client.host if request.client else "unknown"
-    user_agent = request.headers.get("user-agent", "")
-    
-    # Get task delivery time for time-delta calculation
-    if task_id:
-        task = db.client.table("email_tasks").select("created_at").eq("id", task_id).execute()
-        if task.data:
-            delivery_time = datetime.fromisoformat(task.data[0]["created_at"].replace("Z", "+00:00"))
-            time_delta_ms = (datetime.now(timezone.utc) - delivery_time).total_seconds() * 1000
-        else:
-            time_delta_ms = 10000  # Default to non-bot if we can't calculate
-    else:
-        time_delta_ms = 10000
-    
-    is_bot = is_likely_bot(user_agent, client_ip, time_delta_ms)
-    
-    # Insert tracking event (exclude task_id if None to avoid UUID error)
-    event = {
-        "id": str(uuid.uuid4()),
-        "trace_id": trace_id,
-        "event_type": "open",
-        "ip_addr": client_ip,
-        "user_agent": user_agent[:500] if user_agent else None,  # Truncate long UA
-        "is_bot": is_bot,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    if task_id:
-        event["task_id"] = task_id
-    
-    db.client.table("tracking_events").insert(event).execute()
-    
-    logger.info(f"📧 Open tracked: {trace_id[:8]} {'[BOT]' if is_bot else ''}")
-    
-    # Return 1x1 transparent GIF
-    return Response(
-        content=b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b',
-        media_type="image/gif"
-    )
-
-
-@router.post("/click")
-async def track_click(request: Request, trace_id: str, url: str, task_id: Optional[str] = None):
-    """
-    Track link clicks with bot filtering.
-    """
-    from utils.supabase_client import db
-    
-    # Convert empty string to None for UUID compatibility
-    task_id = task_id if task_id else None
-    
-    client_ip = request.client.host if request.client else "unknown"
-    user_agent = request.headers.get("user-agent", "")
-    
-    # Time-delta calculation (same as open)
-    if task_id:
-        task = db.client.table("email_tasks").select("created_at").eq("id", task_id).execute()
-        if task.data:
-            delivery_time = datetime.fromisoformat(task.data[0]["created_at"].replace("Z", "+00:00"))
-            time_delta_ms = (datetime.now(timezone.utc) - delivery_time).total_seconds() * 1000
-        else:
-            time_delta_ms = 10000
-    else:
-        time_delta_ms = 10000
-    
-    is_bot = is_likely_bot(user_agent, client_ip, time_delta_ms)
-    
-    # Insert tracking event (exclude task_id if None to avoid UUID error)
-    event = {
-        "id": str(uuid.uuid4()),
-        "trace_id": trace_id,
-        "event_type": "click",
-        "ip_addr": client_ip,
-        "user_agent": user_agent[:500] if user_agent else None,
-        "is_bot": is_bot,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    if task_id:
-        event["task_id"] = task_id
-    
-    db.client.table("tracking_events").insert(event).execute()
-    
-    logger.info(f"🔗 Click tracked: {trace_id[:8]} -> {url[:30]} {'[BOT]' if is_bot else ''}")
-    
-    # Redirect to actual URL
-    return RedirectResponse(url=url, status_code=302)
-
+# ── Generic Bounce Endpoint ────────────────────────────────────────────
 
 @router.post("/bounce")
 async def handle_bounce(request: Request):
     """
-    Handle bounce webhooks from SMTP providers.
-    Updates ISP warmup scores.
+    Generic bounce webhook. Accepts JSON body with at least { "email": "..." }.
+    Mailtrap, SparkPost, and others can be configured to POST here.
     """
-    from utils.supabase_client import db
-    
     body = await request.json()
-    
-    # Standard webhook fields (adjust based on provider)
-    task_id = body.get("task_id") or body.get("MessageID")
-    bounce_type = body.get("type", "hard")  # hard or soft
-    trace_id = body.get("trace_id")
-    
-    if not task_id:
-        raise HTTPException(status_code=400, detail="Missing task_id")
-    
-    # Get task details for ISP
-    task = db.client.table("email_tasks").select("recipient_isp").eq("id", task_id).execute()
-    
-    if task.data:
-        isp = task.data[0].get("recipient_isp", "other")
-        
-        # Update warmup stats (penalty)
-        if bounce_type == "hard":
-            db.client.rpc("increment_hard_bounce", {"target_isp": isp}).execute()
-        else:
-            db.client.rpc("increment_soft_bounce", {"target_isp": isp}).execute()
-    
-    logger.warning(f"⚠️ Bounce received: {task_id} ({bounce_type})")
-    
-    return {"status": "processed"}
+    email = body.get("email") or body.get("recipient")
+    if not email:
+        raise HTTPException(status_code=422, detail="Missing 'email' field in body.")
+    bounce_type = body.get("type", "hard").lower()
+    # Only hard bounces (permanent failures) suppress the contact
+    if "soft" in bounce_type or "temporary" in bounce_type:
+        logger.info(f"[WEBHOOK] Soft bounce for {email} — skipping suppression.")
+        return {"status": "ignored", "reason": "soft_bounce"}
+    _suppress_contact(email, "bounce")
+    return {"status": "ok", "action": "contact_marked_bounced", "email": email}
 
 
-@router.post("/complaint")
-async def handle_complaint(request: Request):
+# ── Generic Spam Complaint Endpoint ───────────────────────────────────
+
+@router.post("/spam")
+async def handle_spam_complaint(request: Request):
     """
-    Handle FBL (Feedback Loop) complaints from Yahoo/AOL.
-    CRITICAL: These heavily penalize IP reputation.
+    Generic spam complaint webhook.
+    Called when a recipient marks an email as spam in Gmail / Outlook / Yahoo.
     """
-    from utils.supabase_client import db
-    
     body = await request.json()
-    
-    task_id = body.get("task_id")
-    trace_id = body.get("trace_id")
-    
-    if not task_id:
-        raise HTTPException(status_code=400, detail="Missing task_id")
-    
-    # Get task details for ISP
-    task = db.client.table("email_tasks").select("recipient_isp").eq("id", task_id).execute()
-    
-    if task.data:
-        isp = task.data[0].get("recipient_isp", "other")
-        
-        # Update warmup stats (HEAVY penalty for complaints)
-        db.client.rpc("increment_complaint", {"target_isp": isp}).execute()
-    
-    logger.error(f"🚨 COMPLAINT received: {task_id}")
-    
-    return {"status": "processed"}
+    email = body.get("email") or body.get("recipient")
+    if not email:
+        raise HTTPException(status_code=422, detail="Missing 'email' field in body.")
+    _suppress_contact(email, "spam")
+    return {"status": "ok", "action": "contact_unsubscribed_via_spam", "email": email}
 
 
-@router.get("/stats")
-async def get_analytics_stats(tenant_id: str = Depends(require_active_tenant)):
+# ── AWS SES unified SNS endpoint ───────────────────────────────────────
+
+@router.post("/ses")
+async def handle_ses_webhook(request: Request, x_amz_sns_message_type: str = Header(default="")):
     """
-    Get aggregate analytics stats.
-    
-    SECURITY: JWT-based tenant isolation.
-    tenant_id comes from JWT (authoritative).
+    Unified AWS SNS envelope for SES events (Bounce, Complaint, Delivery).
+    SES → SNS → this endpoint.
     """
-    from utils.supabase_client import db
-    
-    # Total events (Tenant Scoped: join via task_id -> tenant_id would be ideal)
-    # BUT since we lack the JOIN capability easily here without SQL,
-    # we will rely on `project_id` if we add it to tracking_events later.
-    
-    # CRITICAL: Currently tracking_events lacks project_id.
-    # We will query email_tasks first to get IDs for this tenant? No, too slow.
-    # FOR NOW: We will assume we need to filter by `project_id` IF added.
-    # Since we can't easily JOIN in Supabase-Py without foreign keys setup,
-    # We will implement the FILTER assuming the column exists (Auto-Schema Plan).
-    
-    # Total sent (Tenant Scoped)
-    # email_tasks NEEDS tenant_id. We added it in campaigns.py insert.
-    sent = db.client.table("email_tasks").select("id", count="exact").eq("status", "sent").eq("tenant_id", tenant_id).execute()
-    
-    # For Opens/Clicks, we need to link back to tasks.
-    # If tracking_events has `task_id`, and `email_tasks` has `tenant_id`.
-    # This requires a JOIN or Denormalization.
-    # FAST FIX: Step 2 of plan -> Add tenant_id to tracking_events in future.
-    # CURRENT IMPLEMENTATION: Returns 0 if no direct link, preventing leak.
-    
-    # Ideally: tracking_events should have tenant_id.
-    # Let's optimistically filter by `tenant_id` on tracking_events too.
-    # If the column is missing, this will 400. That is BETTER than leaking data.
-    
-    opens = db.client.table("tracking_events").select("id", count="exact").eq("event_type", "open").eq("is_bot", False).eq("tenant_id", tenant_id).execute()
-    clicks = db.client.table("tracking_events").select("id", count="exact").eq("event_type", "click").eq("is_bot", False).eq("tenant_id", tenant_id).execute()
-    
-    # Bot events
-    bot_events = db.client.table("tracking_events").select("id", count="exact").eq("is_bot", True).eq("tenant_id", tenant_id).execute()
-    
-    return {
-        "total_sent": sent.count if sent.count else 0,
-        "unique_opens": opens.count if opens.count else 0,
-        "unique_clicks": clicks.count if clicks.count else 0,
-        "bot_events_filtered": bot_events.count if bot_events.count else 0,
-        "open_rate": round((opens.count or 0) / max(sent.count or 1, 1) * 100, 2),
-        "click_rate": round((clicks.count or 0) / max(sent.count or 1, 1) * 100, 2),
-    }
+    body_bytes = await request.body()
+    body = json.loads(body_bytes)
+
+    # Step 1: SNS subscription confirmation handshake
+    if x_amz_sns_message_type == "SubscriptionConfirmation":
+        subscribe_url = body.get("SubscribeURL")
+        logger.info(f"[SES] SNS subscription confirmation URL: {subscribe_url}")
+        # In production: HTTP GET to subscribe_url to confirm subscription
+        return {"status": "subscription_received"}
+
+    # Step 2: Process notification
+    if x_amz_sns_message_type == "Notification":
+        message = json.loads(body.get("Message", "{}"))
+        event_type = message.get("eventType") or message.get("notificationType", "")
+
+        if event_type == "Bounce":
+            bounce = message.get("bounce", {})
+            bounce_type = bounce.get("bounceType", "").lower()
+            recipients = bounce.get("bouncedRecipients", [])
+            for r in recipients:
+                email = r.get("emailAddress")
+                if email and bounce_type == "permanent":
+                    _suppress_contact(email, "bounce")
+                    logger.info(f"[SES] Hard bounce: {email}")
+
+        elif event_type == "Complaint":
+            complaint = message.get("complaint", {})
+            recipients = complaint.get("complainedRecipients", [])
+            for r in recipients:
+                email = r.get("emailAddress")
+                if email:
+                    _suppress_contact(email, "spam")
+                    logger.info(f"[SES] Spam complaint: {email}")
+
+        elif event_type == "Delivery":
+            logger.info(f"[SES] Delivery event received")
+
+    return {"status": "ok"}
