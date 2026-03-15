@@ -1,8 +1,12 @@
-# 📧 Email Engine
+# 📧 Sh_R_Mail (Email Engine)
 
-A multi-tenant email marketing platform — built for businesses to manage contacts, create email templates, run campaigns, and track delivery analytics.
+A self-hosted email marketing and campaign management platform — built for internal use to manage contacts, create email templates, run campaigns, and track delivery analytics.
 
 > **Status:** Active Development — MVP ready for internal testing.
+
+### 🛡️ Email Compliance & AWS SES
+* **How emails are obtained:** Emails are collected strictly through internal university/student opt-ins and manually imported. We do not use bought, scraped, or third-party mailing lists.
+* **Bounce & Complaint Handling:** The platform is designed to process Amazon SES notifications. Bounces and complaints are logged, and those contacts are automatically removed from active mailing lists to maintain a high sender reputation.
 
 ---
 
@@ -68,98 +72,76 @@ A multi-tenant email marketing platform — built for businesses to manage conta
 
 ---
 
-## Project Structure
-
-```
-email_engine/
-├── platform/
-│   ├── api/              # FastAPI backend
-│   │   ├── main.py       # App entry point + routes
-│   │   ├── routes/       # API route handlers
-│   │   ├── services/     # Business logic
-│   │   ├── utils/        # JWT, middleware, helpers
-│   │   └── requirements.txt
-│   ├── client/           # Next.js frontend
-│   │   └── src/app/      # Pages + components
-│   └── services/
-│       └── worker.py     # Background email delivery worker
-├── deploy/               # Docker configurations
-│   ├── api/Dockerfile
-│   ├── worker/Dockerfile
-│   ├── client/Dockerfile
-│   └── nginx/nginx.conf
-├── docs/                 # Project documentation
-│   ├── phase_wise_plan   # Complete feature roadmap
-│   └── team_sprint_plan.md  # Team structure + sprint plan
-├── scripts/              # DB migration + seeding scripts
-├── tests/
-│   └── fixtures/         # Test data files
-├── docker-compose.yml    # Orchestrate all services
-├── start.sh              # Local development startup
-└── stop.sh               # Local development shutdown
-```
-
----
-
 ## Quick Start (Local Development)
 
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+
-- A `.env` file with credentials (see below)
+- `.env` file with credentials
 
-### 1. Clone and configure
+### 1. First Time Setup
+
+Copy the environment file and fill in your credentials:
 ```bash
 git clone <repo-url>
-cd email_engine
+cd Sh_R_Mail
 cp .env.example .env
-# Edit .env with your credentials
 ```
 
-### 2. Install dependencies
+Install backend dependencies:
 ```bash
-# Backend
 cd platform/api
-# Create a virtual environment named .venv
 python -m venv .venv
-
-# Activate it (on Mac/Linux)
-source .venv/bin/activate
-
-# Activate it (on Windows)
-.venv\Scripts\activate
-
+source .venv/bin/activate  # Or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
+```
 
-# Make sure your virtual environment is activated if you used one
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-# Frontend
-cd email_engine/platform/client
+Install frontend dependencies:
+```bash
+cd ../client
 npm install
-npm run dev
+cd ../..
+```
 
-### 3. Start everything
+### 2. Start All Services
+From the root directory, run the helper script:
 ```bash
 ./start.sh
 ```
+This automatically handles port cleanup and starts:
+| Service | URL | Description |
+|---------|-----|-------------|
+| Frontend | http://localhost:3000 | Main application UI |
+| Backend API | http://localhost:8000 | REST API |
+| API Docs | http://localhost:8000/docs | Interactive API documentation |
 
-| Service | URL |
-|---|---|
-| Frontend | http://localhost:3000 |
-| API | http://localhost:8000 |
-| API Docs | http://localhost:8000/docs |
-
-### 4. Stop everything
+### 3. Stop All Services
 ```bash
 ./stop.sh
+```
+
+### 4. Need to Reset?
+```bash
+./stop.sh && rm -rf logs/ && ./start.sh
+```
+
+---
+
+## Viewing Logs
+
+If using the helper scripts (`start.sh`), logs are output to the `logs/` directory:
+```bash
+tail -f logs/api.log       # API logs
+tail -f logs/worker.log    # Worker logs
+tail -f logs/frontend.log  # Frontend logs
+tail -f logs/*.log         # All at once
 ```
 
 ---
 
 ## Environment Variables
 
-Create a `.env` file at the project root:
+Your `.env` file should look like this:
 
 ```env
 # Supabase
@@ -184,120 +166,45 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 ---
 
-## Docker Deployment
+## Docker Deployment (Production)
 
-### Run with Docker (recommended for production):
-```bash
-docker-compose up --build
-```
-
-### Run in background:
+### Run with Docker:
 ```bash
 docker-compose up -d --build
 ```
-
-### View logs:
+Log viewing:
 ```bash
 docker-compose logs -f api
 docker-compose logs -f worker
 docker-compose logs -f client
 ```
-
-### Stop:
+Stop services:
 ```bash
 docker-compose down
 ```
 
-> See `deploy/README.md` for full Docker setup and SMTP configuration.
+---
+
+## Database & Structure
+
+- Hosted on **Supabase** (PostgreSQL) with RLS enforced.
+- Migrations in `platform/database/migrations/` (or `scripts/`).
+
+**How Email Sending Works:**
+1. Tenant creates a Campaign.
+2. Clicks "Send" → API snapshots HTML + recipients → inserts `email_tasks` rows.
+3. Background Worker polls `email_tasks` every 5 seconds.
+4. Worker sends each email via Amazon SES SMTP.
+5. On failure: retries up to 3 times with backoff. Status updated in real-time.
 
 ---
 
-## Viewing Logs (Local Dev)
+## Roadmap & Progress Tracker
 
-```bash
-tail -f logs/api.log       # API logs
-tail -f logs/worker.log    # Worker logs
-tail -f logs/frontend.log  # Frontend logs
-tail -f logs/*.log         # All at once
-```
-
----
-
-## Database
-
-- Hosted on **Supabase** (PostgreSQL)
-- Row Level Security (RLS) enforced — tenants can only access their own data
-- Migrations in `scripts/` folder
-
-```bash
-# Run a migration
-./scripts/run_migration.sh
-```
-
----
-
-## How Email Sending Works
-
-```
-1. Tenant creates a Campaign
-2. Clicks "Send" → API snapshots HTML + recipients → inserts email_tasks rows
-3. Background Worker polls email_tasks every 5 seconds
-4. Worker sends each email via Amazon SES SMTP
-5. On failure: retries up to 3 times with backoff
-6. On hard failure: moves to email_tasks_dead (dead-letter queue)
-7. Status updated in real-time: draft → processing → completed
-```
-
----
-
-## Roadmap
-
-Full text roadmap is in `docs/phases/phase_wise_plan.md`.
+Full text roadmap is in `docs/phase_wise_plan.md`.
 
 🔥 **Interactive Tracker:** 
-You can track your real-time execution progress using the standalone UI tracker! Just double-click `docs/progress.html` in your file browser to open the interactive Phase Dashboard.
-
-**Before Handover (Phases 0–7):**
-- Phase 0 → UI/UX Design system (shadcn/ui)
-- Phase 1.5 → Auth cleanup + Google login
-- Phase 3 → Template editor rebuild (GrapesJS)
-- Phase 4 → Campaign wizard + scheduling
-- Phase 5 → Compliance (unsubscribe, bounce handling)
-- Phase 6 → Analytics (open/click tracking, reports)
-- Phase 7 → Plan enforcement (free/starter/pro quotas)
-
-**Post-Handover (Phases 8–12, company funds):**
-- Phase 8 → Admin panel
-- Phase 9 → Stripe/Razorpay payments
-- Phase 10 → A/B testing, drip campaigns
-- Phase 11 → API & integrations
-- Phase 12 → Redis, microservices, Kubernetes
-
----
-
-## Team Structure
-
-See `docs/team_sprint_plan.md` for full sprint breakdown and role assignments.
-
-| Role | Responsibility |
-|---|---|
-| Tech Lead | Architecture, reviews, client comms |
-| Backend Dev | FastAPI, worker, DB |
-| Frontend Dev | Next.js, components, UX |
-| DevOps | Docker, CI/CD, AWS |
-| QA | Testing, bug reports |
-
----
-
-## Troubleshooting
-
-| Problem | Fix |
-|---|---|
-| Port already in use | `lsof -ti:8000 \| xargs kill -9` |
-| Services won't start | Check `logs/` directory |
-| DB connection error | Verify `SUPABASE_URL` in `.env` |
-| SMTP error | Verify SES keys + domain verified in AWS |
-| Reset everything | `./stop.sh && rm -rf logs/ && ./start.sh` |
+You can track real-time execution progress using the standalone UI tracker! Just double-click `docs/progress.html` in your file browser to open the interactive Phase Dashboard.
 
 ---
 
@@ -310,4 +217,4 @@ See `docs/team_sprint_plan.md` for full sprint breakdown and role assignments.
 
 ---
 
-*Built with ❤️ — Email Engine v1.0*
+*Built with ❤️ — Sh_R_Mail v1.0*
