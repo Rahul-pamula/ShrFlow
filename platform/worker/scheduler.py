@@ -11,8 +11,6 @@ import asyncio
 import os
 import uuid
 import logging
-import re
-import random
 from datetime import datetime, timezone
 from typing import List, Dict
 
@@ -35,140 +33,60 @@ POLL_INTERVAL = 60  # seconds
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../api"))
 from utils.rabbitmq_client import mq_client
-
-
-# ── Text processing (mirror of campaigns.py) ───────────────────────────
-def process_spintax(text: str) -> str:
-    if not text:
-        return ""
-    pattern = r'\{([^{}]+)\}'
-    def _replace(m):
-        return random.choice(m.group(1).split("|"))
-    while re.search(pattern, text):
-        text = re.sub(pattern, _replace, text)
-    return text
-
-
-def process_merge_tags(text: str, contact: dict) -> str:
-    if not text:
-        return ""
-    pattern = r'\{\{(\w+)(?:\|([^}]+))?\}\}'
-    def _replace(m):
-        field = m.group(1)
-        fallback = m.group(2) or ""
-        return str(contact.get(field, fallback) or fallback)
-    return re.sub(pattern, _replace, text)
+from services.campaign_dispatch_service import (
+    claim_scheduled_campaign,
+    fetch_contacts_for_target,
+    queue_campaign_dispatch,
+)
 
 
 # ── Core dispatch logic ────────────────────────────────────────────────
 async def dispatch_campaign(db: Client, campaign: dict):
-    """Mirror of send_campaign in campaigns.py — called by scheduler without JWT."""
+    """Dispatch a scheduled campaign after atomically claiming it."""
     campaign_id = campaign["id"]
     tenant_id   = campaign["tenant_id"]
 
+    if not claim_scheduled_campaign(db, campaign_id, tenant_id):
+        logger.info(f"[{campaign_id}] Skip dispatch; another scheduler instance already claimed it.")
+        return
+
     logger.info(f"[{campaign_id}] Dispatching scheduled campaign: '{campaign['name']}'")
-
-    # 1. Snapshot
-    snapshot_id = str(uuid.uuid4())
-    db.table("campaign_snapshots").insert({
-        "id": snapshot_id,
-        "campaign_id": campaign_id,
-        "body_snapshot": campaign.get("body_html", ""),
-        "subject_snapshot": campaign.get("subject", ""),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }).execute()
-
-    # 2. Mark as sending in DB
-    db.table("campaigns").update({
-        "status": "sending",
-    }).eq("id", campaign_id).execute()
-
-    # 3. Set Redis status so worker will process (best-effort)
-    try:
-        from utils.redis_client import redis_client
-        await redis_client.set_campaign_status(campaign_id, "SENDING")
-    except Exception as e:
-        logger.warning(f"[{campaign_id}] Redis update skipped: {e}")
-
-    # 4. Fetch audience
-    audience_target = campaign.get("audience_target") or "all"
-    query = db.table("contacts").select("id, email, first_name, last_name").eq("tenant_id", tenant_id)
-
-    if audience_target != "all":
-        if audience_target.startswith("batch_domains:"):
-            _, batch_id, domain_blob = audience_target.split(":", 2)
-            domains = [item.strip().lower() for item in domain_blob.split(",") if item.strip()]
-            query = query.eq("import_batch_id", batch_id)
-            if len(domains) == 1:
-                query = query.eq("email_domain", domains[0])
-            elif domains:
-                query = query.in_("email_domain", domains)
-        elif audience_target.startswith("batch_domain:"):
-            _, batch_id, domain = audience_target.split(":", 2)
-            query = query.eq("import_batch_id", batch_id).eq("email_domain", domain)
-        elif audience_target.startswith("domains:"):
-            domains = [item.strip().lower() for item in audience_target.split("domains:", 1)[1].split(",") if item.strip()]
-            if len(domains) == 1:
-                query = query.eq("email_domain", domains[0])
-            elif domains:
-                query = query.in_("email_domain", domains)
-        elif audience_target.startswith("domain:"):
-            query = query.eq("email_domain", audience_target.split("domain:", 1)[1].strip().lower())
-        elif audience_target.startswith("batch:"):
-            batch_id = audience_target.split("batch:", 1)[1]
-            query = query.eq("import_batch_id", batch_id)
-        else:
-            list_members = db.table("list_members").select("contact_id").eq("list_id", audience_target).execute()
-            if list_members.data:
-                contact_ids = [m["contact_id"] for m in list_members.data]
-                query = query.in_("id", contact_ids)
-            else:
-                query = query.eq("id", "00000000-0000-0000-0000-000000000000")
-
-    contacts_res = query.execute()
-    contacts: List[Dict] = contacts_res.data or []
+    contacts, _ = fetch_contacts_for_target(
+        supabase=db,
+        tenant_id=tenant_id,
+        target=campaign.get("audience_target") or "all",
+        exclude_suppressed=False,
+    )
 
     if not contacts:
         logger.warning(f"[{campaign_id}] No contacts found — aborting.")
         db.table("campaigns").update({"status": "draft"}).eq("id", campaign_id).execute()
         return
 
-    # 5. Build dispatch records + RabbitMQ tasks
-    dispatch_records = []
-    tasks = []
+    try:
+        dispatch_result = await queue_campaign_dispatch(
+            supabase=db,
+            mq_client=mq_client,
+            campaign=campaign,
+            tenant_id=tenant_id,
+            contacts=contacts,
+            redis_client=None,
+            mark_campaign_sending=False,
+            touch_scheduled_at=False,
+        )
+    except ValueError as exc:
+        logger.error(f"[{campaign_id}] Dispatch failed: {exc}")
+        db.table("campaigns").update({"status": "draft"}).eq("id", campaign_id).execute()
+        return
 
-    for contact in contacts:
-        dispatch_id = str(uuid.uuid4())
-        html = process_merge_tags(process_spintax(campaign.get("body_html", "")), contact)
-        subject = process_merge_tags(process_spintax(campaign.get("subject", "")), contact)
+    # Best-effort Redis update for workers.
+    try:
+        from utils.redis_client import redis_client
+        await redis_client.set_campaign_status(campaign_id, "SENDING")
+    except Exception as e:
+        logger.warning(f"[{campaign_id}] Redis update skipped: {e}")
 
-        dispatch_records.append({
-            "id": dispatch_id,
-            "campaign_id": campaign_id,
-            "subscriber_id": contact["id"],
-            "status": "PENDING",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        })
-
-        tasks.append({
-            "dispatch_id": dispatch_id,
-            "campaign_id": campaign_id,
-            "tenant_id": tenant_id,
-            "recipient_email": contact["email"],
-            "recipient_id": contact["id"],
-            "subject": subject,
-            "body_html": html,
-        })
-
-    # Batch-insert dispatch rows (Supabase limit is 1000 per request)
-    CHUNK = 1000
-    for i in range(0, len(dispatch_records), CHUNK):
-        db.table("campaign_dispatch").insert(dispatch_records[i:i+CHUNK]).execute()
-
-    # 6. Publish to RabbitMQ
-    await mq_client.publish_tasks(tasks)
-    logger.info(f"[{campaign_id}] ✅ {len(tasks)} tasks published to RabbitMQ.")
+    logger.info(f"[{campaign_id}] ✅ {dispatch_result['dispatched']} tasks published to RabbitMQ.")
 
 
 # ── Monthly summary notifier ───────────────────────────────────────────

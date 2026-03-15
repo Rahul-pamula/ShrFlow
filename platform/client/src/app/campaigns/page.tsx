@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
 /* ============================================================
    CAMPAIGNS - Dark Glassmorphism Theme (matching app design)
    ============================================================ */
@@ -78,7 +80,7 @@ export default function CampaignsPage() {
         if (!token) return;
         try {
             const params = new URLSearchParams({ page: String(page), limit: '15' });
-            const res = await fetch(`http://127.0.0.1:8000/campaigns/?${params}`, {
+            const res = await fetch(`${API_BASE}/campaigns/?${params}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!res.ok) throw new Error("Failed to fetch campaigns");
@@ -134,8 +136,8 @@ export default function CampaignsPage() {
         try {
             const isDelete = action === 'delete';
             const url = isDelete
-                ? `http://127.0.0.1:8000/campaigns/${id}`
-                : `http://127.0.0.1:8000/campaigns/${id}/${action}`;
+                ? `${API_BASE}/campaigns/${id}`
+                : `${API_BASE}/campaigns/${id}/${action}`;
 
             const res = await fetch(url, {
                 method: isDelete ? 'DELETE' : 'POST',

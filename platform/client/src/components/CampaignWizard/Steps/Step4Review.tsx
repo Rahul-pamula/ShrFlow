@@ -9,6 +9,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const STORAGE_KEY = "campaign_local_sessions";
 
 export default function Step4Review({ data, onBack, editId }: any) {
     const router = useRouter();
@@ -29,6 +30,16 @@ export default function Step4Review({ data, onBack, editId }: any) {
     const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
     const [minDateTime, setMinDateTime] = useState("");
+
+    const buildCampaignPayload = () => ({
+        name: data.name || "Untitled Draft",
+        subject: data.subject || "",
+        body_html: data.htmlContent || "",
+        status: "draft",
+        from_name: data.from_name || "",
+        from_prefix: data.from_prefix || "",
+        domain_id: data.domain_id || null,
+    });
 
     // Set minDateTime once on mount so it doesn't constantly change and lock the input during typing
     useEffect(() => {
@@ -132,7 +143,15 @@ export default function Step4Review({ data, onBack, editId }: any) {
             }
 
             setStatus('success');
-            localStorage.removeItem("campaign_wizard_draft");
+            try {
+                const sessions = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+                Object.keys(sessions).forEach((sessionId) => {
+                    if (sessions[sessionId]?.data?.name === data.name && sessions[sessionId]?.data?.subject === data.subject) {
+                        delete sessions[sessionId];
+                    }
+                });
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+            } catch { }
             setTimeout(() => router.push("/campaigns"), 3000);
         } catch (err: any) {
             setStatus('error');
@@ -149,20 +168,47 @@ export default function Step4Review({ data, onBack, editId }: any) {
     const handleSendTest = async () => {
         if (!token || !testEmail) return;
         setTestStatus('sending');
+        let temporaryCampaignId: string | null = null;
         try {
-            // We need a campaign ID for test. Create a temp draft if no id, or just log
-            const res = await fetch(`${API_BASE}/campaigns/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ name: `[TEST] ${data.name}`, subject: data.subject, body_html: data.htmlContent, status: 'draft' })
-            });
-            if (!res.ok) throw new Error("Failed");
-            const { id } = await res.json();
-            await fetch(`${API_BASE}/campaigns/${id}/test`, {
+            let campaignId = editId;
+
+            if (!campaignId) {
+                const createRes = await fetch(`${API_BASE}/campaigns/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({
+                        ...buildCampaignPayload(),
+                        name: `[TEST] ${data.name || "Untitled Draft"}`
+                    })
+                });
+                if (!createRes.ok) {
+                    const error = await createRes.json().catch(() => ({ detail: "Failed to create temporary test draft" }));
+                    throw new Error(error.detail || "Failed to create temporary test draft");
+                }
+                const created = await createRes.json();
+                campaignId = created.id;
+                temporaryCampaignId = created.id;
+            } else {
+                const updateRes = await fetch(`${API_BASE}/campaigns/${campaignId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(buildCampaignPayload())
+                });
+                if (!updateRes.ok) {
+                    const error = await updateRes.json().catch(() => ({ detail: "Failed to refresh campaign before test send" }));
+                    throw new Error(error.detail || "Failed to refresh campaign before test send");
+                }
+            }
+
+            const testRes = await fetch(`${API_BASE}/campaigns/${campaignId}/test`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ recipient_email: testEmail })
             });
+            if (!testRes.ok) {
+                const error = await testRes.json().catch(() => ({ detail: "Failed to send test email" }));
+                throw new Error(error.detail || "Failed to send test email");
+            }
             setTestStatus('sent');
             setTimeout(() => {
                 setShowTestModal(false);
@@ -171,6 +217,15 @@ export default function Step4Review({ data, onBack, editId }: any) {
             }, 2000);
         } catch {
             setTestStatus('error');
+        } finally {
+            if (temporaryCampaignId) {
+                try {
+                    await fetch(`${API_BASE}/campaigns/${temporaryCampaignId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                } catch { }
+            }
         }
     };
 

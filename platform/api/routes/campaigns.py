@@ -34,34 +34,17 @@ from models.campaign import (
 )
 from utils.redis_client import redis_client
 from utils.rabbitmq_client import mq_client
+from services.campaign_dispatch_service import (
+    fetch_contacts_for_target,
+    process_merge_tags,
+    process_spintax,
+    queue_campaign_dispatch,
+)
 
 router = APIRouter(prefix="/campaigns", tags=["Campaigns"])
 
 # === JWT Middleware ===
 from utils.jwt_middleware import require_active_tenant
-
-# === Utilities ===
-def process_spintax(text: str) -> str:
-    """Process Spintax: {Hello|Hi|Hey} -> randomly picks one"""
-    if not text: return ""
-    pattern = r'\{([^{}]+)\}'
-    def replace_spintax(match):
-        options = match.group(1).split('|')
-        return random.choice(options)
-    while re.search(pattern, text):
-        text = re.sub(pattern, replace_spintax, text)
-    return text
-
-def process_merge_tags(text: str, contact: dict) -> str:
-    """Process merge tags: {{first_name}} -> actual value"""
-    if not text: return ""
-    pattern = r'\{\{(\w+)(?:\|([^}]+))?\}\}'
-    def replace_tag(match):
-        field = match.group(1)
-        fallback = match.group(2) or ""
-        return str(contact.get(field, fallback) or fallback)
-    return re.sub(pattern, replace_tag, text)
-
 
 # === Campaign Routes ===
 
@@ -120,7 +103,7 @@ async def list_campaigns(
     from utils.supabase_client import db
     
     # Base query for data
-    query = db.client.table("campaigns").select("id, name, subject, status, created_at, scheduled_at, stats:email_tasks(count)").eq("tenant_id", tenant_id).is_("is_archived", "false")
+    query = db.client.table("campaigns").select("id, name, subject, status, created_at, scheduled_at").eq("tenant_id", tenant_id).is_("is_archived", "false")
     
     # Base query for total count (O(1) metadata)
     count_query = db.client.table("campaigns").select("id", count="exact").eq("tenant_id", tenant_id).is_("is_archived", "false")
@@ -320,44 +303,12 @@ async def send_campaign(request: Request, campaign_id: str, send_request: SendRe
     from utils.billing import check_can_send_campaign
     
     target = send_request.target_list_id or "all"
-    contacts_query = db.client.table("contacts")\
-        .select("id, email, first_name, last_name")\
-        .eq("tenant_id", tenant_id)\
-        .not_.in_("status", ["bounced", "unsubscribed"])
-
-    if target.startswith("batch_domains:"):
-        _, batch_id, domain_blob = target.split(":", 2)
-        domains = [item.strip().lower() for item in domain_blob.split(",") if item.strip()]
-        contacts_query = contacts_query.eq("import_batch_id", batch_id)
-        if len(domains) == 1:
-            contacts_query = contacts_query.eq("email_domain", domains[0])
-        elif domains:
-            contacts_query = contacts_query.in_("email_domain", domains)
-        audience_label = f"Batch domains: {', '.join(domains[:3])}"
-    elif target.startswith("batch_domain:"):
-        _, batch_id, domain = target.split(":", 2)
-        contacts_query = contacts_query.eq("import_batch_id", batch_id).eq("email_domain", domain)
-        audience_label = f"Batch domain: {domain}"
-    elif target.startswith("domains:"):
-        domains = [item.strip().lower() for item in target.split("domains:", 1)[1].split(",") if item.strip()]
-        if len(domains) == 1:
-            contacts_query = contacts_query.eq("email_domain", domains[0])
-        elif domains:
-            contacts_query = contacts_query.in_("email_domain", domains)
-        audience_label = f"Domains: {', '.join(domains[:3])}"
-    elif target.startswith("domain:"):
-        domain = target.split("domain:", 1)[1]
-        contacts_query = contacts_query.eq("email_domain", domain)
-        audience_label = f"Domain: {domain}"
-    elif target.startswith("batch:"):
-        batch_id = target.split("batch:", 1)[1]
-        contacts_query = contacts_query.eq("import_batch_id", batch_id)
-        audience_label = f"Batch: {batch_id[:8]}..."
-    else:
-        audience_label = "All Contacts"
-        
-    contacts_res = contacts_query.execute()
-    contacts = contacts_res.data
+    contacts, audience_label = fetch_contacts_for_target(
+        supabase=db.client,
+        tenant_id=tenant_id,
+        target=target,
+        exclude_suppressed=True,
+    )
     
     if not contacts:
         raise HTTPException(status_code=400, detail=f"No contacts found for audience: {audience_label}")
@@ -395,79 +346,23 @@ async def send_campaign(request: Request, campaign_id: str, send_request: SendRe
             )
     # ──────────────────────────────────────────────────────────────────
 
-    # 2. Snapshot Content (The Freeze)
-    snapshot_id = str(uuid.uuid4())
-    snapshot_data = {
-        "id": snapshot_id,
-        "campaign_id": campaign_id,
-        "body_snapshot": campaign["body_html"],
-        "subject_snapshot": campaign["subject"],
-        "created_at": datetime.now().isoformat()
-    }
-    
-    db.client.table("campaign_snapshots").insert(snapshot_data).execute()
-    
-    # 3. Update Status in DB & Redis
-    update_payload = {
-        "status": "sending",
-        "scheduled_at": datetime.now().isoformat()
-    }
-    db.client.table("campaigns").update(update_payload).eq("id", campaign_id).execute()
-    
-    # Set to SENDING in Redis so workers will process
-    await redis_client.set_campaign_status(campaign_id, "SENDING")
-    
-    # 4. Intent Claims: Insert PENDING rows into campaign_dispatch
-    dispatch_records = []
-    tasks = []
-    
-    for contact in contacts:
-        dispatch_id = str(uuid.uuid4())
-        dispatch_records.append({
-            "id": dispatch_id,
-            "campaign_id": campaign_id,
-            "subscriber_id": contact["id"],
-            "status": "PENDING",
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
-        })
-        
-        # Payload for RabbitMQ
-        html_content = process_spintax(campaign["body_html"])
-        html_content = process_merge_tags(html_content, contact)
-        
-        subject = process_spintax(campaign["subject"])
-        subject = process_merge_tags(subject, contact)
-        
-        
-        domain_name = campaign.get("domains", {}).get("domain_name")
-        if not domain_name:
-            raise HTTPException(status_code=400, detail="Campaign has no associated verified domain.")
-            
-        tasks.append({
-            "dispatch_id": dispatch_id,
-            "campaign_id": campaign_id,
-            "tenant_id": tenant_id,
-            "recipient_email": contact["email"],
-            "recipient_id": contact["id"],
-            "subject": subject,
-            "body_html": html_content,
-            "from_name": campaign.get("from_name", "Email Engine"),
-            "from_email": f"{campaign.get('from_prefix', 'noreply')}@{domain_name}"
-            # Additional config could be added here (e.g. sender email)
-        })
-        
-    # Bulk insert into DB (chunk for Supabase's 1000-row limit)
-    CHUNK = 1000
-    for i in range(0, len(dispatch_records), CHUNK):
-        db.client.table("campaign_dispatch").insert(dispatch_records[i:i+CHUNK]).execute()
-    
-    # 5. RabbitMQ Producer Call
-    await mq_client.publish_tasks(tasks)
+    try:
+        dispatch_result = await queue_campaign_dispatch(
+            supabase=db.client,
+            mq_client=mq_client,
+            campaign=campaign,
+            tenant_id=tenant_id,
+            contacts=contacts,
+            redis_client=redis_client,
+            mark_campaign_sending=True,
+            touch_scheduled_at=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     
     # 6. Increment daily send count & monthly cycle count for the tenant
     try:
-        db.client.rpc("increment_daily_sent", {"tenant_id_arg": tenant_id, "n": len(tasks)}).execute()
+        db.client.rpc("increment_daily_sent", {"tenant_id_arg": tenant_id, "n": len(contacts)}).execute()
     except Exception:
         # Fallback: direct update
         current_daily = daily_sent if 'daily_sent' in dir() else 0
@@ -479,8 +374,8 @@ async def send_campaign(request: Request, campaign_id: str, send_request: SendRe
             current_cycle = cycle_res.data[0]["emails_sent_this_cycle"]
             
         db.client.table("tenants").update({
-            "daily_sent_count": current_daily + len(tasks),
-            "emails_sent_this_cycle": current_cycle + len(tasks)
+            "daily_sent_count": current_daily + len(contacts),
+            "emails_sent_this_cycle": current_cycle + len(contacts)
         }).eq("id", tenant_id).execute()
     
     # ── Phase 7: Check if tenant crossed 80% quota → send warning email ──
@@ -507,9 +402,9 @@ async def send_campaign(request: Request, campaign_id: str, send_request: SendRe
     
     return {
         "status": "queued",
-        "message": f"Campaign queued successfully. {len(tasks)} emails are being dispatched.",
-        "dispatched": len(tasks),
-        "snapshot_id": snapshot_id
+        "message": f"Campaign queued successfully. {dispatch_result['dispatched']} emails are being dispatched.",
+        "dispatched": dispatch_result["dispatched"],
+        "snapshot_id": dispatch_result["snapshot_id"]
     }
 
 @router.post("/{campaign_id}/pause")

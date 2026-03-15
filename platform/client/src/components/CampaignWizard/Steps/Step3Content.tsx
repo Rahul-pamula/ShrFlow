@@ -39,8 +39,8 @@ export default function Step3Content({ data, updateData, onNext, onBack }: any) 
         setLoadingTemplates(true);
         const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
         fetch(`${API_BASE}/templates/`, { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(r => r.ok ? r.json() : { templates: [] })
-            .then(json => setTemplates(json.templates || []))
+            .then(r => r.ok ? r.json() : { data: [] })
+            .then(json => setTemplates(Array.isArray(json.data) ? json.data : []))
             .catch(() => setTemplates([]))
             .finally(() => setLoadingTemplates(false));
     }, [mode, token]);

@@ -4,10 +4,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 import pandas as pd
 import io
-import uuid
 import asyncio
-import re
-import random
 from contextlib import asynccontextmanager
 from typing import Optional
 from pydantic import BaseModel
@@ -32,16 +29,13 @@ from routes import campaigns, webhooks, auth, onboarding, contacts, templates, a
 # Rate limiter — shared instance backed by Redis for multi-tenant scaling
 from utils.rate_limiter import limiter
 
-# ── Scheduler — runs inside the API process, no extra terminal needed ─────
-def _spintax(text: str) -> str:
-    pattern = r'\{([^{}]+)\}'
-    while re.search(pattern, text):
-        text = re.sub(pattern, lambda m: random.choice(m.group(1).split('|')), text)
-    return text
+from services.campaign_dispatch_service import (
+    claim_scheduled_campaign,
+    fetch_contacts_for_target,
+    queue_campaign_dispatch,
+)
 
-def _merge(text: str, contact: dict) -> str:
-    return re.sub(r'\{\{(\w+)(?:\|([^}]*))?\}\}',
-        lambda m: str(contact.get(m.group(1), m.group(2) or '') or ''), text)
+ENABLE_EMBEDDED_CAMPAIGN_SCHEDULER = os.getenv("ENABLE_EMBEDDED_CAMPAIGN_SCHEDULER", "true").lower() == "true"
 
 async def _run_scheduler():
     """Polls every 60 s for campaigns due to be sent and dispatches them."""
@@ -60,58 +54,31 @@ async def _run_scheduler():
                 .is_("is_archived", "false").execute()
             for camp in (res.data or []):
                 cid, tid = camp["id"], camp["tenant_id"]
+                if not claim_scheduled_campaign(db.client, cid, tid, now_iso):
+                    logger.info(f"[{cid}] Skip embedded scheduler dispatch; campaign already claimed.")
+                    continue
                 logger.info(f"[{cid}] Dispatching scheduled campaign '{camp['name']}'")
                 try:
-                    # Snapshot
-                    db.client.table("campaign_snapshots").insert({
-                        "id": str(uuid.uuid4()), "campaign_id": cid,
-                        "body_snapshot": camp.get("body_html", ""),
-                        "subject_snapshot": camp.get("subject", ""),
-                        "created_at": now_iso,
-                    }).execute()
-                    # Mark sending
-                    db.client.table("campaigns").update({"status": "sending", "updated_at": now_iso}).eq("id", cid).execute()
-                    await redis_client.set_campaign_status(cid, "SENDING")
-                    # Audience
-                    target = camp.get("audience_target") or "all"
-                    q = db.client.table("contacts").select("id, email, first_name, last_name").eq("tenant_id", tid)
-                    if target.startswith("batch_domains:"):
-                        _, batch_id, domain_blob = target.split(":", 2)
-                        domains = [item.strip().lower() for item in domain_blob.split(",") if item.strip()]
-                        q = q.eq("import_batch_id", batch_id)
-                        if len(domains) == 1:
-                            q = q.eq("email_domain", domains[0])
-                        elif domains:
-                            q = q.in_("email_domain", domains)
-                    elif target.startswith("batch_domain:"):
-                        _, batch_id, domain = target.split(":", 2)
-                        q = q.eq("import_batch_id", batch_id).eq("email_domain", domain)
-                    elif target.startswith("domains:"):
-                        domains = [item.strip().lower() for item in target.split("domains:", 1)[1].split(",") if item.strip()]
-                        if len(domains) == 1:
-                            q = q.eq("email_domain", domains[0])
-                        elif domains:
-                            q = q.in_("email_domain", domains)
-                    elif target.startswith("domain:"):
-                        q = q.eq("email_domain", target.split("domain:", 1)[1].strip().lower())
-                    elif target.startswith("batch:"):
-                        q = q.eq("import_batch_id", target.split("batch:", 1)[1])
-                    contacts = q.execute().data or []
+                    contacts, _ = fetch_contacts_for_target(
+                        supabase=db.client,
+                        tenant_id=tid,
+                        target=camp.get("audience_target") or "all",
+                        exclude_suppressed=False,
+                    )
                     if not contacts:
                         db.client.table("campaigns").update({"status": "draft"}).eq("id", cid).execute()
                         continue
-                    # Build tasks
-                    dispatch_rows, tasks = [], []
-                    for c in contacts:
-                        did = str(uuid.uuid4())
-                        html = _merge(_spintax(camp.get("body_html", "")), c)
-                        subj = _merge(_spintax(camp.get("subject", "")), c)
-                        dispatch_rows.append({"id": did, "campaign_id": cid, "subscriber_id": c["id"], "status": "PENDING", "created_at": now_iso, "updated_at": now_iso})
-                        tasks.append({"dispatch_id": did, "campaign_id": cid, "tenant_id": tid, "recipient_email": c["email"], "recipient_id": c["id"], "subject": subj, "body_html": html})
-                    for i in range(0, len(dispatch_rows), 1000):
-                        db.client.table("campaign_dispatch").insert(dispatch_rows[i:i+1000]).execute()
-                    await mq_client.publish_tasks(tasks)
-                    logger.info(f"[{cid}] ✅ {len(tasks)} tasks queued")
+                    dispatch_result = await queue_campaign_dispatch(
+                        supabase=db.client,
+                        mq_client=mq_client,
+                        campaign=camp,
+                        tenant_id=tid,
+                        contacts=contacts,
+                        redis_client=redis_client,
+                        mark_campaign_sending=False,
+                        touch_scheduled_at=False,
+                    )
+                    logger.info(f"[{cid}] ✅ {dispatch_result['dispatched']} tasks queued")
                 except Exception as e:
                     logger.error(f"[{cid}] Dispatch failed: {e}")
         except Exception as e:
@@ -122,13 +89,14 @@ async def _run_scheduler():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: launch background scheduler. Shutdown: cancel it."""
-    task = asyncio.create_task(_run_scheduler())
+    task = asyncio.create_task(_run_scheduler()) if ENABLE_EMBEDDED_CAMPAIGN_SCHEDULER else None
     yield
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
+    if task is not None:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 # ── App ────────────────────────────────────────────────────────────────

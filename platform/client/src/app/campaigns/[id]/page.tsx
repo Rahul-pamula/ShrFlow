@@ -10,7 +10,7 @@ import {
     Send, Eye, Loader2, TrendingUp, Pause, Play, XOctagon, X
 } from "lucide-react";
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 const STATUS_STYLES: Record<string, { bg: string; color: string; border: string }> = {
     draft: { bg: "rgba(113,113,122,0.15)", color: "#A1A1AA", border: "rgba(113,113,122,0.3)" },
@@ -67,6 +67,9 @@ export default function CampaignDetailsPage() {
                     subject: campaign.subject,
                     body_html: campaign.body_html,
                     status: 'draft',
+                    from_name: campaign.from_name,
+                    from_prefix: campaign.from_prefix,
+                    domain_id: campaign.domain_id,
                 })
             });
             if (res.ok) {

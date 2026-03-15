@@ -669,9 +669,9 @@ Must finish before handover:
   Phase 1.5  → Auth fixes + Google login
   Phase 3    → Template editor + preview
   Phase 4    → Campaign wizard + pre-send checklist
-  Phase 5    → Unsubscribe page + bounce handling
-  Phase 6    → Analytics page + Sender Health dashboard
-  Phase 7    → Plan limits + usage page + quota banners
+  Phase 5    → Delivery engine (worker + footer + webhooks) — partially complete; needs webhook auth, per-tenant address, daily-limit cap, safer bounce handling
+  Phase 6    → Observability & Analytics — tracking APIs exist; analytics UI + advanced bot filtering pending
+  Phase 7    → Plan limits + usage page + quota banners — quota helper/daily limit exist; billing/upgrade UI + payments missing
 
 Document for company to pay & build later:
   Phase 8    → Admin panel

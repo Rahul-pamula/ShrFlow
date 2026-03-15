@@ -1,56 +1,33 @@
-# Phase 6: Analytics & Engagement Tracking — Technical Audit
+# Phase 6 — Analytics & Engagement Tracking: Current Audit (Partial)
 
-## Overview
-Phase 6 enables the platform to track recipient interactions (opens and clicks) with dispatched email campaigns. It introduces a high-concurrency event ingestion API, database schema for event storage, python worker modifications for payload injection, and frontend dashboards for data visualization. This audit covers the implementation status, technical architecture, resolved issues, and pending optimizations.
-
----
-
-## 1. Database Schema
-### `email_events` Table
-**Status: Implemented ✅**
-The primary storage for all interaction events. It is designed to handle high write-throughput during campaign deployment.
-
-**Columns:**
-- `id` (UUID, Primary Key)
-- `tenant_id` (UUID, Foreign Key)
-- `campaign_id` (UUID, Foreign Key)
-- `dispatch_id` (UUID, Foreign Key)
-- `subscriber_id` (UUID, Foreign Key)
-- `contact_id` (UUID, Foreign Key - Alias for subscriber)
-- `event_type` (TEXT - 'open', 'click', 'bounce', 'spam')
-- `url` (TEXT - Nullable, stores destination for clicks)
-- `user_agent` (TEXT)
-- `ip_address` (TEXT)
-- `is_bot` (BOOLEAN)
-- `created_at` (TIMESTAMPTZ)
-
-**Indexes Implemented:**
-- `idx_email_events_tenant`
-- `idx_email_events_campaign`
-- `idx_email_events_dispatch`
-- `idx_email_events_subscriber`
+## Reality check
+- Tracking endpoints (`/track/open/{dispatch_id}`, `/track/click`) exist and write to `email_events` with a basic bot flag.
+- Worker injects pixel + click wrapping.
+- Analytics APIs exist (`platform/api/routes/analytics.py`) and exclude `is_bot=true`.
+- No analytics UI is present in the client; campaign analytics pages are absent.
+- Bot detection is minimal (UA fragments + “click <2s after open”).
+- No explicit indexes/partitioning for `email_events` are documented in migrations.
+- Sender-health endpoint is basic aggregates without time-windowing or thresholds.
+- Tracking endpoints have rate limits but no signature/HMAC on payloads.
 
 ---
 
-## 2. Backend API (`tracking.py`)
-### `GET /track/open/{encoded_payload}`
-**Status: Implemented ✅**
-- Decodes Base64 payload containing `dispatch_id`.
-- Records `open` event in the database asynchronously via `BackgroundTasks`.
-- Returns a 1x1 transparent GIF with `image/gif` content type.
-- **Cache Headers:** `Cache-Control: no-cache, no-store, must-revalidate` applied to prevent Apple/Gmail proxy caching.
+## Issues found
+- Missing analytics UI to surface the data.
+- Bot filtering is not production-grade; Apple MPP and major proxy networks will inflate opens.
+- No HMAC/signature on tracking payloads; forged events are possible.
+- No documented/verified indexes for `email_events`; potential performance risk at volume.
+- Sender-health logic is simplistic and not time-bounded.
+- No partitioning or retention policy for `email_events`.
 
-### `GET /track/click`
-**Status: Implemented ✅**
-- Expects a `d` query parameter containing a Base64 JSON payload (`dispatch_id`, `url`).
-- Records `click` event asynchronously.
-- Issues `HTTP 307 Temporary Redirect` to the original URL.
-- Preserves external query parameters (UTM tags) by appending them to the destination URL.
+---
 
-### Bot Detection Engine
-**Status: Implemented ✅**
-- `_is_bot()` function cross-references `User-Agent` against known crawler fragments (`bot`, `crawler`, `spider`, `googleimageproxy`).
-- **Timing Correlation:** If a `click` event occurs less than 2 seconds after an `open` event for the same `dispatch_id`, the click is flagged as `is_bot = true` (assumed security scanner pre-fetch).
+## Recommended remediation
+1) Build the campaign analytics UI + sender-health widget backed by existing APIs.
+2) Strengthen bot detection (Apple MPP, proxy IP ranges, honeypot links, timing + UA).
+3) Add HMAC or signed payload on tracking URLs; keep rate limits.
+4) Add and document indexes on `email_events` (`tenant_id`, `campaign_id`, `dispatch_id`, `event_type`, `created_at`), and plan for partitioning/retention.
+5) Enhance sender-health metrics with time windows and thresholds; expose bot vs. human counts separately.
 
 ---
 
@@ -109,10 +86,7 @@ The primary storage for all interaction events. It is designed to handle high wr
 
 ---
 
-## Pending Roadmap (Phase 7 / Phase 6.5)
-
-1. **Schedule Delays (Phase 7):** Currently, the frontend `scheduled_at` date is saved to the database, but the Python worker pulls everything from RabbitMQ immediately. A delay mechanism (RabbitMQ Delayed Message Plugin or Celery Beat) needs to be implemented.
-2. **Honeypot Links (Phase 6.5):** Inject invisible `display:none` links via the Python worker to trap sophisticated bots that bypass the 2-second timing check.
-3. **Database Partitioning (Phase 6.5):** As the platform scales, `email_events` should be partitioned by month to maintain index performance.
-4. **Actionable Segments (Phase 6.5):** UI feature to "Create Segment" directly from the Opened/Clicked recipient list in the Campaign Analytics view.
-5. **Domain Verification (Phase 7):** Moving away from generic AWS SES domains to tenant-specific verified sending domains (SPF/DKIM/DMARC) to improve baseline deliverability and minimize Gmail spam folder placement.
+## File pointers
+- Tracking: `platform/api/routes/tracking.py`
+- Worker injection: `platform/worker/email_sender.py`
+- Analytics API: `platform/api/routes/analytics.py`

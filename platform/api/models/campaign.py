@@ -28,8 +28,9 @@ class CampaignUpdate(BaseModel):
 
 class CampaignResponse(CampaignBase):
     id: UUID
-    project_id: UUID
+    tenant_id: UUID
     created_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
