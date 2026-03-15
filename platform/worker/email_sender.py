@@ -39,6 +39,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 UNSUB_SECRET = os.getenv("UNSUBSCRIBE_SECRET", "dev-unsub-secret-change-in-production")
 FRONTEND_BASE = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+TRACKING_SECRET = os.getenv("TRACKING_SECRET", "dev-tracking-secret")
 
 def _get_api_base() -> str:
     """Reload API_URL from .env on every call so tunnel URL changes are picked up."""
@@ -69,7 +70,8 @@ def _inject_email_footer(body_html: str, contact_id: str, campaign_id: str) -> s
 
 def _inject_tracking_pixel(body_html: str, dispatch_id: str) -> str:
     """Inject 1×1 tracking pixel to detect email opens."""
-    pixel = f'<img src="{_get_api_base()}/track/open/{dispatch_id}" width="1" height="1" style="display:none;" alt="" />'
+    sig = hmac.new(TRACKING_SECRET.encode(), dispatch_id.encode(), hashlib.sha256).hexdigest()
+    pixel = f'<img src="{_get_api_base()}/track/open/{dispatch_id}?s={sig}" width="1" height="1" style="display:none;" alt="" />'
     # Insert just before </body> if present, else append
     if "</body>" in body_html.lower():
         return body_html.replace("</body>", pixel + "</body>", 1)
@@ -85,9 +87,20 @@ def _wrap_links(body_html: str, dispatch_id: str) -> str:
         if "/unsubscribe" in original_url or "/track/" in original_url:
             return match.group(0)
         encoded = base64.urlsafe_b64encode(original_url.encode()).decode().rstrip("=")
-        tracked_url = f"{_get_api_base()}/track/click?d={dispatch_id}&url={encoded}"
+        sig = hmac.new(TRACKING_SECRET.encode(), f"{dispatch_id}:{encoded}".encode(), hashlib.sha256).hexdigest()
+        tracked_url = f"{_get_api_base()}/track/click?d={dispatch_id}&u={encoded}&s={sig}"
         return f'href="{tracked_url}"'
     return _re.sub(r'href="([^"]+)"', replace_href, body_html, flags=_re.IGNORECASE)
+
+def _inject_honeypot(body_html: str, dispatch_id: str) -> str:
+    """Add a hidden link to flag aggressive scanners as bots."""
+    hp_dest = "https://example.com/ignore"
+    encoded = base64.urlsafe_b64encode(hp_dest.encode()).decode().rstrip("=")
+    sig = hmac.new(TRACKING_SECRET.encode(), f"{dispatch_id}:{encoded}".encode(), hashlib.sha256).hexdigest()
+    link = f'<a href="{_get_api_base()}/track/click?d={dispatch_id}&u={encoded}&s={sig}&hp=1" style="display:none;">.</a>'
+    if "</body>" in body_html.lower():
+        return body_html.replace("</body>", link + "</body>", 1)
+    return body_html + link
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("Missing Supabase credentials in environment")
@@ -215,6 +228,7 @@ async def process_message(message: aio_pika.abc.AbstractIncomingMessage, holding
                 body_html = _inject_email_footer(body_html, recipient_id, campaign_id)
                 body_html = _inject_tracking_pixel(body_html, dispatch_id)
                 body_html = _wrap_links(body_html, dispatch_id)
+                body_html = _inject_honeypot(body_html, dispatch_id)
                 logger.info(f"[{dispatch_id}] Footer + tracking injected for {recipient_email}")
 
             # 4. Real SMTP Send via AWS SES (or fallback to simulation)
