@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  backendUrl: 'YOUR_BACKEND_URL'
+  backendUrl: 'https://phase-tracker.onrender.com'
 };
