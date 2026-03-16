@@ -28,7 +28,9 @@ export class DashboardComponent implements OnInit {
     this.phaseService.getPhases().subscribe({
       next: (data) => {
         console.log('[Dashboard] Phases loaded:', data);
-        this.phases = data;
+        this.phases = [...data].sort((a, b) =>
+          (a.title || '').localeCompare(b.title || '', undefined, { numeric: true, sensitivity: 'base' })
+        );
       },
       error: (err) => {
         console.error('[Dashboard] Error fetching phases:', err);
