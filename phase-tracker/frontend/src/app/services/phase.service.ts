@@ -11,7 +11,10 @@ import { environment } from '../../environments/environment';
 export class PhaseService {
   private apiUrl = `${environment.backendUrl}/api`;
 
-  constructor(private http: HttpClient) { }
+  constructor(private http: HttpClient) {
+    // Helpful runtime log to verify configured backend
+    console.log('[PhaseService] Using API base:', this.apiUrl);
+  }
 
   // Phases
   getPhases(): Observable<Phase[]> {

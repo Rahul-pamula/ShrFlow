@@ -17,6 +17,11 @@ app.use(express.json());
 app.use('/api/phases', phasesRoutes);
 app.use('/api/tasks', tasksRoutes);
 
+// Simple health check to avoid "Cannot GET /" confusion
+app.get('/', (_req, res) => {
+  res.status(200).send('Phase Tracker API is running');
+});
+
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/phase-tracker';
 
