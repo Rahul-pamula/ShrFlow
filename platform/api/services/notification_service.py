@@ -51,29 +51,15 @@ def _base_template(title: str, body_html: str) -> str:
 
 
 async def _send_notification(to_email: str, subject: str, html: str):
-    """Low-level send using SMTP."""
-    if not SMTP_USERNAME or not SMTP_HOST:
-        logger.warning(f"[NOTIFY] No SMTP creds — skipping notification to {to_email}")
-        return False
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = f"{FROM_NAME} <{FROM_EMAIL}>"
-        msg["To"] = to_email
-        msg.attach(MIMEText(html, "html"))
-
-        await aiosmtplib.send(
-            msg,
-            hostname=SMTP_HOST,
-            port=SMTP_PORT,
-            username=SMTP_USERNAME,
-            password=SMTP_PASSWORD,
-            start_tls=True,
-        )
-        logger.info(f"[NOTIFY] Sent notification to {to_email}: {subject}")
+    """Push to Centralized Mailer Queue using raw HTML."""
+    from services.email_service import send_raw_html
+    
+    success = await send_raw_html(to_email, subject, html)
+    if success:
+        logger.info(f"[NOTIFY QUEUED] Sent notification to {to_email}: {subject}")
         return True
-    except Exception as e:
-        logger.error(f"[NOTIFY] Failed to send to {to_email}: {e}")
+    else:
+        logger.error(f"[NOTIFY QUEUE ERROR] Failed to push to {to_email}")
         return False
 
 

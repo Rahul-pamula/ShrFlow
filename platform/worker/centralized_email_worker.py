@@ -44,7 +44,8 @@ SUBJECTS = {
     "reset_password": "Reset your Email Engine password",
     "verify_email": "Verify your Email Engine account",
     "team_invite": "You've been invited to join a Workspace!",
-    "access_request": "Action Required: New Workspace Access Request"
+    "access_request": "Action Required: New Workspace Access Request",
+    "sender_verification": "Verify your sender address — Email Engine"
 }
 
 ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -111,18 +112,24 @@ async def process_message(message: aio_pika.abc.AbstractIncomingMessage):
             
             logger.info(f"Processing '{task_type}' email for {to_email}")
             
-            if task_type not in SUBJECTS:
-                raise ValueError(f"Unknown email task type: {task_type}")
+            if task_type == "raw_html":
+                # Bypass Jinja completely for Test Campaigns & Legacy Notifications
+                html_content = data.get("html", "")
+                subject = data.get("subject", "Email Engine Notification")
+            else:
+                if task_type not in SUBJECTS:
+                    raise ValueError(f"Unknown email task type: {task_type}")
 
-            # 1. Load the corresponding Jinja template
-            template_file = f"{task_type}.html"
-            template = jinja_env.get_template(template_file)
-            
-            # 2. Render HTML safely
-            html_content = template.render(**data)
+                # 1. Load the corresponding Jinja template
+                template_file = f"{task_type}.html"
+                template = jinja_env.get_template(template_file)
+                
+                # 2. Render HTML safely
+                html_content = template.render(**data)
+                subject = SUBJECTS[task_type]
             
             # 3. Dispatch to SMTP
-            await send_via_smtp(to_email, SUBJECTS[task_type], html_content)
+            await send_via_smtp(to_email, subject, html_content)
             
             logger.info(f"✅ Successfully dispatched '{task_type}' to {to_email}")
             await message.ack()

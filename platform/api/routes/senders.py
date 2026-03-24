@@ -29,42 +29,13 @@ TOKEN_EXPIRY_HOURS = 24
 
 
 async def send_verification_email(to_email: str, token: str):
-    """Send a custom sender verification email from our centralized SMTP."""
-    verify_url = f"{BACKEND_URL}/senders/confirm?token={token}"
-
-    html = f"""
-    <div style="font-family: sans-serif; max-width: 520px; margin: auto; padding: 32px; background: #f9f9f9; border-radius: 8px;">
-        <h2 style="color: #1a1a1a;">Verify your sender address</h2>
-        <p style="color: #444; line-height: 1.6;">
-            You (or someone on your team) added <strong>{to_email}</strong> as a sender identity
-            on <strong>Email Engine</strong>. Click the button below to confirm ownership.
-        </p>
-        <a href="{verify_url}" style="display:inline-block; margin: 24px 0; padding: 12px 28px;
-            background: #6366f1; color: white; border-radius: 6px; text-decoration: none;
-            font-weight: 600;">Verify Sender Address</a>
-        <p style="color: #999; font-size: 12px;">
-            This link expires in {TOKEN_EXPIRY_HOURS} hours. If you did not request this, you can safely ignore this email.
-        </p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-        <p style="color: #bbb; font-size: 11px;">{verify_url}</p>
-    </div>
-    """
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Verify your sender address — Email Engine"
-    msg["From"]    = f"{SMTP_NAME} <{SMTP_FROM}>"
-    msg["To"]      = to_email
-    msg.attach(MIMEText(html, "html"))
-
-    try:
-        if SMTP_PORT == 465:
-            await aiosmtplib.send(msg, hostname=SMTP_HOST, port=SMTP_PORT,
-                                  username=SMTP_USER, password=SMTP_PASS, use_tls=True)
-        else:
-            await aiosmtplib.send(msg, hostname=SMTP_HOST, port=SMTP_PORT,
-                                  username=SMTP_USER, password=SMTP_PASS, start_tls=True)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send verification email via SMTP: {str(e)}")
+    """Send a custom sender verification email via RabbitMQ Centralized Mailer."""
+    from services.email_service import send_sender_verification
+    from fastapi import HTTPException
+    
+    success = await send_sender_verification(to_email, token)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to enqueue sender verification email.")
 
 
 # ─── List Senders ──────────────────────────────────────────────────────────────

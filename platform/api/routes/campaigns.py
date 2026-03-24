@@ -557,50 +557,24 @@ async def send_test_email(campaign_id: str, request: TestEmailRequest, tenant_id
     html_content = process_merge_tags(process_spintax(camp["body_html"]), sample_contact)
     subject = process_merge_tags(process_spintax(camp["subject"]), sample_contact)
 
-    import os
-    import aiosmtplib
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.text import MIMEText
-
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_port = int(os.getenv("SMTP_PORT", 587))
-    smtp_user = os.getenv("SMTP_USERNAME")
-    smtp_pass = os.getenv("SMTP_PASSWORD")
-    smtp_from_email = os.getenv("SMTP_FROM_EMAIL", "noreply@example.com")
-    smtp_from_name = os.getenv("SMTP_FROM_NAME", "Email Engine")
-
-    if not smtp_host or not smtp_user:
-        raise HTTPException(status_code=500, detail="SMTP credentials not configured in environment")
-
-    # Construct the raw email payload
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"[TEST] {subject}"
-    msg["From"] = f"{smtp_from_name} <{smtp_from_email}>"
-    msg["To"] = request.recipient_email
-    msg.attach(MIMEText("Please view this email in an email client that supports HTML.", "plain"))
-    msg.attach(MIMEText(html_content, "html"))
-
-    # Send via SMTP
-    try:
-        if smtp_port == 465:
-            await aiosmtplib.send(
-                msg, hostname=smtp_host, port=smtp_port, username=smtp_user, password=smtp_pass, use_tls=True
-            )
-        else:
-            await aiosmtplib.send(
-                msg, hostname=smtp_host, port=smtp_port, username=smtp_user, password=smtp_pass, start_tls=True
-            )
-        
+    from services.email_service import send_raw_html
+    
+    success = await send_raw_html(
+        to_email=request.recipient_email, 
+        subject=f"[TEST] {subject}", 
+        html_content=html_content
+    )
+    
+    if not success:
         import logging
-        logging.getLogger("email_engine").info(f"[TEST_EMAIL] Success: {request.recipient_email}")
-        
-    except Exception as e:
-        import logging
-        logging.getLogger("email_engine").error(f"[TEST_EMAIL] Failed: {e}")
-        raise HTTPException(status_code=500, detail=f"SMTP Error: {str(e)}")
+        logging.getLogger("email_engine").error(f"[TEST_EMAIL] Failed to queue email for {request.recipient_email}")
+        raise HTTPException(status_code=500, detail="Failed to enqueue test email to RabbitMQ.")
+
+    import logging
+    logging.getLogger("email_engine").info(f"[TEST_EMAIL_QUEUED] Success: {request.recipient_email}")
 
     return {
-        "status": "sent",
-        "message": f"Test email successfully dispatched to {request.recipient_email}",
+        "status": "queued",
+        "message": f"Test email successfully queued in RabbitMQ to {request.recipient_email}",
         "subject": subject
     }
