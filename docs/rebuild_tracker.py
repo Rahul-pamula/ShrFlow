@@ -7,6 +7,10 @@ Since phase_wise_plan.md is now a narrative doc (no checkboxes),
 the tracker data is maintained directly here.
 """
 import json
+import sys
+import os
+sys.path.insert(0, os.path.dirname(__file__))
+from task_descriptions import DESCRIPTIONS
 
 phases = [
   {"title": "PHASE 0 — UI/UX Foundation and Design System", "tasks": [
@@ -381,11 +385,17 @@ def format_task(task):
     text = task["text"]
     import re
     m = re.match(r'^\[([^\]]+)\]\s+(.*)', text)
+    cat = ""
+    body = text
     if m:
         cat = m.group(1)
         body = m.group(2)
-        text = f"<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[{cat}]</span> {body}"
-    return {"text": text, "done": task["done"]}
+        formatted_text = f"<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[{cat}]</span> {body}"
+    else:
+        formatted_text = text
+    # Look up a plain-English description by body text, then fall back to full raw text
+    desc = DESCRIPTIONS.get(body, DESCRIPTIONS.get(text, ""))
+    return {"text": formatted_text, "done": task["done"], "desc": desc}
 
 formatted_phases = [{"title": p["title"], "tasks": [format_task(t) for t in p["tasks"]]} for p in phases]
 
@@ -400,6 +410,8 @@ html_template = """<!DOCTYPE html>
     <style>
         body { font-family: 'Inter', system-ui, sans-serif; background-color: #09090b; color: #fafafa; }
         .glass { background: rgba(24, 24, 27, 0.6); backdrop-filter: blur(16px); border: 1px solid rgba(63, 63, 70, 0.4); }
+        .task-desc { font-size: 0.75rem; line-height: 1.5; color: #71717a; margin-top: 3px; padding-left: 0; }
+        .task-desc.hidden-desc { display: none; }
     </style>
 </head>
 <body class="p-4 sm:p-8 min-h-screen">
@@ -479,15 +491,33 @@ html_template = """<!DOCTYPE html>
                     label.classList.toggle('line-through', e.target.checked);
                     label.classList.toggle('text-zinc-500', e.target.checked);
                     label.classList.toggle('text-zinc-200', !e.target.checked);
+                    if (descEl) {
+                        descEl.classList.toggle('text-zinc-600', e.target.checked);
+                        descEl.classList.toggle('text-zinc-500', !e.target.checked);
+                    }
                 });
+                
+                let descEl = null;
                 
                 const label = document.createElement('label');
                 label.htmlFor = taskId;
                 label.className = `text-sm leading-relaxed cursor-pointer select-none block w-full transition-all duration-200 ${isChecked ? 'line-through text-zinc-500' : 'text-zinc-200'}`;
                 label.innerHTML = task.text;
                 
+                const labelWrap = document.createElement('div');
+                labelWrap.className = 'flex-1 min-w-0';
+                labelWrap.appendChild(label);
+
+                if (task.desc) {
+                    const desc = document.createElement('p');
+                    desc.className = `task-desc ${isChecked ? 'text-zinc-600' : 'text-zinc-500'}`;
+                    desc.textContent = task.desc;
+                    descEl = desc;
+                    labelWrap.appendChild(desc);
+                }
+
                 tDiv.appendChild(checkbox);
-                tDiv.appendChild(label);
+                tDiv.appendChild(labelWrap);
                 taskList.appendChild(tDiv);
             });
             
