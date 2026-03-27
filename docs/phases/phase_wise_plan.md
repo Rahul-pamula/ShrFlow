@@ -37,7 +37,7 @@ graph TD
     class User userNode;
     class App coreApp;
     
-    subgraph App Logic
+    subgraph AppLogic [App Logic]
         Auth[Auth & Core Logistics]
         Campaigns[Campaign Engine]
         App --> Auth
@@ -46,7 +46,7 @@ graph TD
         class Campaigns coreApp;
     end
 
-    subgraph Dual Processing Queues
+    subgraph DualProcessingQueues [Dual Processing Queues]
         SysQueue[(System Queue)]
         TenantQueue[(Campaign Queue)]
         Auth --> |"OTP, Invites, Password Resets"| SysQueue
@@ -62,7 +62,7 @@ graph TD
         class TenantWorker tenWorker;
     end
 
-    subgraph Email Delivery Providers
+    subgraph EmailDeliveryProviders [Email Delivery Providers]
         Gmail[Gmail SMTP]
         SES[AWS SES]
         SysWorker --> |"shrmail.app@gmail.com"| Gmail
@@ -79,8 +79,8 @@ graph TD
     class Inbox2 userNode;
 
     classDef dualBox fill:#f8fafc,stroke:#cbd5e1,stroke-width:2px,stroke-dasharray: 5 5;
-    class Dual Processing Queues dualBox;
-    class Email Delivery Providers dualBox;
+    class DualProcessingQueues dualBox;
+    class EmailDeliveryProviders dualBox;
 ```
 
 ---
