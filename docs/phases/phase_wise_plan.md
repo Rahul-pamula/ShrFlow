@@ -1022,6 +1022,71 @@ graph TD
 ## Phase 10 — Advanced Campaigns & Knowledge RAG Bot
 **WHY:** Deep automation workflows and intelligence mechanisms dramatically optimizing open rates naturally.
 
+### Phase 10 & 10.5 Architecture Flow (Advanced Campaigns & Deep RAG)
+
+```mermaid
+graph TD
+    classDef frontend fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+    classDef ai fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+    classDef logic fill:#f59e0b,stroke:#b45309,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+    classDef database fill:#475569,stroke:#334155,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+
+    subgraph IntelligenceUI [Advanced Tenant Interfaces]
+        ChatWidget[Floating AI Chat Assistant]
+        DripCanvas[Visual Drip Workflow Builder]
+        ABSplit[A/B Variant Creation Matrix]
+        
+        ChatWidget --> DripCanvas
+        ABSplit --> DripCanvas
+        class ChatWidget frontend;
+        class DripCanvas frontend;
+        class ABSplit frontend;
+    end
+
+    subgraph DripEngine [Advanced Logic Core]
+        StateMachine[Chronological Drip State Machine]
+        STOptimizer[Send-Time Optimization Logic]
+        WinnerBot[A/B Autonomous Winner Selector]
+        
+        DripCanvas --> StateMachine
+        ABSplit --> WinnerBot
+        StateMachine --> STOptimizer
+        class StateMachine logic;
+        class STOptimizer logic;
+        class WinnerBot logic;
+    end
+
+    subgraph RAGOrchestration [AI Inference Pipeline]
+        Langchain[LangChain / LlamaIndex Orchestrator]
+        Embeddings[Realtime Embedding Model]
+        ContextBuilder[Cosine Similarity Context Ingestion]
+        
+        ChatWidget --> |"Natural Language Ask"| Langchain
+        Langchain <--> ContextBuilder
+        Embeddings --> ContextBuilder
+        class Langchain ai;
+        class Embeddings ai;
+        class ContextBuilder ai;
+    end
+
+    subgraph KnowledgeData [Vector Datastore]
+        TenantSets[(Tenant Campaign Datasets)]
+        pgvector[(pgvector / Pinecone <br> High-Dimensional Array)]
+        
+        WinnerBot -.-> |"Ingests Winners"| TenantSets
+        TenantSets --> Embeddings
+        ContextBuilder <--> pgvector
+        class TenantSets database;
+        class pgvector database;
+    end
+
+    classDef dualBox fill:#f8fafc,stroke:#cbd5e1,stroke-width:2px,stroke-dasharray: 4 4;
+    class IntelligenceUI dualBox;
+    class DripEngine dualBox;
+    class RAGOrchestration dualBox;
+    class KnowledgeData dualBox;
+```
+
 **[BACKEND]**
 - Audience A/B split logic partitioning recipients evenly and identifying open-rate winners autonomously.
 - Drip campaign orchestration routing logic based on predefined chronological state machines.
@@ -1053,6 +1118,72 @@ graph TD
 
 ## Phase 11 — API & Integrations
 **WHY:** Creates extreme extensibility via headless consumption and outgoing system webhooks.
+
+### Phase 11 Architecture Flow
+
+```mermaid
+graph TD
+    classDef frontend fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+    classDef api fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+    classDef external fill:#ef4444,stroke:#b91c1c,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+    classDef database fill:#475569,stroke:#334155,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+
+    subgraph PortalUI [External Integrator Facing]
+        OpenAPI[Interactive Swagger OpenAPI Docs]
+        WebhookUI[Event Subscription Manager]
+        DevDash[API Consumption Dash]
+        
+        DevDash --> OpenAPI
+        DevDash --> WebhookUI
+        class OpenAPI frontend;
+        class WebhookUI frontend;
+        class DevDash frontend;
+    end
+
+    subgraph HeadlessAPI [Inbound Transactional API]
+        RESTAPI[/v1/send Protected Endpoint/]
+        PayloadValidation[JSON Schema Payload Validator]
+        AuthCache[API Key Redis Validation]
+        
+        RESTAPI --> PayloadValidation
+        RESTAPI --> AuthCache
+        PayloadValidation --> |"Injects to RMQ"| DeliveryQueue
+        class RESTAPI api;
+        class PayloadValidation api;
+        class AuthCache api;
+    end
+
+    subgraph WebhookDispatcher [Outbound Event Engine]
+        EventTracker[Open / Bounce Listener]
+        Retrier[Exponential Backoff Retrier]
+        PayloadBuilder[System-to-Tenant Webhook Dispatcher]
+        
+        EventTracker --> PayloadBuilder
+        PayloadBuilder -.-> |"Attempts Deliver"| Retrier
+        class EventTracker api;
+        class Retrier api;
+        class PayloadBuilder api;
+    end
+
+    subgraph ExternalClients [Tenant Systems]
+        CRM[External Hubspot / Salesforce]
+        CustomApp[Tenant Custom Codebases]
+        Endpoints[(Tenant Webhook Subscriptions)]
+        
+        HeadlessAPI <--> CustomApp
+        PayloadBuilder --> |"HTTP POST"| CRM
+        WebhookUI --> Endpoints
+        class CRM external;
+        class CustomApp external;
+        class Endpoints database;
+    end
+
+    classDef dualBox fill:#f8fafc,stroke:#cbd5e1,stroke-width:2px,stroke-dasharray: 4 4;
+    class PortalUI dualBox;
+    class HeadlessAPI dualBox;
+    class WebhookDispatcher dualBox;
+    class ExternalClients dualBox;
+```
 
 **[BACKEND]**
 - Dedicated `/v1/send` REST API architecturally prioritizing transactional payload executions reliably.
