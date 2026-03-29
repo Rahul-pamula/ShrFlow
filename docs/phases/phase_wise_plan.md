@@ -1678,7 +1678,7 @@ graph TD
     classDef external fill:#ef4444,stroke:#b91c1c,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
     classDef database fill:#475569,stroke:#334155,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
 
-    subgraph API Gateway [Nginx/Kong Routing]
+    subgraph APIGateway [Nginx/Kong Routing]
         Gateway[Central Reverse Proxy]
         Degraded[Conditional Degradation Rules]
         
@@ -1724,7 +1724,7 @@ graph TD
     end
 
     classDef dualBox fill:#f8fafc,stroke:#cbd5e1,stroke-width:2px,stroke-dasharray: 4 4;
-    class API Gateway dualBox;
+    class APIGateway dualBox;
     class MicroserviceCluster dualBox;
     class AsynchronousBackplane dualBox;
     class DatabasePartitioning dualBox;
