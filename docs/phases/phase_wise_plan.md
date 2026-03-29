@@ -88,6 +88,67 @@ graph TD
 ## Phase 0 — UI/UX Foundation & Design System
 **WHY:** Establishes the visual language, reusable UI primitives, interaction rules, and accessibility baseline before feature work scales.
 
+### Phase 0 Architecture Flow
+
+```mermaid
+graph TD
+    classDef foundation fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+    classDef component fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+    classDef a11y fill:#f59e0b,stroke:#b45309,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+    classDef devtool fill:#64748b,stroke:#475569,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+
+    subgraph TheDesignSystem [The Design System & Styling]
+        Tokens[Global CSS Tokens]
+        Tailwind[Tailwind Config Mapper]
+        Theme[Dark/Light Mode Swapper]
+        Tokens --> Tailwind
+        Tokens --> Theme
+        class Tokens foundation;
+        class Tailwind foundation;
+        class Theme foundation;
+    end
+
+    subgraph ComponentLibrary [shadcn UI Component Library]
+        Atoms[Atoms: Button, Badge, Toast, Spinner]
+        Molecules[Molecules: StatCard, PageHeader, EmptyState]
+        Organisms[Organisms: DataTable, ConfirmModal]
+        Atoms --> Molecules
+        Molecules --> Organisms
+        class Atoms component;
+        class Molecules component;
+        class Organisms component;
+    end
+
+    subgraph AccessibilityLayer [Global Accessibility Specs]
+        Focus[Modal Focus Traps]
+        Touch[44x44 Min Touch Targets]
+        Aria[ARIA Icon Labels]
+        Contrast[WCAG 2.1 AA Contrast]
+        class Focus a11y;
+        class Touch a11y;
+        class Aria a11y;
+        class Contrast a11y;
+    end
+
+    subgraph LocalDeveloperTools [Local Dev Environment]
+        Mailhog[Mailhog Docker / Email Catcher]
+        Seeder[Python DB Seeder]
+        Env[Standardized .env.example]
+        class Mailhog devtool;
+        class Seeder devtool;
+        class Env devtool;
+    end
+
+    TheDesignSystem --> ComponentLibrary
+    AccessibilityLayer -.-> ComponentLibrary
+
+    classDef dualBox fill:#f8fafc,stroke:#cbd5e1,stroke-width:2px,stroke-dasharray: 4 4;
+    class TheDesignSystem dualBox;
+    class ComponentLibrary dualBox;
+    class AccessibilityLayer dualBox;
+    class LocalDeveloperTools dualBox;
+```
+
 **[BACKEND]**
 - Mailhog added to docker-compose for local email testing and debugging.
 - Database seed script (`seed_dev_data.py`) for reproducible development states.
