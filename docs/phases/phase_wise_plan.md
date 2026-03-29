@@ -165,7 +165,80 @@ graph TD
 ---
 
 ## Phase 1 — Foundation, Auth, Tenant Identity & Onboarding
-**WHY:** Turns a standalone app into a multi-tenant SaaS product. Establishes user identity, tenant identity, onboarding workflows, and route guards.
+**WHY:** Before any email can be sent, we need a secure multi-tenant foundation. Every query, row, and action must be strictly isolated by `tenant_id`.
+
+### Phase 1 Architecture Flow
+
+```mermaid
+graph TD
+    classDef frontend fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+    classDef auth fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+    classDef security fill:#ef4444,stroke:#b91c1c,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+    classDef database fill:#475569,stroke:#334155,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+
+    subgraph UserInterface [Frontend UX & Onboarding]
+        Login[Login & Signup Pages <br> w/ Google/GitHub OAuth]
+        Wizard[Multi-Step Wizard <br> Workspace > Use-Case]
+        DashboardShell[Dashboard Sidebar & Layout]
+        Context[Global AuthContext state]
+        
+        Login --> Context
+        Wizard --> DashboardShell
+        class Login frontend;
+        class Wizard frontend;
+        class DashboardShell frontend;
+        class Context frontend;
+    end
+
+    subgraph SecurityMiddleware [Next.js & FastAPI Middleware]
+        RouteGuard[Next.js Route Protection Redirects]
+        FastAPIGuard[FastAPI Active-Tenant Resolver]
+        RateLimit[IP / Email Login Rate Limiter]
+        
+        Context -.-> |"Carries JWT"| RouteGuard
+        RouteGuard --> RateLimit
+        RateLimit --> FastAPIGuard
+        class RouteGuard security;
+        class FastAPIGuard security;
+        class RateLimit security;
+    end
+
+    subgraph AuthEngine [Authentication & Tenancy API]
+        JWT[Custom JWT Issuer <br> Short-Lived Access]
+        Revocation[Token Version Revocation]
+        Bcrypt[Bcrypt Password Hashing]
+        
+        FastAPIGuard --> JWT
+        JWT --> Revocation
+        class JWT auth;
+        class Revocation auth;
+        class Bcrypt auth;
+    end
+
+    subgraph TenantModel [Tenant Database Architecture]
+        Users[(Users Table)]
+        Tenants[(Tenants Table)]
+        TenantUsers[(Tenant_Users Join)]
+        
+        Users --> TenantUsers
+        Tenants --> TenantUsers
+        Bcrypt --> Users
+        JWT --> TenantUsers
+        class Users database;
+        class Tenants database;
+        class TenantUsers database;
+    end
+
+    UserInterface --> |"Sends Credentials"| SecurityMiddleware
+    SecurityMiddleware --> |"Validates Payload"| AuthEngine
+    AuthEngine --> |"Queries Membership"| TenantModel
+
+    classDef dualBox fill:#f8fafc,stroke:#cbd5e1,stroke-width:2px,stroke-dasharray: 4 4;
+    class UserInterface dualBox;
+    class SecurityMiddleware dualBox;
+    class AuthEngine dualBox;
+    class TenantModel dualBox;
+```
 
 **[BACKEND]**
 - Custom email/password auth using bcrypt and JWT validation.
