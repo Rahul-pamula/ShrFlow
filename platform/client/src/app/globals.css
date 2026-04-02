@@ -3,40 +3,118 @@
 @tailwind utilities;
 
 /* ============================================================
-   EMAIL ENGINE — Premium UI Design System
-   Sleek, dark, glassmorphic aesthetic inspired by top SaaS
+   EMAIL ENGINE — Design System
+   ============================================================
+   Light mode tokens are defined in :root (default)
+   Dark mode tokens override them under .dark
+   No hardcoded colors in components — always use CSS vars
    ============================================================ */
 
+/* ── LIGHT MODE (default / :root) ──────────────────────────── */
 :root {
+  color-scheme: light;
+
+  /* Core Canvas */
+  --bg-primary: #F8FAFC;
+  --bg-card: rgba(255, 255, 255, 0.9);
+  --bg-hover: rgba(241, 245, 249, 0.95);
+  --bg-input: rgba(255, 255, 255, 0.95);
+
+  /* Brand Accents */
+  --accent: #3B82F6;
+  --accent-hover: #2563EB;
+  --accent-gradient: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
+  --accent-glow: rgba(59, 130, 246, 0.25);
+  --accent-purple: #8B5CF6;
+
+  /* Text & Typography */
+  --text-primary: #0F172A;
+  --text-secondary: #1E293B;
+  --text-muted: #64748B;
+  --text-inverted: #F8FAFC;
+
+  /* Borders & Dividers */
+  --border: rgba(148, 163, 184, 0.4);
+  --border-highlight: rgba(148, 163, 184, 0.6);
+
+  /* Semantic Feedback */
+  --success: #059669;
+  --success-bg: rgba(209, 250, 229, 0.8);
+  --success-border: rgba(5, 150, 105, 0.25);
+
+  --warning: #D97706;
+  --warning-bg: rgba(254, 243, 199, 0.8);
+  --warning-border: rgba(217, 119, 6, 0.25);
+
+  --danger: #DC2626;
+  --danger-bg: rgba(254, 226, 226, 0.8);
+  --danger-border: rgba(220, 38, 38, 0.25);
+
+  --info: #0284C7;
+  --info-bg: rgba(224, 242, 254, 0.8);
+
+  /* Radii & Shadows */
+  --radius: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.05);
+  --shadow-glow: 0 0 20px var(--accent-glow);
+
+  /* Typography Scale */
+  --text-h1: 2.25rem;
+  --text-h2: 1.5rem;
+  --text-h3: 1.125rem;
+  --text-body: 0.875rem;
+  --text-caption: 0.75rem;
+  --text-mono: 0.875rem;
+
+  /* Shadcn UI Base Tokens (HSL for Tailwind compatibility) */
+  --background: 210 40% 98%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 221 83% 53%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border-hsl: 214 32% 91%;
+  --input-hsl: 214 32% 91%;
+  --ring: 221 83% 53%;
+}
+
+/* ── DARK MODE (.dark class applied by next-themes) ─────────── */
+.dark {
+  color-scheme: dark;
+
   /* Core Canvas */
   --bg-primary: #09090B;
-  /* Deep zinc-950 canvas */
   --bg-card: rgba(24, 24, 27, 0.6);
-  /* Translucent zinc-900 surface */
   --bg-hover: rgba(39, 39, 42, 0.8);
-  /* zinc-800 hover */
   --bg-input: rgba(9, 9, 11, 0.8);
 
-  /* Brand Accents (Vibrant Gradients) */
+  /* Brand Accents */
   --accent: #3B82F6;
-  /* blue-500 */
   --accent-hover: #2563EB;
-  /* blue-600 */
   --accent-gradient: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
   --accent-glow: rgba(59, 130, 246, 0.4);
+  --accent-purple: #8B5CF6;
 
   /* Text & Typography */
   --text-primary: #FAFAFA;
-  /* zinc-50 */
   --text-secondary: #E4E4E7;
-  /* zinc-200 */
   --text-muted: #A1A1AA;
-  /* zinc-400 */
   --text-inverted: #09090B;
 
   /* Borders & Dividers */
   --border: rgba(63, 63, 70, 0.4);
-  /* subtle zinc-700/40 border */
   --border-highlight: rgba(161, 161, 170, 0.2);
 
   /* Semantic Feedback */
@@ -52,32 +130,15 @@
   --danger-bg: rgba(69, 10, 10, 0.3);
   --danger-border: rgba(239, 68, 68, 0.2);
 
-  /* Radii & Shadows */
-  --radius: 0.75rem;
-  /* 12px default */
-  --radius-lg: 1rem;
-  /* 16px large */
-  --radius-xl: 1.5rem;
-  /* 24px extra large */
+  --info: #0EA5E9;
+  --info-bg: rgba(14, 165, 233, 0.3);
 
+  /* Shadows (deeper for dark) */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 20px var(--accent-glow);
 
-  /* Typography Scale */
-  --text-h1: 2.25rem;
-  --text-h2: 1.5rem;
-  --text-h3: 1.125rem;
-  --text-body: 0.875rem;
-  --text-caption: 0.75rem;
-  --text-mono: 0.875rem;
-
-  /* Additional Semantic Tokens */
-  --accent-purple: #8B5CF6;
-  --info: #0EA5E9;
-  --info-bg: rgba(14, 165, 233, 0.3);
-
-  /* Shadcn UI Base Tokens (HSL for Tailwind compatibility) */
+  /* Shadcn UI Base Tokens — Dark */
   --background: 240 10% 4%;
   --foreground: 0 0% 98%;
   --card: 240 10% 4%;
@@ -110,18 +171,21 @@ html,
 body {
   height: 100%;
   background-color: var(--bg-primary);
-  /* Subtle dark radial gradient for depth */
-  background-image: radial-gradient(circle at 50% 0%, rgba(39, 39, 42, 0.4) 0%, rgba(9, 9, 11, 1) 70%);
   background-attachment: fixed;
   color: var(--text-primary);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Dark mode canvas gradient (only on dark) */
+.dark body {
+  background-image: radial-gradient(circle at 50% 0%, rgba(39, 39, 42, 0.4) 0%, rgba(9, 9, 11, 1) 70%);
 }
 
 /* Focus States */
-
 *:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -129,20 +193,12 @@ body {
 }
 
 /* Scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 3px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(161, 161, 170, 0.5);
 }
@@ -151,7 +207,6 @@ body {
    PREMIUM UTILITY CLASSES
    ============================================================ */
 
-/* Glass Panel */
 .glass-panel {
   background: var(--bg-card);
   backdrop-filter: blur(16px);
@@ -161,7 +216,6 @@ body {
   box-shadow: var(--shadow-card);
 }
 
-/* Gradient Button */
 .btn-premium {
   background: var(--accent-gradient);
   color: white;
@@ -177,18 +231,13 @@ body {
   gap: 0.5rem;
   cursor: pointer;
 }
-
 .btn-premium:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px var(--accent-glow);
   filter: brightness(1.1);
 }
+.btn-premium:active { transform: translateY(0); }
 
-.btn-premium:active {
-  transform: translateY(0);
-}
-
-/* Gradient Text */
 .text-gradient {
   background: var(--accent-gradient);
   -webkit-background-clip: text;
@@ -202,74 +251,33 @@ body {
    ============================================================ */
 
 @keyframes slideUpFade {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(16px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
 @keyframes pulseGlow {
-
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
-  }
-
-  50% {
-    box-shadow: 0 0 15px 0 var(--accent-glow);
-  }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+  50%       { box-shadow: 0 0 15px 0 var(--accent-glow); }
 }
 
-.animate-slide-up {
-  animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
+.animate-slide-up   { animation: slideUpFade  0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-slide-right { animation: slideInRight 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
-.animate-slide-right {
-  animation: slideInRight 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* Stagger items */
-.stagger-1 {
-  animation-delay: 0.1s;
-  opacity: 0;
-}
-
-.stagger-2 {
-  animation-delay: 0.2s;
-  opacity: 0;
-}
-
-.stagger-3 {
-  animation-delay: 0.3s;
-  opacity: 0;
-}
-
-.stagger-4 {
-  animation-delay: 0.4s;
-  opacity: 0;
-}
+.stagger-1 { animation-delay: 0.1s; opacity: 0; }
+.stagger-2 { animation-delay: 0.2s; opacity: 0; }
+.stagger-3 { animation-delay: 0.3s; opacity: 0; }
+.stagger-4 { animation-delay: 0.4s; opacity: 0; }
 
 .hover-lift {
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.3s ease;
 }
-
 .hover-lift:hover {
   transform: translateY(-4px);
   box-shadow: var(--shadow-glow);
