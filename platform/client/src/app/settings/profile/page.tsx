@@ -93,7 +93,7 @@ export default function ProfileSettingsPage() {
             {/* Header */}
             <div className="mb-8 mt-4">
                 <div className="mb-4">
-                    <a href="/settings" className="inline-flex items-center text-[var(--text-muted)] hover:text-white transition-colors text-sm font-medium">
+                    <a href="/settings" className="inline-flex items-center text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors text-sm font-medium">
                         <ArrowLeft size={16} className="mr-2" /> Back to Settings
                     </a>
                 </div>
