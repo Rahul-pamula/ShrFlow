@@ -4,11 +4,11 @@ import { ArrowLeft, ShieldCheck, AlertTriangle, HelpCircle, CheckCircle2 } from 
 import Link from 'next/link';
 
 const colors = {
-    bg: '#0F1117',
-    card: 'rgba(255, 255, 255, 0.03)',
-    border: 'rgba(255, 255, 255, 0.08)',
-    text: '#F3F4F6',
-    textSecondary: '#9CA3AF',
+    bg: 'var(--bg-primary)',
+    card: 'var(--bg-card)',
+    border: 'var(--border)',
+    text: 'var(--text-primary)',
+    textSecondary: 'var(--text-muted)',
     primary: '#3B82F6',
     warning: '#F59E0B',
     danger: '#EF4444',
