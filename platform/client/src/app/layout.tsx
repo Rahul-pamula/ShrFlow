@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import LayoutWrapper from "@/components/layout/LayoutWrapper";
 import { ToastProvider } from "@/components/ui";
+import { ThemeProvider } from "@/components/ui/ThemeProvider";
 
 const inter = Inter({
     subsets: ["latin"],
@@ -22,15 +23,22 @@ export default function RootLayout({
     children: React.ReactNode;
 }) {
     return (
-        <html lang="en" className={inter.variable}>
+        /*
+         * suppressHydrationWarning: next-themes writes `class` and `style`
+         * attributes on <html> on the client to avoid a flash of wrong theme.
+         * Without this flag, React will warn about the server/client mismatch.
+         */
+        <html lang="en" className={inter.variable} suppressHydrationWarning>
             <body className={inter.className}>
-                <AuthProvider>
-                    <ToastProvider>
-                        <LayoutWrapper>
-                            {children}
-                        </LayoutWrapper>
-                    </ToastProvider>
-                </AuthProvider>
+                <ThemeProvider>
+                    <AuthProvider>
+                        <ToastProvider>
+                            <LayoutWrapper>
+                                {children}
+                            </LayoutWrapper>
+                        </ToastProvider>
+                    </AuthProvider>
+                </ThemeProvider>
             </body>
         </html>
     );
