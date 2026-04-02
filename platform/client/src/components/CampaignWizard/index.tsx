@@ -223,7 +223,7 @@ export default function CampaignWizard({ editCampaignId, draftCampaignId }: Prop
 
     if (loadingDraft) {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px', color: '#71717A' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px', color: 'var(--text-muted)' }}>
                 <Loader2 size={32} className="animate-spin text-blue-500 mb-4" />
                 <p>Loading draft from database...</p>
             </div>
@@ -246,22 +246,22 @@ export default function CampaignWizard({ editCampaignId, draftCampaignId }: Prop
             {/* Header / Actions */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
                 <div>
-                    <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#FAFAFA', margin: '0 0 4px' }}>{editId ? 'Edit Campaign Draft' : 'Create New Campaign'}</h1>
-                    <p style={{ fontSize: '13px', color: '#71717A', margin: 0 }}>Follow the steps to design and launch your email.</p>
+                    <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px' }}>{editId ? 'Edit Campaign Draft' : 'Create New Campaign'}</h1>
+                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Follow the steps to design and launch your email.</p>
                 </div>
                 <button
                     onClick={handleSaveDraftToDB}
                     disabled={savingDraft || (!campaignData.name && !campaignData.subject)}
                     style={{
                         display: 'flex', alignItems: 'center', gap: '8px',
-                        padding: '8px 16px', background: 'rgba(24,24,27,0.8)', border: '1px solid rgba(63,63,70,0.5)',
-                        borderRadius: '8px', color: '#A1A1AA', fontSize: '13px', fontWeight: 500,
+                        padding: '8px 16px', background: 'var(--bg-card)', border: '1px solid var(--border)',
+                        borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500,
                         cursor: (savingDraft || (!campaignData.name && !campaignData.subject)) ? 'not-allowed' : 'pointer',
                         opacity: (savingDraft || (!campaignData.name && !campaignData.subject)) ? 0.5 : 1,
                         transition: 'all 0.2s'
                     }}
-                    onMouseOver={e => { if (!savingDraft && (campaignData.name || campaignData.subject)) e.currentTarget.style.color = '#FAFAFA'; }}
-                    onMouseOut={e => e.currentTarget.style.color = '#A1A1AA'}
+                    onMouseOver={e => { if (!savingDraft && (campaignData.name || campaignData.subject)) e.currentTarget.style.color = 'var(--text-primary)'; }}
+                    onMouseOut={e => e.currentTarget.style.color = 'var(--text-secondary)'}
                 >
                     {savingDraft ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                     Save Draft & Exit
@@ -274,7 +274,7 @@ export default function CampaignWizard({ editCampaignId, draftCampaignId }: Prop
                     {/* Progress Bar Track */}
                     <div style={{
                         position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
-                        width: '100%', height: '2px', background: 'rgba(63, 63, 70, 0.4)', zIndex: 0
+                        width: '100%', height: '2px', background: 'var(--border)', zIndex: 0
                     }} />
                     {/* Active Progress Bar */}
                     <div style={{
@@ -291,17 +291,17 @@ export default function CampaignWizard({ editCampaignId, draftCampaignId }: Prop
                         const Icon = step.icon;
 
                         return (
-                            <div key={step.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', zIndex: 2, background: '#09090B', padding: '0 12px' }}>
+                            <div key={step.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', zIndex: 2, background: 'var(--bg-primary)', padding: '0 12px' }}>
                                 <div style={{
                                     width: '44px', height: '44px', borderRadius: '50%',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    border: isCompleted ? 'none' : `2px solid ${isActive ? '#3B82F6' : 'rgba(63,63,70,0.5)'}`,
+                                    border: isCompleted ? 'none' : `2px solid ${isActive ? '#3B82F6' : 'var(--border)'}`,
                                     background: isCompleted
                                         ? 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)'
                                         : isActive
                                             ? 'rgba(59, 130, 246, 0.1)'
-                                            : 'rgba(24, 24, 27, 0.6)',
-                                    color: isCompleted ? 'white' : isActive ? '#3B82F6' : '#71717A',
+                                            : 'var(--bg-card)',
+                                    color: isCompleted ? 'white' : isActive ? '#3B82F6' : 'var(--text-muted)',
                                     transition: 'all 0.3s ease',
                                     boxShadow: isActive ? '0 0 20px rgba(59, 130, 246, 0.4)' : 'none'
                                 }}>
@@ -309,7 +309,7 @@ export default function CampaignWizard({ editCampaignId, draftCampaignId }: Prop
                                 </div>
                                 <span style={{
                                     marginTop: '8px', fontSize: '12px', fontWeight: 500,
-                                    color: isActive ? '#3B82F6' : isCompleted ? '#A1A1AA' : '#52525B',
+                                    color: isActive ? '#3B82F6' : isCompleted ? 'var(--text-muted)' : 'var(--text-secondary)',
                                     transition: 'color 0.3s ease'
                                 }}>
                                     {step.title}
