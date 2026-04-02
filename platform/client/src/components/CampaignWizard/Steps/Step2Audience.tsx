@@ -110,8 +110,8 @@ export default function Step2Audience({ data, updateData, onNext, onBack }: any)
                 onClick={() => select(id, name)}
                 style={{
                     padding: '18px 20px', borderRadius: '10px', cursor: 'pointer',
-                    border: `1px solid ${isSelected ? 'rgba(59, 130, 246, 0.5)' : 'rgba(63, 63, 70, 0.35)'}`,
-                    background: isSelected ? 'rgba(59, 130, 246, 0.07)' : 'rgba(24, 24, 27, 0.4)',
+                    border: `1px solid ${isSelected ? 'rgba(59, 130, 246, 0.5)' : 'var(--border)'}`,
+                    background: isSelected ? 'rgba(59, 130, 246, 0.07)' : 'var(--bg-primary)',
                     transition: 'all 0.2s ease',
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px'
                 }}
@@ -119,14 +119,14 @@ export default function Step2Audience({ data, updateData, onNext, onBack }: any)
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                     <div style={{
                         width: '42px', height: '42px', borderRadius: '10px', flexShrink: 0,
-                        background: isSelected ? 'rgba(59, 130, 246, 0.15)' : 'rgba(63, 63, 70, 0.3)',
+                        background: isSelected ? 'rgba(59, 130, 246, 0.15)' : 'var(--border)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center'
                     }}>
                         {icon}
                     </div>
                     <div>
-                        <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#FAFAFA', margin: 0 }}>{name}</h3>
-                        <p style={{ fontSize: '12px', color: '#71717A', margin: '2px 0 0' }}>
+                        <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{name}</h3>
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
                             <span style={{ color: isSelected ? '#60A5FA' : '#A1A1AA', fontWeight: 600 }}>
                                 {count.toLocaleString()}
                             </span>
@@ -163,8 +163,8 @@ export default function Step2Audience({ data, updateData, onNext, onBack }: any)
                     <Users size={18} color="#3B82F6" />
                 </div>
                 <div>
-                    <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#FAFAFA', margin: 0 }}>Select Audience</h2>
-                    <p style={{ fontSize: '13px', color: '#71717A', margin: 0 }}>Choose who receives this campaign — all contacts or a specific import batch</p>
+                    <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Select Audience</h2>
+                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Choose who receives this campaign — all contacts or a specific import batch</p>
                 </div>
             </div>
 
@@ -177,28 +177,28 @@ export default function Step2Audience({ data, updateData, onNext, onBack }: any)
                     <AlertCircle size={15} /> {error}
                 </div>
             ) : totalContacts === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px', border: '1px dashed rgba(63, 63, 70, 0.4)', borderRadius: '10px' }}>
+                <div style={{ textAlign: 'center', padding: '40px', border: '1px dashed var(--border)', borderRadius: '10px' }}>
                     <Users size={32} color="#52525B" style={{ margin: '0 auto 12px' }} />
-                    <p style={{ color: '#71717A', fontSize: '14px', marginBottom: '4px' }}>No contacts in your account yet.</p>
-                    <p style={{ color: '#52525B', fontSize: '12px' }}>Go to <strong style={{ color: '#A1A1AA' }}>Contacts</strong> → Upload CSV first.</p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '4px' }}>No contacts in your account yet.</p>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Go to <strong style={{ color: 'var(--text-muted)' }}>Contacts</strong> → Upload CSV first.</p>
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '360px', overflowY: 'auto', paddingRight: '4px' }}>
 
                     {/* === ALL CONTACTS === */}
-                    <p style={{ fontSize: '11px', fontWeight: 600, color: '#52525B', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 4px' }}>Entire List</p>
+                    <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 4px' }}>Entire List</p>
                     <AudienceCard
                         id="all"
                         name="All Contacts"
                         count={totalContacts}
                         subtitle="subscribers in your account"
-                        icon={<Globe size={18} color={data.listId === 'all' ? '#3B82F6' : '#71717A'} />}
+                        icon={<Globe size={18} color={data.listId === 'all' ? '#3B82F6' : 'var(--text-muted)'} />}
                     />
 
                     {/* === LISTS === */}
                     {lists.length > 0 && (
                         <>
-                            <p style={{ fontSize: '11px', fontWeight: 600, color: '#52525B', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '12px 0 4px' }}>Your Lists</p>
+                            <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '12px 0 4px' }}>Your Lists</p>
                             {lists.map((list: any) => (
                                 <AudienceCard
                                     key={list.id}
@@ -206,7 +206,7 @@ export default function Step2Audience({ data, updateData, onNext, onBack }: any)
                                     name={list.name}
                                     count={list.subscriber_count ?? 0}
                                     subtitle="contacts in this list"
-                                    icon={<Users size={18} color={data.listId === list.id ? '#3B82F6' : '#71717A'} />}
+                                    icon={<Users size={18} color={data.listId === list.id ? '#3B82F6' : 'var(--text-muted)'} />}
                                 />
                             ))}
                         </>
@@ -215,7 +215,7 @@ export default function Step2Audience({ data, updateData, onNext, onBack }: any)
                     {/* === IMPORT BATCHES === */}
                     {batches.length > 0 && (
                         <>
-                            <p style={{ fontSize: '11px', fontWeight: 600, color: '#52525B', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '12px 0 4px' }}>Import Batches</p>
+                            <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '12px 0 4px' }}>Import Batches</p>
                             {batches.map(batch => (
                                 <AudienceCard
                                     key={batch.id}
@@ -223,7 +223,7 @@ export default function Step2Audience({ data, updateData, onNext, onBack }: any)
                                     name={batch.file_name.replace(/\.[^.]+$/, '')}
                                     count={batch.imported_count}
                                     subtitle={`contacts · Imported ${new Date(batch.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
-                                    icon={<FileSpreadsheet size={18} color={(data.listId === `batch:${batch.id}` || data.listId?.startsWith(`batch_domain:${batch.id}:`)) ? '#3B82F6' : '#71717A'} />}
+                                    icon={<FileSpreadsheet size={18} color={(data.listId === `batch:${batch.id}` || data.listId?.startsWith(`batch_domain:${batch.id}:`)) ? '#3B82F6' : 'var(--text-muted)'} />}
                                 />
                             ))}
                         </>
@@ -235,21 +235,21 @@ export default function Step2Audience({ data, updateData, onNext, onBack }: any)
                             padding: '14px',
                             borderRadius: '10px',
                             border: '1px solid rgba(63, 63, 70, 0.35)',
-                            background: 'rgba(24, 24, 27, 0.35)'
+                            background: 'var(--bg-primary)'
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
                                 <Globe size={16} color="#60A5FA" />
                                 <div>
-                                    <p style={{ fontSize: '13px', fontWeight: 600, color: '#FAFAFA', margin: 0 }}>Optional domain filter inside this batch</p>
-                                    <p style={{ fontSize: '12px', color: '#71717A', margin: '2px 0 0' }}>Narrow the selected batch to one domain without changing the overall audience flow.</p>
+                                    <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Optional domain filter inside this batch</p>
+                                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>Narrow the selected batch to one domain without changing the overall audience flow.</p>
                                 </div>
                             </div>
                             {domainsLoading ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#71717A', fontSize: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '12px' }}>
                                     <Loader2 size={14} className="animate-spin" /> Loading batch domains...
                                 </div>
                             ) : batchDomains.length === 0 ? (
-                                <p style={{ fontSize: '12px', color: '#71717A', margin: 0 }}>No domain breakdown available for this batch yet.</p>
+                                <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>No domain breakdown available for this batch yet.</p>
                             ) : (
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                                     <button
@@ -261,8 +261,8 @@ export default function Step2Audience({ data, updateData, onNext, onBack }: any)
                                             padding: '8px 10px',
                                             borderRadius: '999px',
                                             border: `1px solid ${data.listId === `batch:${selectedBatchId}` ? 'rgba(59,130,246,0.45)' : 'rgba(63,63,70,0.35)'}`,
-                                            background: data.listId === `batch:${selectedBatchId}` ? 'rgba(59,130,246,0.12)' : 'rgba(39,39,42,0.45)',
-                                            color: '#FAFAFA',
+                                            background: data.listId === `batch:${selectedBatchId}` ? 'rgba(59,130,246,0.12)' : 'var(--bg-primary)',
+                                            color: 'var(--text-primary)',
                                             fontSize: '12px',
                                             cursor: 'pointer'
                                         }}
@@ -277,8 +277,8 @@ export default function Step2Audience({ data, updateData, onNext, onBack }: any)
                                                 padding: '8px 10px',
                                                 borderRadius: '999px',
                                                 border: `1px solid ${selectedBatchDomains.includes(entry.domain) ? 'rgba(59,130,246,0.45)' : 'rgba(63,63,70,0.35)'}`,
-                                                background: selectedBatchDomains.includes(entry.domain) ? 'rgba(59,130,246,0.12)' : 'rgba(39,39,42,0.45)',
-                                                color: '#FAFAFA',
+                                                background: selectedBatchDomains.includes(entry.domain) ? 'rgba(59,130,246,0.12)' : 'var(--bg-primary)',
+                                                color: 'var(--text-primary)',
                                                 fontSize: '12px',
                                                 cursor: 'pointer'
                                             }}
@@ -294,15 +294,15 @@ export default function Step2Audience({ data, updateData, onNext, onBack }: any)
             )}
 
             {/* Footer */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '32px', paddingTop: '24px', borderTop: '1px solid rgba(63, 63, 70, 0.3)' }}>
-                <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#71717A', fontSize: '14px', cursor: 'pointer', padding: '8px 4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '32px', paddingTop: '24px', borderTop: '1px solid var(--border)' }}>
+                <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '14px', cursor: 'pointer', padding: '8px 4px' }}>
                     ← Back
                 </button>
                 <button
                     onClick={onNext}
                     disabled={!data.listId || totalContacts === 0}
                     className={data.listId && totalContacts > 0 ? 'btn-premium' : ''}
-                    style={(!data.listId || totalContacts === 0) ? { padding: '10px 20px', background: 'rgba(63,63,70,0.3)', border: '1px solid rgba(63,63,70,0.4)', borderRadius: '8px', color: '#52525B', fontSize: '14px', cursor: 'not-allowed' } : {}}
+                    style={(!data.listId || totalContacts === 0) ? { padding: '10px 20px', background: 'var(--bg-hover)', border: '1px solid rgba(63,63,70,0.4)', borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '14px', cursor: 'not-allowed' } : {}}
                 >
                     Next Step →
                 </button>
