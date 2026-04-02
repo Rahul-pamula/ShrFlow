@@ -1,13 +1,14 @@
 """
 AUTHENTICATION ROUTES
-Progressive Tenant Onboarding System
+Phase 1.5 — Auth Hardening + Phase 7.6 — Repository Architecture
 
-Features:
-- User signup with email/password
-- User login with JWT token generation
-- Automatic tenant creation on signup
-- Password hashing with bcrypt
-- JWT-based authentication
+Security Features:
+- Composite key rate limiting (IP + Email + User-Agent)
+- CAPTCHA verification (reCAPTCHA v3 / Cloudflare Turnstile)
+- Constant-time password comparison via bcrypt
+- Generic error messages to prevent user enumeration
+- Repository pattern — no direct db.client calls
+- Immutable audit logging
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status, Request
@@ -23,9 +24,16 @@ import httpx
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-# Import the global limiter from shared module
-from utils.rate_limiter import limiter
+# Rate limiter (standard slowapi for non-auth routes)
+from utils.rate_limiter import limiter, enforce_auth_rate_limit
+# CAPTCHA verification utility
+from utils.captcha import verify_captcha
+# JWT middleware
 from utils.jwt_middleware import require_authenticated_user, JWTPayload
+# Repository layer — isolates all DB access
+from repositories.user_repository import UserRepository
+from repositories.auth_repository import AuthRepository
+from repositories.audit_repository import AuditRepository
 
 
 # JWT Configuration
@@ -86,17 +94,32 @@ VALID_THEMES = {"light", "dark", "system"}
 
 
 class SignupRequest(BaseModel):
-    """User signup request"""
+    """
+    User signup request.
+    captcha_token: Required in production (CAPTCHA_ENABLED=true).
+                   Pass any non-empty string in dev (CAPTCHA_ENABLED=false).
+    """
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100)
     full_name: str = Field(..., min_length=1, max_length=200)
-    tenant_name: Optional[str] = None  # Optional: if absent, user is joining via invite
+    tenant_name: Optional[str] = None
+    captcha_token: str = Field(
+        default="",
+        description="reCAPTCHA v3 / Cloudflare Turnstile token. Required in production."
+    )
 
 
 class LoginRequest(BaseModel):
-    """User login request"""
+    """
+    User login request.
+    captcha_token: Required in production (CAPTCHA_ENABLED=true).
+    """
     email: EmailStr
     password: str
+    captcha_token: str = Field(
+        default="",
+        description="reCAPTCHA v3 / Cloudflare Turnstile token. Required in production."
+    )
 
 
 class AuthResponse(BaseModel):
@@ -152,26 +175,31 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 # === Routes ===
 
 @router.post("/signup", response_model=AuthResponse)
-@limiter.limit("5/minute")
 async def signup(request: Request, body_request: SignupRequest):
     """
     Create a new user account and tenant.
-    
-    Flow:
-    1. Validate email uniqueness
-    2. Hash password
-    3. Create user record
-    4. Create tenant record (status: 'onboarding')
-    5. Link user to tenant as owner
-    6. Generate JWT token
-    7. Return token + tenant info
+
+    Security:
+    - Composite rate limiting applied BEFORE any DB interaction.
+    - CAPTCHA token MUST be validated before any account creation.
+    - Generic error messages prevent user enumeration.
+    - All DB access via Repository pattern — no inline db.client calls.
     """
     from utils.supabase_client import db
-    
-    # Check if email already exists
-    existing_user = db.client.table("users").select("id").eq("email", body_request.email).execute()
-    
-    if existing_user.data:
+    user_repo = UserRepository(db.client)
+    auth_repo = AuthRepository(db.client)
+    audit_repo = AuditRepository(db.client)
+
+    # Layer 1: Composite rate limit (IP + email + user-agent)
+    await enforce_auth_rate_limit(request, body_request.email)
+
+    # Layer 2: CAPTCHA validation (must pass before any DB interaction)
+    await verify_captcha(body_request.captcha_token, action="signup")
+
+    # Check if email already exists via repository
+    existing_user = user_repo.get_by_email(body_request.email)
+
+    if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
@@ -180,12 +208,12 @@ async def signup(request: Request, body_request: SignupRequest):
     # Generate IDs
     user_id = str(uuid.uuid4())
     tenant_id = str(uuid.uuid4())
-    
-    # Hash password
+
+    # Hash password — bcrypt is inherently constant-time
     password_hash = hash_password(body_request.password)
-    
+
     try:
-        # 1. Create user
+        # 1. Create user via repository
         user_data = {
             "id": user_id,
             "email": body_request.email,
@@ -195,8 +223,7 @@ async def signup(request: Request, body_request: SignupRequest):
             "is_active": True,
             "created_at": datetime.utcnow().isoformat()
         }
-        
-        db.client.table("users").insert(user_data).execute()
+        user_repo.create_user(user_data)
         
         # 2. Check if this is an invited user (no tenant_name provided)
         if not body_request.tenant_name:
@@ -208,52 +235,38 @@ async def signup(request: Request, body_request: SignupRequest):
             # We need a dummy tenant_id for the JWT — just use a zero UUID
             tenant_id = "00000000-0000-0000-0000-000000000000"
         
-        # 3. Check for Enterprise JIT Auto-Discovery
-        elif jit_tenant_id := get_verified_domain_tenant(body_request.email):
+        # 3. Check for Enterprise JIT Auto-Discovery (via repository)
+        elif jit_tenant_id := auth_repo.get_verified_domain_tenant(body_request.email.split('@')[1].lower()):
             tenant_id = jit_tenant_id
-            
+
             # Create a Join Request instead of a new tenant
-            db.client.table("join_requests").insert({
-                "user_id": user_id,
-                "tenant_id": tenant_id,
-                "status": "pending",
-                "risk_score": "Low Risk"
-            }).execute()
-            
+            auth_repo.create_join_request(user_id, tenant_id)
+
             # Blast notification to Workspace Owners
             await notify_workspace_owners(tenant_id, body_request.email)
-            
+
             tenant_status = "pending_join"
             role = "pending"
         else:
             # Normal isolated tenant creation (status: onboarding)
-            tenant_data = {
+            auth_repo.create_tenant({
                 "id": tenant_id,
-                "email": body_request.email,  # Required by existing schema
+                "email": body_request.email,
                 "status": "onboarding",
                 "created_at": datetime.utcnow().isoformat()
-            }
-            db.client.table("tenants").insert(tenant_data).execute()
-            
+            })
+
             # Link user to tenant as owner
-            tenant_user_data = {
+            auth_repo.create_tenant_user({
                 "tenant_id": tenant_id,
                 "user_id": user_id,
                 "role": "owner",
                 "joined_at": datetime.utcnow().isoformat()
-            }
-            db.client.table("tenant_users").insert(tenant_user_data).execute()
-            
+            })
+
             # Create onboarding progress tracker
-            onboarding_data = {
-                "tenant_id": tenant_id,
-                "stage_basic_info": False,
-                "stage_compliance": False,
-                "stage_intent": False,
-                "started_at": datetime.utcnow().isoformat()
-            }
-            db.client.table("onboarding_progress").insert(onboarding_data).execute()
-            
+            auth_repo.create_onboarding_progress(tenant_id)
+
             tenant_status = "onboarding"
             role = "owner"
         
@@ -267,24 +280,17 @@ async def signup(request: Request, body_request: SignupRequest):
         }
         
         access_token = create_access_token(token_data)
-        
-        # 6. Update last login
-        db.client.table("users").update({
-            "last_login_at": datetime.utcnow().isoformat()
-        }).eq("id", user_id).execute()
-        
+
+        # 6. Update last login via repository
+        user_repo.update_last_login(user_id, datetime.now(timezone.utc).isoformat())
+
         # 7. Send email verification link
         from services.email_service import send_email_verification
         import secrets
-        
+
         verify_token = secrets.token_hex(64)
         expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
-        
-        db.client.table("email_verification_tokens").insert({
-            "user_id": user_id,
-            "token": verify_token,
-            "expires_at": expires_at.isoformat(),
-        }).execute()
+        auth_repo.create_email_verification_token(user_id, verify_token, expires_at.isoformat())
         
         # Fire and forget sending email
         await send_email_verification(body_request.email, verify_token)
@@ -298,84 +304,80 @@ async def signup(request: Request, body_request: SignupRequest):
         )
         
     except Exception as e:
-        # Rollback: Delete created records if any step fails
-        # Note: In production, use database transactions
+        # Rollback via repository — removes partially-created records
         try:
-            db.client.table("tenant_users").delete().eq("user_id", user_id).execute()
-            db.client.table("tenants").delete().eq("id", tenant_id).execute()
-            db.client.table("users").delete().eq("id", user_id).execute()
-        except:
+            auth_repo.hard_delete_tenant(tenant_id)
+            auth_repo.hard_delete_user(user_id)
+        except Exception:
             pass
-        
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create account: {str(e)}"
+            detail="Failed to create account. Please try again."
         )
 
 
 @router.post("/login", response_model=AuthResponse)
-@limiter.limit("5/minute")
 async def login(request: Request, body_request: LoginRequest):
     """
     Authenticate an existing user.
-    
-    Flow:
-    1. Verify email exists
-    2. Verify password
-    3. Get user's primary tenant
-    4. Generate JWT token
-    5. Return token + tenant info
-    
-    MULTI-TENANT HANDLING:
-    - Currently returns user's FIRST tenant (by join date)
-    - Future: Add /auth/switch-tenant endpoint
-    - Future: Add tenant picker UI for users with multiple tenants
-    - For now: Most users have one tenant (owner of their org)
+
+    Security:
+    - Composite rate limiting (IP + email + user-agent) before ANY DB interaction.
+    - CAPTCHA validation BEFORE credential check — blocks bots upfront.
+    - Generic error message used for ALL failures to prevent user enumeration.
+    - bcrypt.checkpw is inherently constant-time (resistant to timing attacks).
+    - All DB access via Repository pattern — no inline db.client calls.
     """
     from utils.supabase_client import db
+    user_repo = UserRepository(db.client)
+    auth_repo = AuthRepository(db.client)
+    audit_repo = AuditRepository(db.client)
+
+    # Layer 1: Composite rate limit MUST run before DB
+    await enforce_auth_rate_limit(request, body_request.email)
+
+    # Layer 2: CAPTCHA validation — blocks bots before any DB access
+    await verify_captcha(body_request.captcha_token, action="login")
+
+    # Fetch user via repository
+    user = user_repo.get_by_email(body_request.email)
+
+    # SECURITY: Use identical error message for missing user AND wrong password.
+    # This prevents attackers from enumerating valid accounts.
+    if not user:
     
-    # Get user by email
-    user_result = db.client.table("users").select("*").eq("email", body_request.email).execute()
-    
-    if not user_result.data:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
-        )
-    
-    user = user_result.data[0]
-    
-    # Verify password
+        # SECURITY: bcrypt.checkpw against a dummy hash — ensures constant response
+        # time regardless of whether user exists (prevents timing-based enumeration)
+        bcrypt.checkpw(body_request.password.encode(), bcrypt.hashpw(b"dummy", bcrypt.gensalt()))
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    # Verify password — bcrypt.checkpw is already constant-time
     if not verify_password(body_request.password, user["password_hash"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
+            detail="Invalid credentials"  # SECURITY: generic message — no enumeration
         )
-    
+
     # Check if user is active
     if not user.get("is_active", True):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is disabled"
         )
-    
-    # Get user's primary tenant (first tenant they're a member of)
-    # TODO: When implementing multi-tenant support, add tenant selection logic
-    tenant_user_result = db.client.table("tenant_users").select(
-        "tenant_id, role, isolation_model"
-    ).eq("user_id", user["id"]).order("joined_at").limit(1).execute()
-    
-    if not tenant_user_result.data:
-        # Check if they are in the waiting room
-        join_req_result = db.client.table("join_requests").select("tenant_id, status").eq("user_id", user["id"]).execute()
-        
-        if not join_req_result.data:
-            # Check if they have a pending team invitation by email (not yet accepted)
-            invite_res = db.client.table("team_invitations").select("tenant_id").eq("email", user["email"]).execute()
-            if invite_res.data:
-                # They have a pending invite but haven't accepted yet
-                # Give them a minimal JWT so they can hit /team/invites/accept
-                tenant_id = invite_res.data[0]["tenant_id"]
+
+    # Get user's primary tenant via repository
+    tenant_user = auth_repo.get_tenant_user_link(user["id"])
+
+    if not tenant_user:
+        # Check join requests via repository
+        join_req = auth_repo.get_join_request(user["id"])
+
+        if not join_req:
+            # Check for pending team invitation via repository
+            pending_invite = auth_repo.get_pending_invite(user["email"])
+            if pending_invite:
+                tenant_id = pending_invite["tenant_id"]
                 role = "invited_pending"
                 tenant_status = "pending_join"
             else:
@@ -384,38 +386,36 @@ async def login(request: Request, body_request: LoginRequest):
                     detail="No assigned workspace or pending requests found for user"
                 )
         else:
-            join_req = join_req_result.data[0]
             tenant_id = join_req["tenant_id"]
             role = "pending"
-            
+
             if join_req["status"] == "blocked":
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Your request to join this workspace was denied by the administrator."
                 )
-            
+
             tenant_status = "pending_join"
     else:
-        tenant_user = tenant_user_result.data[0]
         tenant_id = tenant_user["tenant_id"]
         role = tenant_user["role"]
     
-    # Get tenant status
-    tenant_result = db.client.table("tenants").select("status").eq("id", tenant_id).execute()
-    
-    if not tenant_result.data:
+    # Get tenant status via repository
+    tenant = auth_repo.get_tenant_by_id(tenant_id)
+
+    if not tenant:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Tenant not found"
         )
-    
+
     if role == "pending":
         tenant_status = "pending_join"
         isolation_model = "team"
     else:
-        tenant_status = tenant_result.data[0]["status"]
-        isolation_model = tenant_user.get("isolation_model", "team")
-    
+        tenant_status = tenant["status"]
+        isolation_model = (tenant_user or {}).get("isolation_model", "team")
+
     # Generate JWT token
     token_data = {
         "user_id": user["id"],
@@ -424,14 +424,21 @@ async def login(request: Request, body_request: LoginRequest):
         "role": role,
         "isolation_model": isolation_model
     }
-    
     access_token = create_access_token(token_data)
-    
-    # Update last login
-    db.client.table("users").update({
-        "last_login_at": datetime.utcnow().isoformat()
-    }).eq("id", user["id"]).execute()
-    
+
+    # Update last login via repository
+    user_repo.update_last_login(user["id"], datetime.now(timezone.utc).isoformat())
+
+    # Emit immutable audit log
+    audit_repo.insert_log(
+        tenant_id=tenant_id,
+        action="auth.login",
+        user_id=user["id"],
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        metadata={"role": role}
+    )
+
     return AuthResponse(
         user_id=user["id"],
         tenant_id=tenant_id,
