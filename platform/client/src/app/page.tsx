@@ -32,7 +32,7 @@ export default function LandingPage() {
     };
 
     return (
-        <div style={{ backgroundColor: '#09090b', color: 'white', minHeight: '100vh', position: 'relative', overflowX: 'hidden', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+        <div style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', minHeight: '100vh', position: 'relative', overflowX: 'hidden', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
             <style jsx global>{`
                 ::selection {
                     background: rgba(59, 130, 246, 0.3);
@@ -61,7 +61,7 @@ export default function LandingPage() {
                     100% { transform: translateX(-50%); }
                 }
                 .hero-text {
-                    background: linear-gradient(to right, #ffffff, #94a3b8, #ffffff);
+                    background: linear-gradient(to right, var(--text-primary), var(--text-muted), var(--text-primary));
                     background-size: 200% auto;
                     color: transparent;
                     -webkit-background-clip: text;
@@ -77,46 +77,28 @@ export default function LandingPage() {
                     animation: gradient-text 4s linear infinite;
                 }
                 .glass-card {
-                    background: rgba(255, 255, 255, 0.02);
+                    background: var(--bg-card);
                     backdrop-filter: blur(20px);
                     -webkit-backdrop-filter: blur(20px);
-                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border: 1px solid var(--border);
                     transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
                 }
                 .glass-card:hover {
-                    background: rgba(255, 255, 255, 0.04);
-                    border: 1px solid rgba(255, 255, 255, 0.15);
+                    background: var(--bg-hover);
+                    border: 1px solid var(--accent);
                     transform: translateY(-4px);
                     box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
                 }
                 .glass-nav {
-                    background: rgba(9, 9, 11, 0.7);
+                    background: var(--bg-primary);
                     backdrop-filter: blur(20px);
                     -webkit-backdrop-filter: blur(20px);
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                    border-bottom: 1px solid var(--border);
                 }
-                .btn-premium {
-                    position: relative;
-                    overflow: hidden;
-                    background: #ffffff;
-                    color: #09090b;
-                    border: none;
-                    transition: all 0.3s ease;
-                }
-                .btn-premium:hover {
-                    transform: scale(1.02);
-                    box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
-                }
-                .btn-secondary {
-                    background: transparent;
-                    color: white;
-                    border: 1px solid rgba(255, 255, 255, 0.15);
-                    transition: all 0.3s ease;
-                }
-                .btn-secondary:hover {
-                    background: rgba(255, 255, 255, 0.05);
-                    border-color: rgba(255, 255, 255, 0.3);
-                }
+                
+                
+                
+                
                 .marquee-container {
                     overflow: hidden;
                     white-space: nowrap;
@@ -137,7 +119,7 @@ export default function LandingPage() {
                 
                 /* Custom scrollbar */
                 ::-webkit-scrollbar { width: 8px; }
-                ::-webkit-scrollbar-track { background: #09090b; }
+                ::-webkit-scrollbar-track { background: var(--bg-primary); }
                 ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
                 ::-webkit-scrollbar-thumb:hover { background: #475569; }
             `}</style>
@@ -149,7 +131,7 @@ export default function LandingPage() {
                 left: '-10%',
                 width: '600px',
                 height: '600px',
-                background: 'radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, rgba(9, 9, 11, 0) 70%)',
+                background: 'radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%)',
                 filter: 'blur(80px)',
                 zIndex: 0,
                 pointerEvents: 'none'
@@ -160,7 +142,7 @@ export default function LandingPage() {
                 right: '-10%',
                 width: '600px',
                 height: '600px',
-                background: 'radial-gradient(circle, rgba(168, 85, 247, 0.1) 0%, rgba(9, 9, 11, 0) 70%)',
+                background: 'radial-gradient(circle, rgba(168, 85, 247, 0.1) 0%, transparent 70%)',
                 filter: 'blur(80px)',
                 zIndex: 0,
                 pointerEvents: 'none'
@@ -173,7 +155,7 @@ export default function LandingPage() {
                 left: mousePos.x - 300,
                 width: '600px',
                 height: '600px',
-                background: 'radial-gradient(circle, rgba(255,255,255,0.02) 0%, rgba(9,9,11,0) 50%)',
+                background: 'radial-gradient(circle, rgba(59, 130, 246, 0.05) 0%, transparent 50%)',
                 pointerEvents: 'none',
                 zIndex: 1,
             }} />
@@ -189,9 +171,9 @@ export default function LandingPage() {
                     right: 0,
                     transition: 'all 0.3s ease',
                     zIndex: 50,
-                    backgroundColor: scrolled ? 'rgba(9, 9, 11, 0.8)' : 'transparent',
+                    backgroundColor: scrolled ? 'var(--bg-card)' : 'transparent',
                     backdropFilter: scrolled ? 'blur(20px)' : 'none',
-                    borderBottom: scrolled ? '1px solid rgba(255,255,255,0.08)' : '1px solid transparent'
+                    borderBottom: scrolled ? '1px solid var(--border)' : '1px solid transparent'
                 }}>
                     <div style={{
                         maxWidth: '1280px',
@@ -212,36 +194,22 @@ export default function LandingPage() {
                                 justifyContent: 'center',
                                 boxShadow: '0 4px 20px rgba(59, 130, 246, 0.3)'
                             }}>
-                                <Mail style={{ width: '18px', height: '18px', color: 'white' }} />
+                                <Mail style={{ width: '18px', height: '18px', color: 'var(--text-primary)' }} />
                             </div>
-                            <span style={{ fontSize: '18px', fontWeight: 600, letterSpacing: '-0.02em', color: 'white' }}>
+                            <span style={{ fontSize: '18px', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
                                 Email Engine
                             </span>
                         </div>
 
                         <nav className="hidden md:flex gap-10">
-                            <button onClick={() => scrollToSection('features')} style={{ background: 'none', border: 'none', fontSize: '14px', fontWeight: 500, color: '#94a3b8', cursor: 'pointer', transition: 'color 0.2s' }} onMouseOver={(e) => e.currentTarget.style.color = 'white'} onMouseOut={(e) => e.currentTarget.style.color = '#94a3b8'}>Features</button>
-                            <button onClick={() => scrollToSection('integrations')} style={{ background: 'none', border: 'none', fontSize: '14px', fontWeight: 500, color: '#94a3b8', cursor: 'pointer', transition: 'color 0.2s' }} onMouseOver={(e) => e.currentTarget.style.color = 'white'} onMouseOut={(e) => e.currentTarget.style.color = '#94a3b8'}>Integrations</button>
-                            <button onClick={() => scrollToSection('pricing')} style={{ background: 'none', border: 'none', fontSize: '14px', fontWeight: 500, color: '#94a3b8', cursor: 'pointer', transition: 'color 0.2s' }} onMouseOver={(e) => e.currentTarget.style.color = 'white'} onMouseOut={(e) => e.currentTarget.style.color = '#94a3b8'}>Pricing</button>
+                            <button onClick={() => scrollToSection('features')} className="bg-transparent border-none text-[14px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer">Features</button>
+                            <button onClick={() => scrollToSection('integrations')} className="bg-transparent border-none text-[14px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer">Integrations</button>
+                            <button onClick={() => scrollToSection('pricing')} className="bg-transparent border-none text-[14px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer">Pricing</button>
                         </nav>
 
                         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                            <Link href="/login" className="hidden sm:inline-block" style={{
-                                fontSize: '14px',
-                                fontWeight: 500,
-                                color: '#e2e8f0',
-                                textDecoration: 'none',
-                                transition: 'color 0.2s'
-                            }} onMouseOver={(e) => e.currentTarget.style.color = 'white'} onMouseOut={(e) => e.currentTarget.style.color = '#e2e8f0'}>
-                                Sign In
-                            </Link>
-                            <Link href="/signup" className="btn-secondary" style={{
-                                fontSize: '14px',
-                                fontWeight: 500,
-                                padding: '8px 20px',
-                                borderRadius: '8px',
-                                textDecoration: 'none',
-                            }}>
+                            <Link href="/login" className="hidden sm:inline-block text-[14px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Sign In</Link>
+                            <Link href="/signup" className="btn-premium py-2 px-5 text-sm">
                                 Get Started
                             </Link>
                         </div>
@@ -260,7 +228,7 @@ export default function LandingPage() {
                     <div style={{
                         position: 'absolute',
                         top: 0, left: 0, right: 0, bottom: 0,
-                        backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)`,
+                        backgroundImage: `linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)`,
                         backgroundSize: '40px 40px',
                         maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%)',
                         WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%)',
@@ -291,7 +259,7 @@ export default function LandingPage() {
                                 letterSpacing: '-0.03em',
                                 lineHeight: '1.05',
                                 marginBottom: '24px',
-                                color: 'white'
+                                color: 'var(--text-primary)'
                             }}>
                                 Automate emails like <br />
                                 <span className="hero-highlight">absolute magic.</span>
@@ -299,7 +267,7 @@ export default function LandingPage() {
 
                             <p style={{
                                 fontSize: 'clamp(18px, 2vw, 22px)',
-                                color: '#94a3b8',
+                                color: 'var(--text-muted)',
                                 maxWidth: '700px',
                                 margin: '0 auto 48px auto',
                                 lineHeight: '1.6',
@@ -309,23 +277,14 @@ export default function LandingPage() {
                             </p>
 
                             <div className="flex flex-col sm:flex-row gap-5 items-center justify-center mb-20 w-full px-6 sm:px-0">
-                                <Link href="/signup" className="btn-premium w-full sm:w-auto justify-center" style={{
-                                    fontSize: '16px',
-                                    fontWeight: 600,
-                                    padding: '16px 32px',
-                                    borderRadius: '12px',
-                                    textDecoration: 'none',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '10px',
-                                }}>
+                                <Link href="/signup" className="btn-premium w-full sm:w-auto h-12 text-base font-semibold px-8 rounded-xl shadow-[0_4px_14px_rgba(37,99,235,0.39)]">
                                     Get Started Free
-                                    <MoveRight style={{ width: '18px', height: '18px' }} />
+                                    <MoveRight className="w-[18px] h-[18px]" />
                                 </Link>
                                 <Link href="/docs" className="glass-card w-full sm:w-auto text-center" style={{
                                     fontSize: '16px',
                                     fontWeight: 500,
-                                    color: 'white',
+                                    color: 'var(--text-primary)',
                                     padding: '16px 32px',
                                     borderRadius: '12px',
                                     textDecoration: 'none',
@@ -343,10 +302,10 @@ export default function LandingPage() {
                                 animation: 'float 8s ease-in-out infinite',
                                 overflow: 'hidden',
                                 boxShadow: '0 30px 60px -15px rgba(0,0,0,0.8), 0 0 40px rgba(59, 130, 246, 0.1)',
-                                border: '1px solid rgba(255,255,255,0.1)'
+                                border: '1px solid var(--border)'
                             }}>
                                 {/* Mac Window Header */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '16px 20px', backgroundColor: 'rgba(0,0,0,0.4)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '16px 20px', backgroundColor: 'rgba(0,0,0,0.4)', borderBottom: '1px solid var(--border)' }}>
                                     <div style={{ width: 12, height: 12, borderRadius: 6, background: '#ef4444' }} />
                                     <div style={{ width: 12, height: 12, borderRadius: 6, background: '#f59e0b' }} />
                                     <div style={{ width: 12, height: 12, borderRadius: 6, background: '#10b981' }} />
@@ -379,7 +338,7 @@ export default function LandingPage() {
                 </section>
 
                 {/* Marquee Integrations Section */}
-                <section id="integrations" style={{ padding: '40px 0', borderTop: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(0,0,0,0.2)' }}>
+                <section id="integrations" style={{ padding: '40px 0', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--bg-hover)' }}>
                     <div style={{ textAlign: 'center', marginBottom: '32px' }}>
                         <p style={{ fontSize: '14px', fontWeight: 600, color: '#64748b', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Integrates with your modern stack</p>
                     </div>
@@ -403,10 +362,10 @@ export default function LandingPage() {
                 {/* Bento Grid Features Section */}
                 <section id="features" style={{ padding: '160px 24px', maxWidth: '1280px', margin: '0 auto' }}>
                     <div style={{ textAlign: 'center', marginBottom: '80px' }}>
-                        <h2 style={{ fontSize: '48px', fontWeight: 700, color: 'white', marginBottom: '24px', letterSpacing: '-0.02em' }}>
+                        <h2 style={{ fontSize: '48px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '24px', letterSpacing: '-0.02em' }}>
                             Everything you <span style={{ color: '#60a5fa' }}>need</span>, <br />nothing you don't.
                         </h2>
-                        <p style={{ fontSize: '18px', color: '#94a3b8', maxWidth: '600px', margin: '0 auto' }}>
+                        <p style={{ fontSize: '18px', color: 'var(--text-muted)', maxWidth: '600px', margin: '0 auto' }}>
                             We striped away the bloated marketing tools to give developers a powerful, headless email engine.
                         </p>
                     </div>
@@ -419,8 +378,8 @@ export default function LandingPage() {
                                 <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(96, 165, 250, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px', border: '1px solid rgba(96, 165, 250, 0.2)' }}>
                                     <Workflow style={{ width: '24px', height: '24px', color: '#60a5fa' }} />
                                 </div>
-                                <h3 className="text-2xl md:text-3xl font-semibold text-white mb-4">Visual Automation Builder</h3>
-                                <p style={{ fontSize: '16px', color: '#94a3b8', lineHeight: '1.6', maxWidth: '400px' }}>
+                                <h3 className="text-2xl md:text-3xl font-semibold text-[var(--text-primary)] mb-4">Visual Automation Builder</h3>
+                                <p style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: '1.6', maxWidth: '400px' }}>
                                     Design complex journeys with a drag-and-drop workflow canvas. Set delays, rules, and conditions without touching the code.
                                 </p>
                             </div>
@@ -432,8 +391,8 @@ export default function LandingPage() {
                                 <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(168, 85, 247, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px', border: '1px solid rgba(168, 85, 247, 0.2)' }}>
                                     <Code2 style={{ width: '24px', height: '24px', color: '#c084fc' }} />
                                 </div>
-                                <h3 className="text-xl md:text-2xl font-semibold text-white mb-4">Developer API</h3>
-                                <p style={{ fontSize: '16px', color: '#94a3b8', lineHeight: '1.6' }}>
+                                <h3 className="text-xl md:text-2xl font-semibold text-[var(--text-primary)] mb-4">Developer API</h3>
+                                <p style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
                                     RESTful endpoints with predictable payloads and comprehensive webhooks.
                                 </p>
                             </div>
@@ -445,8 +404,8 @@ export default function LandingPage() {
                                 <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
                                     <Shield style={{ width: '24px', height: '24px', color: '#34d399' }} />
                                 </div>
-                                <h3 className="text-xl md:text-2xl font-semibold text-white mb-4">Multi-Tenant Security</h3>
-                                <p style={{ fontSize: '16px', color: '#94a3b8', lineHeight: '1.6' }}>
+                                <h3 className="text-xl md:text-2xl font-semibold text-[var(--text-primary)] mb-4">Multi-Tenant Security</h3>
+                                <p style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
                                     Isolated workspaces out of the box. Safe for B2B SaaS applications.
                                 </p>
                             </div>
@@ -458,8 +417,8 @@ export default function LandingPage() {
                                 <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(251, 191, 36, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px', border: '1px solid rgba(251, 191, 36, 0.2)' }}>
                                     <Zap style={{ width: '24px', height: '24px', color: '#fbbf24' }} />
                                 </div>
-                                <h3 className="text-2xl md:text-3xl font-semibold text-white mb-4">Real-time Delivery Pipeline</h3>
-                                <p style={{ fontSize: '16px', color: '#94a3b8', lineHeight: '1.6', maxWidth: '400px' }}>
+                                <h3 className="text-2xl md:text-3xl font-semibold text-[var(--text-primary)] mb-4">Real-time Delivery Pipeline</h3>
+                                <p style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: '1.6', maxWidth: '400px' }}>
                                     Our Rust-based ingest servers and Redis queues ensure sub-millisecond event processing and reliable email dispatch even during massive spikes.
                                 </p>
                             </div>
@@ -471,81 +430,72 @@ export default function LandingPage() {
                 {/* Final CTA */}
                 <section style={{ padding: '160px 24px', textAlign: 'center', position: 'relative' }}>
                     <div style={{ maxWidth: '800px', margin: '0 auto', position: 'relative', zIndex: 2 }}>
-                        <h2 style={{ fontSize: '56px', fontWeight: 700, color: 'white', marginBottom: '32px', letterSpacing: '-0.02em' }}>
+                        <h2 style={{ fontSize: '56px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '32px', letterSpacing: '-0.02em' }}>
                             Ready to upgrade your stack?
                         </h2>
-                        <p style={{ fontSize: '20px', color: '#94a3b8', marginBottom: '48px' }}>
+                        <p style={{ fontSize: '20px', color: 'var(--text-muted)', marginBottom: '48px' }}>
                             Join hundreds of developers building the future of automated communications.
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-5 justify-center w-full px-6 sm:px-0">
-                            <Link href="/signup" className="btn-premium w-full sm:w-auto justify-center" style={{
-                                fontSize: '16px',
-                                fontWeight: 600,
-                                padding: '16px 32px',
-                                borderRadius: '12px',
-                                textDecoration: 'none',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '10px',
-                            }}>
+                            <Link href="/signup" className="btn-premium w-full sm:w-auto h-12 text-base font-semibold px-8 rounded-xl shadow-[0_4px_14px_rgba(37,99,235,0.39)]">
                                 Get Started for Free
-                                <MoveRight style={{ width: '18px', height: '18px' }} />
+                                <MoveRight className="w-[18px] h-[18px]" />
                             </Link>
                         </div>
                     </div>
                 </section>
 
                 {/* Footer */}
-                <footer className="border-t border-white/5 py-16 px-6 bg-black/30">
+                <footer className="border-t border-[var(--border)] py-16 px-6 bg-[var(--bg-card)]">
                     <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-12">
                         <div>
                             <div className="flex items-center gap-2 mb-6">
                                 <Mail className="w-4 h-4 text-blue-400" />
-                                <span className="text-base font-semibold text-white">Email Engine</span>
+                                <span className="text-base font-semibold text-[var(--text-primary)]">Email Engine</span>
                             </div>
-                            <p className="text-sm text-slate-400 leading-relaxed">
+                            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
                                 The modern infrastructure for event-driven email automation.
                             </p>
                         </div>
 
                         <div>
-                            <h4 className="text-sm font-semibold text-white mb-5">Product</h4>
+                            <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-5">Product</h4>
                             <div className="flex flex-col gap-3">
-                                <Link href="#" className="text-sm text-slate-400 hover:text-white transition-colors">Features</Link>
-                                <Link href="#" className="text-sm text-slate-400 hover:text-white transition-colors">Integrations</Link>
-                                <Link href="#" className="text-sm text-slate-400 hover:text-white transition-colors">Pricing</Link>
-                                <Link href="#" className="text-sm text-slate-400 hover:text-white transition-colors">Changelog</Link>
+                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Features</Link>
+                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Integrations</Link>
+                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Pricing</Link>
+                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Changelog</Link>
                             </div>
                         </div>
 
                         <div>
-                            <h4 className="text-sm font-semibold text-white mb-5">Developers</h4>
+                            <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-5">Developers</h4>
                             <div className="flex flex-col gap-3">
-                                <Link href="/docs" className="text-sm text-slate-400 hover:text-white transition-colors">Documentation</Link>
-                                <Link href="#" className="text-sm text-slate-400 hover:text-white transition-colors">API Reference</Link>
-                                <a href="https://github.com" className="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
+                                <Link href="/docs" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Documentation</Link>
+                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">API Reference</Link>
+                                <a href="https://github.com" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1.5">
                                     GitHub <ExternalLink className="w-3 h-3" />
                                 </a>
-                                <Link href="#" className="text-sm text-slate-400 hover:text-white transition-colors">Status</Link>
+                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Status</Link>
                             </div>
                         </div>
 
                         <div>
-                            <h4 className="text-sm font-semibold text-white mb-5">Company</h4>
+                            <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-5">Company</h4>
                             <div className="flex flex-col gap-3">
-                                <Link href="#" className="text-sm text-slate-400 hover:text-white transition-colors">About</Link>
-                                <Link href="#" className="text-sm text-slate-400 hover:text-white transition-colors">Blog</Link>
-                                <Link href="#" className="text-sm text-slate-400 hover:text-white transition-colors">Contact</Link>
+                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">About</Link>
+                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Blog</Link>
+                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Contact</Link>
                             </div>
                         </div>
                     </div>
 
-                    <div className="max-w-7xl mx-auto mt-16 pt-8 border-t border-white/5 flex justify-between items-center sm:flex-row flex-col gap-4">
-                        <p className="text-sm text-slate-500">© 2026 Email Engine Inc. All rights reserved.</p>
+                    <div className="max-w-7xl mx-auto mt-16 pt-8 border-t border-[var(--border)] flex justify-between items-center sm:flex-row flex-col gap-4">
+                        <p className="text-sm text-[var(--text-muted)]">© 2026 Email Engine Inc. All rights reserved.</p>
                         <div className="flex gap-6">
-                            <Link href="#" className="text-sm text-slate-500 hover:text-white transition-colors">Privacy</Link>
-                            <Link href="#" className="text-sm text-slate-500 hover:text-white transition-colors">Terms</Link>
+                            <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Privacy</Link>
+                            <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Terms</Link>
                         </div>
                     </div>
                 </footer>
