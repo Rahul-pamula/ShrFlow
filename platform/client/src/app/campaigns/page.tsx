@@ -170,10 +170,10 @@ export default function CampaignsPage() {
             {/* Page Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
                 <div>
-                    <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#FAFAFA', margin: 0, letterSpacing: '-0.02em' }}>
+                    <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>
                         Campaigns
                     </h1>
-                    <p style={{ fontSize: '13px', color: '#71717A', margin: '4px 0 0' }}>
+                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
                         Create and manage your email campaigns
                     </p>
                 </div>
@@ -192,7 +192,7 @@ export default function CampaignsPage() {
                 <div style={{ position: 'relative', width: '280px' }}>
                     <Search size={14} style={{
                         position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)',
-                        color: '#52525B'
+                        color: 'var(--text-muted)'
                     }} />
                     <input
                         type="text"
@@ -201,15 +201,15 @@ export default function CampaignsPage() {
                         onChange={(e) => setSearch(e.target.value)}
                         style={{
                             width: '100%', padding: '9px 12px 9px 34px',
-                            background: 'rgba(9, 9, 11, 0.8)', border: '1px solid rgba(63, 63, 70, 0.4)',
-                            borderRadius: '8px', fontSize: '13px', color: '#FAFAFA', outline: 'none',
+                            background: 'var(--bg-input)', border: '1px solid var(--border)',
+                            borderRadius: '8px', fontSize: '13px', color: 'var(--text-primary)', outline: 'none',
                         }}
                     />
                 </div>
                 <button style={{
                     display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px',
-                    background: 'rgba(9, 9, 11, 0.8)', border: '1px solid rgba(63, 63, 70, 0.4)',
-                    borderRadius: '8px', color: '#A1A1AA', fontSize: '13px', cursor: 'pointer',
+                    background: 'var(--bg-input)', border: '1px solid var(--border)',
+                    borderRadius: '8px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer',
                 }}>
                     <Filter size={14} />
                     Filter
@@ -218,7 +218,7 @@ export default function CampaignsPage() {
 
             {/* ERROR STATE */}
             {error && (
-                <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'rgba(69, 10, 10, 0.3)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', color: '#EF4444', fontSize: '13px' }}>
+                <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'var(--danger-bg)', border: '1px solid var(--danger-border)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--danger)', fontSize: '13px' }}>
                     <AlertCircle size={15} /> {error}
                 </div>
             )}
@@ -234,7 +234,7 @@ export default function CampaignsPage() {
             {!loading && !error && filtered.length === 0 && (
                 <div style={{
                     textAlign: 'center', padding: '64px 24px',
-                    background: 'rgba(24, 24, 27, 0.4)', border: '1px dashed rgba(63, 63, 70, 0.4)',
+                    background: 'var(--bg-card)', border: '1px dashed var(--border)',
                     borderRadius: '12px'
                 }}>
                     <div style={{
@@ -244,10 +244,10 @@ export default function CampaignsPage() {
                     }}>
                         <Megaphone size={24} color="#3B82F6" />
                     </div>
-                    <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#E4E4E7', marginBottom: '8px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
                         No campaigns yet
                     </h3>
-                    <p style={{ fontSize: '13px', color: '#71717A', marginBottom: '20px' }}>
+                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
                         Create your first campaign and start sending emails.
                     </p>
                     <button
@@ -263,18 +263,18 @@ export default function CampaignsPage() {
             {/* DATA TABLE */}
             {!loading && filtered.length > 0 && (
                 <div style={{
-                    background: 'rgba(24, 24, 27, 0.6)', backdropFilter: 'blur(16px)',
-                    border: '1px solid rgba(63, 63, 70, 0.4)', borderRadius: '12px', overflow: 'hidden'
+                    background: 'var(--bg-card)', backdropFilter: 'blur(16px)',
+                    border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden'
                 }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
-                            <tr style={{ borderBottom: '1px solid rgba(63, 63, 70, 0.3)' }}>
+                            <tr style={{ borderBottom: '1px solid var(--border)' }}>
                                 {['Campaign', 'Status', 'Contacts', 'Created', 'Actions'].map((h, i) => (
                                     <th key={h} style={{
                                         padding: '12px 20px', fontSize: '11px', fontWeight: 500,
-                                        textTransform: 'uppercase', letterSpacing: '0.06em', color: '#52525B',
+                                        textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)',
                                         textAlign: i >= 2 && i < 4 ? 'right' : i === 4 ? 'right' : 'left',
-                                        background: 'rgba(9, 9, 11, 0.3)'
+                                        background: 'var(--bg-hover)'
                                     }}>
                                         {h}
                                     </th>
@@ -286,7 +286,7 @@ export default function CampaignsPage() {
                                 <tr
                                     key={`localdraft-${draft.id}`}
                                     style={{
-                                        borderBottom: '1px solid rgba(63, 63, 70, 0.2)',
+                                        borderBottom: '1px solid var(--border)',
                                         transition: 'background 0.15s ease',
                                         background: 'rgba(59, 130, 246, 0.04)'
                                     }}
@@ -301,16 +301,16 @@ export default function CampaignsPage() {
                                                 </p>
                                                 <span style={{ fontSize: '10px', fontWeight: 600, background: 'rgba(59,130,246,0.1)', color: '#60A5FA', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(59,130,246,0.2)', textTransform: 'uppercase' }}>Unsaved Browser Session</span>
                                             </div>
-                                            <p style={{ fontSize: '12px', color: '#A1A1AA', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '300px' }}>{draft.subject || '—'}</p>
+                                            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '300px' }}>{draft.subject || '—'}</p>
                                         </Link>
                                     </td>
                                     <td style={{ padding: '16px 20px' }}>
                                         <StatusBadge status="draft" />
                                     </td>
-                                    <td style={{ padding: '16px 20px', fontSize: '13px', color: '#A1A1AA', textAlign: 'right' }}>
+                                    <td style={{ padding: '16px 20px', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'right' }}>
                                         —
                                     </td>
-                                    <td style={{ padding: '16px 20px', fontSize: '13px', color: '#71717A', textAlign: 'right' }}>
+                                    <td style={{ padding: '16px 20px', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'right' }}>
                                         Just now
                                     </td>
                                     <td style={{ padding: '16px 20px', textAlign: 'right' }}>
@@ -341,17 +341,17 @@ export default function CampaignsPage() {
                                 <tr
                                     key={c.id}
                                     style={{
-                                        borderBottom: idx < filtered.length - 1 ? '1px solid rgba(63, 63, 70, 0.2)' : 'none',
+                                        borderBottom: idx < filtered.length - 1 ? '1px solid var(--border)' : 'none',
                                         transition: 'background 0.15s ease',
                                     }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(39, 39, 42, 0.3)')}
+                                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
                                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                                 >
                                     {/* Name + Subject */}
                                     <td style={{ padding: '16px 20px' }}>
                                         <Link href={`/campaigns/${c.id}`} style={{ textDecoration: 'none' }}>
-                                            <p style={{ fontSize: '14px', fontWeight: 600, color: '#FAFAFA', margin: 0 }}>{c.name}</p>
-                                            <p style={{ fontSize: '12px', color: '#71717A', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '300px' }}>{c.subject}</p>
+                                            <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{c.name}</p>
+                                            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '300px' }}>{c.subject}</p>
                                         </Link>
                                     </td>
 
@@ -361,12 +361,12 @@ export default function CampaignsPage() {
                                     </td>
 
                                     {/* Count */}
-                                    <td style={{ padding: '16px 20px', fontSize: '13px', color: '#A1A1AA', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                                    <td style={{ padding: '16px 20px', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                                         {c.stats?.[0]?.count ? c.stats[0].count.toLocaleString() : '—'}
                                     </td>
 
                                     {/* Date */}
-                                    <td style={{ padding: '16px 20px', fontSize: '13px', color: '#71717A', textAlign: 'right' }}>
+                                    <td style={{ padding: '16px 20px', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'right' }}>
                                         {new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                     </td>
 
@@ -411,17 +411,17 @@ export default function CampaignsPage() {
 
                     {/* Pagination Controls */}
                     {totalPages > 1 && (
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: '16px 20px', borderTop: '1px solid rgba(63, 63, 70, 0.4)', background: 'rgba(9, 9, 11, 0.3)' }}>
-                            <span style={{ fontSize: "13px", color: '#A1A1AA' }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: '16px 20px', borderTop: '1px solid var(--border)', background: 'var(--bg-hover)' }}>
+                            <span style={{ fontSize: "13px", color: 'var(--text-muted)' }}>
                                 Showing {(page - 1) * 15 + 1}–{Math.min(page * 15, total)} of {total} campaigns
                             </span>
                             <div style={{ display: "flex", gap: "8px" }}>
                                 <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-                                    style={{ padding: "6px 14px", fontSize: "13px", fontWeight: 500, color: "white", backgroundColor: "transparent", border: `1px solid rgba(63, 63, 70, 0.6)`, borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", opacity: page <= 1 ? 0.4 : 1 }}>
+                                    style={{ padding: "6px 14px", fontSize: "13px", fontWeight: 500, color: 'var(--text-primary)', backgroundColor: "transparent", border: `1px solid var(--border)`, borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", opacity: page <= 1 ? 0.4 : 1 }}>
                                     <ChevronLeft size={14} /> Prev
                                 </button>
                                 <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-                                    style={{ padding: "6px 14px", fontSize: "13px", fontWeight: 500, color: "white", backgroundColor: "transparent", border: `1px solid rgba(63, 63, 70, 0.6)`, borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", opacity: page >= totalPages ? 0.4 : 1 }}>
+                                    style={{ padding: "6px 14px", fontSize: "13px", fontWeight: 500, color: 'var(--text-primary)', backgroundColor: "transparent", border: `1px solid var(--border)`, borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", opacity: page >= totalPages ? 0.4 : 1 }}>
                                     Next <ChevronRight size={14} />
                                 </button>
                             </div>
