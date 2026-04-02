@@ -25,6 +25,8 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 # Import the global limiter from shared module
 from utils.rate_limiter import limiter
+from utils.jwt_middleware import require_authenticated_user, JWTPayload
+
 
 # JWT Configuration
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
@@ -80,6 +82,9 @@ async def notify_workspace_owners(tenant_id: str, requester_email: str):
 
 # === Pydantic Models ===
 
+VALID_THEMES = {"light", "dark", "system"}
+
+
 class SignupRequest(BaseModel):
     """User signup request"""
     email: EmailStr
@@ -106,6 +111,11 @@ class AuthResponse(BaseModel):
 class SwitchWorkspaceRequest(BaseModel):
     """Request to switch to a different workspace"""
     tenant_id: str
+
+
+class ThemeUpdateRequest(BaseModel):
+    """Request to update the user's theme preference"""
+    theme: str = Field(..., description="Must be one of: light, dark, system")
 
 
 # === Helper Functions ===
@@ -432,20 +442,70 @@ async def login(request: Request, body_request: LoginRequest):
 
 
 @router.get("/me")
-async def get_current_user():
+async def get_current_user(jwt_payload: JWTPayload = Depends(require_authenticated_user)):
     """
-    Get current authenticated user info.
-    
-    TODO: Implement JWT verification middleware
-    For now, this is a placeholder.
+    Get current authenticated user info, including stored theme preference.
+    This is called on app load to hydrate the frontend session and sync theme.
     """
+    from utils.supabase_client import db
+
+    user_result = db.client.table("users").select(
+        "id, email, full_name, email_verified, is_active, created_at, last_login_at, theme_preference"
+    ).eq("id", jwt_payload.user_id).execute()
+
+    if not user_result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user = user_result.data[0]
     return {
-        "message": "JWT verification not yet implemented",
-        "note": "Use the token from signup/login in Authorization header"
+        "user_id": user["id"],
+        "email": user["email"],
+        "full_name": user.get("full_name"),
+        "email_verified": user.get("email_verified", False),
+        "theme_preference": user.get("theme_preference") or "system",
+        "tenant_id": jwt_payload.tenant_id,
+        "role": jwt_payload.role,
     }
 
 
-from utils.jwt_middleware import require_authenticated_user, JWTPayload
+@router.patch("/me/theme")
+@limiter.limit("10/minute")
+async def update_theme_preference(
+    request: Request,
+    body: ThemeUpdateRequest,
+    jwt_payload: JWTPayload = Depends(require_authenticated_user),
+):
+    """
+    Update the authenticated user's theme preference.
+
+    Security:
+    - Requires valid JWT
+    - Strictly validates against allowed values (light | dark | system)
+    - Idempotency: skips DB write if value hasn't changed
+    - Rate limited to 10 requests/min per user
+    """
+    from utils.supabase_client import db
+
+    # Strict whitelist validation — never trust client-supplied strings
+    if body.theme not in VALID_THEMES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid theme. Must be one of: {', '.join(sorted(VALID_THEMES))}",
+        )
+
+    # Idempotency: fetch current value, skip write if unchanged
+    user_result = db.client.table("users").select("theme_preference").eq("id", jwt_payload.user_id).execute()
+    if not user_result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    current = user_result.data[0].get("theme_preference") or "system"
+    if current == body.theme:
+        return {"status": "no_change", "theme_preference": current}
+
+    # Persist the validated theme value
+    db.client.table("users").update({"theme_preference": body.theme}).eq("id", jwt_payload.user_id).execute()
+
+    return {"status": "updated", "theme_preference": body.theme}
 
 @router.get("/workspaces")
 async def get_user_workspaces(jwt_payload: JWTPayload = Depends(require_authenticated_user)):
