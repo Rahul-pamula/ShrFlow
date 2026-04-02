@@ -236,13 +236,13 @@ export default function Step4Review({ data, onBack, editId }: any) {
                 <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: isScheduled ? 'rgba(59,130,246,0.1)' : 'rgba(16,185,129,0.1)', border: `1px solid ${isScheduled ? 'rgba(59,130,246,0.3)' : 'rgba(16,185,129,0.3)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px', boxShadow: `0 0 30px ${isScheduled ? 'rgba(59,130,246,0.2)' : 'rgba(16,185,129,0.2)'}` }}>
                     {isScheduled ? <Calendar size={36} color="#3B82F6" /> : <CheckCircle2 size={36} color="#10B981" />}
                 </div>
-                <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#FAFAFA', marginBottom: '8px' }}>
+                <h2 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px' }}>
                     {isScheduled ? 'Campaign Scheduled! 📅' : 'Campaign Launched! 🚀'}
                 </h2>
-                <p style={{ color: '#71717A', fontSize: '14px', maxWidth: '420px' }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '14px', maxWidth: '420px' }}>
                     {isScheduled
                         ? <>{scheduledMsg || 'Your campaign has been scheduled.'} Redirecting...</>
-                        : <><strong style={{ color: '#A1A1AA' }}>{data.name}</strong> has been queued. Workers are now sending emails.</>}
+                        : <><strong style={{ color: 'var(--text-muted)' }}>{data.name}</strong> has been queued. Workers are now sending emails.</>}
                 </p>
             </div>
         );
@@ -250,10 +250,10 @@ export default function Step4Review({ data, onBack, editId }: any) {
 
     const summaryRow = (icon: any, label: string, value: string) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 0', borderBottom: '1px solid rgba(63,63,70,0.25)' }}>
-            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(63,63,70,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
+            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
             <div>
-                <p style={{ fontSize: '11px', color: '#52525B', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>{label}</p>
-                <p style={{ fontSize: '14px', color: '#E4E4E7', fontWeight: 500, margin: 0 }}>{value || '—'}</p>
+                <p style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>{label}</p>
+                <p style={{ fontSize: '14px', color: 'var(--text-primary)', fontWeight: 500, margin: 0 }}>{value || '—'}</p>
             </div>
         </div>
     );
@@ -266,25 +266,25 @@ export default function Step4Review({ data, onBack, editId }: any) {
                     <Send size={18} color="#3B82F6" />
                 </div>
                 <div>
-                    <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#FAFAFA', margin: 0 }}>Review & Launch</h2>
-                    <p style={{ fontSize: '13px', color: '#71717A', margin: 0 }}>Double-check before sending</p>
+                    <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Review & Launch</h2>
+                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Double-check before sending</p>
                 </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '20px' }}>
                 {/* Summary */}
-                <div style={{ background: 'rgba(9,9,11,0.4)', borderRadius: '10px', padding: '4px 16px', border: '1px solid rgba(63,63,70,0.3)' }}>
-                    {summaryRow(<FileText size={15} color="#71717A" />, 'Campaign', `${data.name} — ${data.subject}`)}
-                    {summaryRow(<Mail size={15} color="#71717A" />, 'Sender', `${data.from_name} <${data.from_prefix}@${data.domain_name || 'your-domain'}>`)}
-                    {summaryRow(<Users size={15} color="#71717A" />, 'Audience', data.listName)}
-                    {summaryRow(<LayoutTemplate size={15} color="#71717A" />, 'Template', data.templateName)}
+                <div style={{ background: 'var(--bg-hover)', borderRadius: '10px', padding: '4px 16px', border: '1px solid rgba(63,63,70,0.3)' }}>
+                    {summaryRow(<FileText size={15} color="var(--text-muted)" />, 'Campaign', `${data.name} — ${data.subject}`)}
+                    {summaryRow(<Mail size={15} color="var(--text-muted)" />, 'Sender', `${data.from_name} <${data.from_prefix}@${data.domain_name || 'your-domain'}>`)}
+                    {summaryRow(<Users size={15} color="var(--text-muted)" />, 'Audience', data.listName)}
+                    {summaryRow(<LayoutTemplate size={15} color="var(--text-muted)" />, 'Template', data.templateName)}
                 </div>
 
                 {/* Preview */}
                 <div style={{ border: '1px solid rgba(63,63,70,0.3)', borderRadius: '10px', overflow: 'hidden', background: 'white' }}>
-                    <div style={{ background: 'rgba(24,24,27,0.9)', padding: '8px 12px', borderBottom: '1px solid rgba(63,63,70,0.4)', display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: '11px', color: '#71717A' }}>Preview</span>
-                        <span style={{ fontSize: '11px', color: '#52525B' }}>Desktop</span>
+                    <div style={{ background: 'var(--bg-primary)', padding: '8px 12px', borderBottom: '1px solid rgba(63,63,70,0.4)', display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Preview</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Desktop</span>
                     </div>
                     <div style={{ maxHeight: '220px', overflowY: 'auto', padding: '8px', background: '#ffffff' }}>
                         <div dangerouslySetInnerHTML={{ __html: data.htmlContent }} style={{ pointerEvents: 'none', fontSize: '10px', transform: 'scale(0.9)', transformOrigin: 'top left' }} />
@@ -293,23 +293,23 @@ export default function Step4Review({ data, onBack, editId }: any) {
             </div>
 
             {/* Pre-send checklist */}
-            <div style={{ padding: '16px 18px', background: 'rgba(9,9,11,0.4)', border: '1px solid rgba(63,63,70,0.3)', borderRadius: '10px', marginBottom: '20px' }}>
-                <p style={{ fontSize: '12px', fontWeight: 600, color: '#A1A1AA', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px' }}>Pre-send Checklist</p>
+            <div style={{ padding: '16px 18px', background: 'var(--bg-hover)', border: '1px solid rgba(63,63,70,0.3)', borderRadius: '10px', marginBottom: '20px' }}>
+                <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px' }}>Pre-send Checklist</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                     {checks.map(c => (
-                        <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: c.ok ? '#4ADE80' : '#F87171' }}>
+                        <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: c.ok ? 'var(--success)' : 'var(--danger)' }}>
                             {c.ok ? <CheckCheck size={14} /> : <XCircle size={14} />}
-                            <span style={{ color: c.ok ? '#A1A1AA' : '#F87171' }}>{c.label}</span>
+                            <span style={{ color: c.ok ? 'var(--text-secondary)' : 'var(--danger)' }}>{c.label}</span>
                         </div>
                     ))}
                 </div>
                 {!allChecksPass && (
-                    <p style={{ fontSize: '12px', color: '#F87171', margin: '10px 0 0' }}>⚠ Fix the items above before launching.</p>
+                    <p style={{ fontSize: '12px', color: 'var(--danger)', margin: '10px 0 0' }}>⚠ Fix the items above before launching.</p>
                 )}
             </div>
 
             {/* Send Mode Selector */}
-            <div style={{ marginBottom: '20px', background: 'rgba(9,9,11,0.4)', border: '1px solid rgba(63,63,70,0.3)', borderRadius: '10px', overflow: 'hidden' }}>
+            <div style={{ marginBottom: '20px', background: 'var(--bg-hover)', border: '1px solid rgba(63,63,70,0.3)', borderRadius: '10px', overflow: 'hidden' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
                     {(['now', 'later'] as const).map(mode => (
                         <button
@@ -319,8 +319,8 @@ export default function Step4Review({ data, onBack, editId }: any) {
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                                 padding: '14px 0', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
                                 background: sendMode === mode ? (mode === 'now' ? 'rgba(16,185,129,0.1)' : 'rgba(59,130,246,0.1)') : 'transparent',
-                                color: sendMode === mode ? (mode === 'now' ? '#10B981' : '#3B82F6') : '#71717A',
-                                borderBottom: sendMode === mode ? `2px solid ${mode === 'now' ? '#10B981' : '#3B82F6'}` : '2px solid transparent',
+                                color: sendMode === mode ? (mode === 'now' ? 'var(--success)' : '#3B82F6') : '#71717A',
+                                borderBottom: sendMode === mode ? `2px solid ${mode === 'now' ? 'var(--success)' : '#3B82F6'}` : '2px solid transparent',
                                 transition: 'all 0.2s'
                             }}
                         >
@@ -331,17 +331,17 @@ export default function Step4Review({ data, onBack, editId }: any) {
 
                 {sendMode === 'later' && (
                     <div style={{ padding: '16px 18px', borderTop: '1px solid rgba(63,63,70,0.3)' }}>
-                        <p style={{ fontSize: '12px', color: '#71717A', margin: '0 0 10px' }}>Choose a date and time (will convert to UTC):</p>
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 10px' }}>Choose a date and time (will convert to UTC):</p>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <Clock size={14} color="#71717A" />
+                            <Clock size={14} color="var(--text-muted)" />
                             <input
                                 type="date"
                                 value={scheduleDate}
                                 onChange={e => setScheduleDate(e.target.value)}
                                 style={{
-                                    flex: 1, padding: '8px 12px', background: 'rgba(24,24,27,0.6)',
+                                    flex: 1, padding: '8px 12px', background: 'var(--bg-hover)',
                                     border: '1px solid rgba(63,63,70,0.4)', borderRadius: '8px',
-                                    color: '#FAFAFA', fontSize: '13px', outline: 'none', colorScheme: 'dark'
+                                    color: 'var(--text-primary)', fontSize: '13px', outline: 'none', colorScheme: 'dark'
                                 }}
                             />
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1 }}>
@@ -356,11 +356,11 @@ export default function Step4Review({ data, onBack, editId }: any) {
                                         if (!isPM && h === 12) h24 = 0;
                                         setScheduleTime(`${String(h24).padStart(2, '0')}:${m}`);
                                     }}
-                                    style={{ padding: '8px 12px', background: 'rgba(24,24,27,0.6)', border: '1px solid rgba(63,63,70,0.4)', borderRadius: '8px', color: '#FAFAFA', fontSize: '13px', outline: 'none' }}
+                                    style={{ padding: '8px 12px', background: 'var(--bg-hover)', border: '1px solid rgba(63,63,70,0.4)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
                                 >
                                     {[...Array(12)].map((_, i) => <option key={i + 1} value={String(i + 1).padStart(2, '0')}>{String(i + 1).padStart(2, '0')}</option>)}
                                 </select>
-                                <span style={{ color: '#71717A' }}>:</span>
+                                <span style={{ color: 'var(--text-muted)' }}>:</span>
                                 <select
                                     value={scheduleTime ? scheduleTime.split(':')[1] : '00'}
                                     onChange={e => {
@@ -368,7 +368,7 @@ export default function Step4Review({ data, onBack, editId }: any) {
                                         const h24 = scheduleTime ? scheduleTime.split(':')[0] : '12';
                                         setScheduleTime(`${h24}:${m}`);
                                     }}
-                                    style={{ padding: '8px 12px', background: 'rgba(24,24,27,0.6)', border: '1px solid rgba(63,63,70,0.4)', borderRadius: '8px', color: '#FAFAFA', fontSize: '13px', outline: 'none' }}
+                                    style={{ padding: '8px 12px', background: 'var(--bg-hover)', border: '1px solid rgba(63,63,70,0.4)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
                                 >
                                     {[...Array(60)].map((_, i) => <option key={i} value={String(i).padStart(2, '0')}>{String(i).padStart(2, '0')}</option>)}
                                 </select>
@@ -383,7 +383,7 @@ export default function Step4Review({ data, onBack, editId }: any) {
                                         if (!isPM && h24Old >= 12) h24 -= 12;
                                         setScheduleTime(`${String(h24).padStart(2, '0')}:${m}`);
                                     }}
-                                    style={{ padding: '8px 12px', background: 'rgba(24,24,27,0.6)', border: '1px solid rgba(63,63,70,0.4)', borderRadius: '8px', color: '#FAFAFA', fontSize: '13px', outline: 'none', marginLeft: '4px' }}
+                                    style={{ padding: '8px 12px', background: 'var(--bg-hover)', border: '1px solid rgba(63,63,70,0.4)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none', marginLeft: '4px' }}
                                 >
                                     <option value="AM">AM</option>
                                     <option value="PM">PM</option>
@@ -391,7 +391,7 @@ export default function Step4Review({ data, onBack, editId }: any) {
                             </div>
                         </div>
                         {scheduledAt && (
-                            <p style={{ fontSize: '11px', color: '#52525B', margin: '8px 0 0' }}>
+                            <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: '8px 0 0' }}>
                                 Sends: {new Date(scheduledAt).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })}
                             </p>
                         )}
@@ -429,13 +429,13 @@ export default function Step4Review({ data, onBack, editId }: any) {
             {/* Footer actions */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '20px', borderTop: '1px solid rgba(63,63,70,0.3)' }}>
                 <button onClick={onBack} disabled={status === 'creating' || status === 'sending'}
-                    style={{ background: 'none', border: 'none', color: '#71717A', fontSize: '14px', cursor: 'pointer', padding: '8px 4px' }}>
+                    style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '14px', cursor: 'pointer', padding: '8px 4px' }}>
                     ← Back
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {/* Send Test Email button */}
                     <button onClick={() => setShowTestModal(true)}
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'rgba(24,24,27,0.6)', border: '1px solid rgba(63,63,70,0.4)', borderRadius: '8px', color: '#A1A1AA', fontSize: '13px', cursor: 'pointer' }}>
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'var(--bg-hover)', border: '1px solid rgba(63,63,70,0.4)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
                         <Mail size={13} /> Send Test
                     </button>
                     <button
@@ -456,21 +456,21 @@ export default function Step4Review({ data, onBack, editId }: any) {
             {/* Test Email Modal */}
             {showTestModal && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-                    <div style={{ background: '#18181B', border: '1px solid rgba(63,63,70,0.5)', borderRadius: '12px', padding: '28px', width: '380px' }}>
+                    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '28px', width: '380px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#FAFAFA', margin: 0 }}>Send Test Email</h3>
-                            <button onClick={() => { setShowTestModal(false); setTestStatus('idle'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#71717A' }}><X size={18} /></button>
+                            <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Send Test Email</h3>
+                            <button onClick={() => { setShowTestModal(false); setTestStatus('idle'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={18} /></button>
                         </div>
-                        <p style={{ fontSize: '13px', color: '#71717A', margin: '0 0 16px' }}>Send a preview of this campaign to any email address to check how it looks.</p>
+                        <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 16px' }}>Send a preview of this campaign to any email address to check how it looks.</p>
                         <input
                             type="email"
                             placeholder="your@email.com"
                             value={testEmail}
                             onChange={e => setTestEmail(e.target.value)}
-                            style={{ width: '100%', padding: '9px 12px', fontSize: '13px', background: 'rgba(24,24,27,0.4)', border: '1px solid rgba(63,63,70,0.4)', borderRadius: '8px', color: '#FAFAFA', boxSizing: 'border-box', outline: 'none', marginBottom: '14px' }}
+                            style={{ width: '100%', padding: '9px 12px', fontSize: '13px', background: 'var(--bg-hover)', border: '1px solid rgba(63,63,70,0.4)', borderRadius: '8px', color: 'var(--text-primary)', boxSizing: 'border-box', outline: 'none', marginBottom: '14px' }}
                         />
-                        {testStatus === 'sent' && <p style={{ color: '#4ADE80', fontSize: '13px', margin: '0 0 12px' }}>✅ Test email sent to {testEmail}!</p>}
-                        {testStatus === 'error' && <p style={{ color: '#F87171', fontSize: '13px', margin: '0 0 12px' }}>❌ Failed to send. Try again.</p>}
+                        {testStatus === 'sent' && <p style={{ color: 'var(--success)', fontSize: '13px', margin: '0 0 12px' }}>✅ Test email sent to {testEmail}!</p>}
+                        {testStatus === 'error' && <p style={{ color: 'var(--danger)', fontSize: '13px', margin: '0 0 12px' }}>❌ Failed to send. Try again.</p>}
                         <button
                             onClick={handleSendTest}
                             disabled={!testEmail || testStatus === 'sending'}
