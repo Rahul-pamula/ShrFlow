@@ -166,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             // Set cookie for middleware (expires in 7 days)
             document.cookie = `auth_token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+            document.cookie = `email_verified=${data.email_verified ? 'true' : 'false'}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
 
             // Store user data
             const userData = {
@@ -174,6 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 fullName: data.full_name || email.split('@')[0],
                 tenantId: data.tenant_id,
                 tenantStatus: data.tenant_status,
+                emailVerified: data.email_verified,
                 role: data.role || 'owner',
             };
             localStorage.setItem('user_data', JSON.stringify(userData));

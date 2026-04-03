@@ -29,6 +29,9 @@ export function proxy(request: NextRequest) {
 
     // Get tenant status from cookie
     const tenantStatus = request.cookies.get('tenant_status')?.value;
+    const emailVerified = request.cookies.get('email_verified')?.value;
+
+    const allowUnverifiedRoutes = ['/verify-email', '/logout'];
 
     // Rule 2: If has token and on auth route → redirect based on status
     if (token && isAuthRoute) {
@@ -36,6 +39,11 @@ export function proxy(request: NextRequest) {
             return NextResponse.redirect(new URL('/onboarding/workspace', request.url));
         }
         return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+
+    // Rule 2.5: Email verification gate for protected routes
+    if (token && isProtectedRoute && emailVerified === 'false' && !allowUnverifiedRoutes.some(r => pathname.startsWith(r))) {
+        return NextResponse.redirect(new URL('/verify-email', request.url));
     }
 
     // Rule 3: STRICT DASHBOARD ACCESS CONTROL

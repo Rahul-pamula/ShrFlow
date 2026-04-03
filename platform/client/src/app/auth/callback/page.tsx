@@ -18,14 +18,16 @@ function CallbackContent() {
             return;
         }
 
-        const token = searchParams.get('token');
-        const tenantStatus = searchParams.get('tenant_status');
+                const token = searchParams.get('token');
+                const tenantStatus = searchParams.get('tenant_status');
+                const emailVerified = searchParams.get('email_verified') || 'true';
 
-        if (token) {
-            try {
-                // Instantly log the user into the browser session
-                localStorage.setItem('auth_token', token);
-                document.cookie = `auth_token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+                if (token) {
+                    try {
+                        // Instantly log the user into the browser session
+                        localStorage.setItem('auth_token', token);
+                        document.cookie = `auth_token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+                        document.cookie = `email_verified=${emailVerified}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
 
                 if (tenantStatus) {
                     document.cookie = `tenant_status=${tenantStatus}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
@@ -42,6 +44,7 @@ function CallbackContent() {
                     tenantId: searchParams.get('tenant_id'),
                     tenantStatus: tenantStatus,
                     role: searchParams.get('role') || 'owner',
+                    emailVerified: emailVerified === 'true',
                 };
                 localStorage.setItem('user_data', JSON.stringify(userData));
 

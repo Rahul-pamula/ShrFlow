@@ -134,6 +134,7 @@ class AuthResponse(BaseModel):
     token: str
     onboarding_required: bool
     tenant_status: str
+    email_verified: bool = False
 
 
 class SwitchWorkspaceRequest(BaseModel):
@@ -305,7 +306,8 @@ async def signup(request: Request, body_request: SignupRequest):
             tenant_id=tenant_id,
             token=access_token,
             onboarding_required=(tenant_status == "onboarding"),
-            tenant_status=tenant_status
+            tenant_status=tenant_status,
+            email_verified=False
         )
         
     except Exception as e:
@@ -449,7 +451,8 @@ async def login(request: Request, body_request: LoginRequest):
         tenant_id=tenant_id,
         token=access_token,
         onboarding_required=(tenant_status == "onboarding"),
-        tenant_status=tenant_status
+        tenant_status=tenant_status,
+        email_verified=user.get("email_verified", False)
     )
 
 
