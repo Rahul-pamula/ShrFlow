@@ -491,8 +491,11 @@ export default function ContactsPage() {
         color: active ? colors.accent : colors.textSecondary,
         background: "none",
         border: "none",
-        borderBottomWidth: "2px",
+        borderTopStyle: "solid" as const,
+        borderTopWidth: "0px",
+        borderTopColor: "transparent",
         borderBottomStyle: "solid" as const,
+        borderBottomWidth: active ? "2px" : "0px",
         borderBottomColor: active ? colors.accent : "transparent",
         cursor: "pointer",
         transition: "all 150ms"
