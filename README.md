@@ -5,6 +5,30 @@
 
 ---
 
+## 🌟 What This Project Does
+
+Sh_R_Mail is a **full-scale, self-hosted email marketing platform** — designed as a high-performance, open-source alternative to platforms like Mailchimp or SendGrid. 
+
+**Core Capabilities:**
+*   **Multi-tenant Architecture:** Secure workspace isolation spanning Teams and Agencies.
+*   **High-Velocity Contacts Engine:** Gigabyte-scale CSV ingestion, segmentation, and deduplication handled asynchronously by RabbitMQ data workers.
+*   **Visual Template Builder:** Drag-and-drop block editor compiling into responsive MJML, featuring an AI Copywriting Assistant.
+*   **Campaign Orchestration:** Fine-grained dispatch throttling, scheduling, spintax merge-tags, and instant pause/cancel controls.
+*   **Dual Delivery Pipeline:** Critical system emails route securely through trusted Gmail SMTP, while massive bulk marketing campaigns isolate their reputation through AWS SES.
+*   **Deep Observability:** Granular audit logging, Supabase Edge Function open-tracking pixels, and real-time AWS SNS webhook bounce/complaint handling.
+
+## 🛠 Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Frontend** | Next.js 14 (App Router), TypeScript, Tailwind CSS, shadcn/ui |
+| **Backend API** | Python FastAPI + Uvicorn |
+| **Async Workers** | Python async (aio-pika, aiosmtplib) + RabbitMQ |
+| **Database** | Supabase (PostgreSQL + Edge Functions) |
+| **State & Cache** | Redis (Upstash) |
+| **Delivery** | Amazon SES (Campaigns) & Gmail SMTP (System Mail) |
+
+---
 ## 📊 Live Project Tracker
 
 You can monitor our granular, task-by-task engineering progress directly at our hosted tracker:  
