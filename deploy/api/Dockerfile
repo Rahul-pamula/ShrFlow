@@ -12,11 +12,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python dependencies first (layer caching)
-COPY platform/api/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY platform/api/requirements.txt ./platform/api/
+RUN pip install --no-cache-dir -r platform/api/requirements.txt
 
-# Copy source code
-COPY platform/api/ .
+# Copy source code exactly matching the nested directory structure
+COPY platform/api/ ./platform/api/
+
+# Keep the nested path context matching local environments
+WORKDIR /app/platform/api
 
 # Create assets directory
 RUN mkdir -p assets

@@ -1,5 +1,5 @@
 # ============================================================
-# Email Engine — Background Worker (Email Sender)
+# Email Engine — Background Workers
 # ============================================================
 FROM python:3.11-slim
 
@@ -12,17 +12,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python dependencies first (layer caching)
-COPY platform/api/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY platform/api/requirements.txt ./platform/api/
+RUN pip install --no-cache-dir -r platform/api/requirements.txt
 
-# Copy API utils (shared code: supabase client, models, etc.)
-COPY platform/api/ ./api/
+# Copy source configuration to mirror monolithic architecture
+COPY platform/ ./platform/
 
-# Copy worker source
-COPY platform/services/ .
+# Set Python path so worker scripts can import correctly
+ENV PYTHONPATH="/app/platform/api"
+WORKDIR /app/platform/worker
 
-# Set Python path so worker can import from api/
-ENV PYTHONPATH="/app/api"
-
-# Start the worker
-CMD ["python", "worker.py"]
+# Start the primary worker (can be overridden by docker-compose)
+CMD ["python", "email_sender.py"]

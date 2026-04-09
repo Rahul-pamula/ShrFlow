@@ -42,12 +42,12 @@ services:
     networks:
       - email_engine_net
 
-  # ── Background Worker ────────────────────────────────────
-  worker:
+  # ── Email Sender Worker ──────────────────────────────────
+  email_sender:
     build:
       context: .
       dockerfile: deploy/worker/Dockerfile
-    container_name: email_engine_worker
+    container_name: email_engine_email_sender
     restart: unless-stopped
     env_file:
       - .env
@@ -58,6 +58,66 @@ services:
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASS=${SMTP_PASS}
+      - WORKER_PREFETCH_COUNT=10
+      - WORKER_MAX_RETRIES=3
+    command: python email_sender.py
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - email_engine_net
+
+  # ── Background Worker (Legacy) ───────────────────────────
+  background_worker:
+    build:
+      context: .
+      dockerfile: deploy/worker/Dockerfile
+    container_name: email_engine_background_worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+    command: python background_worker.py
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - email_engine_net
+
+  # ── Scheduler ────────────────────────────────────────────
+  scheduler:
+    build:
+      context: .
+      dockerfile: deploy/worker/Dockerfile
+    container_name: email_engine_scheduler
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+    command: python scheduler.py
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - email_engine_net
+
+  # ── Centralized System Worker ────────────────────────────
+  centralized_email_worker:
+    build:
+      context: .
+      dockerfile: deploy/worker/Dockerfile
+    container_name: email_engine_centralized_worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+    command: python centralized_email_worker.py
     depends_on:
       api:
         condition: service_healthy
@@ -65,15 +125,16 @@ services:
       - email_engine_net
 
   # ── Mailhog Development SMTP ────────────────────────────
-  mailhog:
-    image: mailhog/mailhog
-    container_name: email_engine_mailhog
-    restart: unless-stopped
-    ports:
-      - "1025:1025" # SMTP endpoint
-      - "8025:8025" # Web UI endpoint
-    networks:
-      - email_engine_net
+  # CURRENTLY DISABLED
+  # mailhog:
+  #   image: mailhog/mailhog
+  #   container_name: email_engine_mailhog
+  #   restart: unless-stopped
+  #   ports:
+  #     - "1025:1025" # SMTP endpoint
+  #     - "8025:8025" # Web UI endpoint
+  #   networks:
+  #     - email_engine_net
 
   # ── Frontend ─────────────────────────────────────────────
   client:
