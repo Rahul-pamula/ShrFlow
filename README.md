@@ -29,22 +29,6 @@ Sh_R_Mail is a **full-scale, self-hosted email marketing platform** — designed
 | **Delivery** | Amazon SES (Campaigns) & Gmail SMTP (System Mail) |
 
 ---
-## 📊 Live Project Tracker
-
-You can monitor our granular, task-by-task engineering progress directly at our hosted tracker:  
-🌍 **[Open Live Phase Tracker](https://rahul-pamula.github.io/Sh_R_Mail/progress.html)**
-
-**Active Architectural Phases:**
-- **Phase 0:** UI/UX Foundation & Design System
-- **Phase 1:** Auth, Tenant Identity & Audit Logging 
-- **Phase 2:** Contacts Engine & Ingestion Async Workers
-- **Phase 3:** Template Engine & AI Content Creation 
-- **Phase 4:** Campaign Orchestration & Schedulers
-- **Phase 5:** Delivery Engine (AWS SES Dual Pipeline)
-
-*(The tracker automatically reflects code shipped directly to the `main` branch).*
-
----
 
 ## 🏗 Architecture & Design Documents
 
@@ -52,6 +36,17 @@ Sh_R_Mail uses a complex asynchronous dual-pipeline architecture. Instead of clu
 
 *   📘 **[Complete Architectural Overview (with diagrams)](docs/phases/shrmail_architecture.md)**
 *   📋 **[Phase-by-Phase Roadmap & Execution Plan](docs/phases/phase_wise_plan.md)**
+
+---
+
+## 📊 Live Project Tracker
+
+You can monitor our granular, task-by-task engineering progress directly at our hosted tracker:  
+🌍 **[Open Live Phase Tracker](https://rahul-pamula.github.io/Sh_R_Mail/progress.html)**
+
+The platform has been architected across **14 phases (Phase 0 — Phase 13)**, covering everything from UI/UX foundations, multi-tenant auth, contacts ingestion, campaign orchestration, delivery pipelines, analytics, GDPR compliance, AI integrations, and full enterprise scale. See the full breakdown in the tracker above.
+
+*(The tracker automatically reflects tasks shipped directly to the `main` branch).*
 
 ---
 
