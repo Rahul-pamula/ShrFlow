@@ -12,8 +12,9 @@ If you run commands without Docker open, you will receive an error like: `Cannot
 
 ## 2. Starting & Stopping the Servers
 
-Always run these commands from the root directory of your project folder (`/Users/pamula/Desktop/Sh_R_Mail`).
-
+> [!IMPORTANT]
+> **Always run these commands from the root directory of your project folder (`/Users/pamula/Desktop/Sh_R_Mail`).**
+> If you run them from a subfolder (like `/platform/api`), Docker will not be able to find all your project files!
 ### ▶️ Start Everything
 To bake the images and spin up all of your databases, APIs, workers, and frontend clients into the background:
 ```bash
