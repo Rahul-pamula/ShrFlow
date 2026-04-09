@@ -32,7 +32,9 @@ Terminal 2 (Email Sender Worker)
   #   WORKER_MAX_RETRIES=3     → retry each message up to 3 times
   WORKER_PREFETCH_COUNT=10 WORKER_MAX_RETRIES=3 python email_sender.py
 
-Terminal 3 (Background Worker)
+Terminal 3 (Background Worker — LEGACY, no longer required for contact imports)
+  CSV imports now run inside the API process via FastAPI BackgroundTasks.
+  This worker is kept for any future RabbitMQ-based background tasks.
   cd /Users/pamula/Desktop/Sh_R_Mail/platform/worker
   source /Users/pamula/Desktop/Sh_R_Mail/platform/api/.venv/bin/activate
   python background_worker.py
@@ -61,4 +63,31 @@ Background worker logs  → Terminal 3 (background_worker.py)
 Notification emails     → Your inbox
 Rate limit responses    → curl output (look for 429)
 DB state changes        → Supabase SQL Editor
-Open tracking issues    → Check tunnel is running + "Display images" clicked in Gmail 
+Open tracking issues    → Check tunnel is running + "Display images" clicked in Gmail
+
+--------------------------------------------------------------
+KNOWN ISSUES / GOTCHAS
+--------------------------------------------------------------
+
+[FIXED] Contacts not uploading / job stuck in "pending" forever
+  PREVIOUS SYMPTOM:
+    - Import returned 200 OK but contacts never appeared.
+    - Frontend polled GET /contacts/jobs/{job_id} every 2s indefinitely.
+    - RabbitMQ published the task but nothing consumed it.
+
+  ROOT CAUSE:
+    The csv_import task was published to a RabbitMQ queue ("background_tasks")
+    that required a separate background_worker.py process to be running.
+    If that process was not started, the job stayed in status="pending" forever.
+
+  ARCHITECTURAL FIX (applied 2026-04-04):
+    Removed the RabbitMQ dependency for CSV imports entirely.
+    Contact imports now run via FastAPI BackgroundTasks inside the API process.
+    As long as the API server (Terminal 1) is running, imports will always work.
+
+    Changed files:
+      platform/api/services/import_service.py   [NEW] — import processing logic
+      platform/api/routes/contacts.py            [MODIFIED] — uses BackgroundTasks
+        instead of mq_client.publish_background_task()
+
+    background_worker.py is now OPTIONAL (kept for future RabbitMQ tasks).

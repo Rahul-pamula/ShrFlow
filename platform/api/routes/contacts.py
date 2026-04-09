@@ -2,16 +2,16 @@
 Contacts API Routes
 Handles contact listing, stats, CSV/Excel upload, and lifecycle management.
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Response
 from typing import Optional, Dict, List
 from pydantic import BaseModel
 import pandas as pd
 import logging
 from services.contact_service import ContactService
 from services.batch_service import BatchService
+from services.import_service import process_csv_import
 from utils.jwt_middleware import require_active_tenant, verify_jwt_token, JWTPayload, require_admin_or_owner, apply_data_isolation
 from utils.supabase_client import db
-from utils.rabbitmq_client import mq_client  # Added for Background Jobs
 from utils.file_parser import parse_file
 import uuid
 
@@ -120,6 +120,7 @@ async def preview_csv(
 @router.post("/upload/import")
 async def import_contacts(
     file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = None,
     email_col: str = "email",
     first_name_col: Optional[str] = None,
     last_name_col: Optional[str] = None,
@@ -189,10 +190,10 @@ async def import_contacts(
                 detail=f"No valid contact rows found after skipping {skipped_blank} blank rows."
             )
 
-        # ── PHASE 7.5: asynchronous JOB TRIGGER ─────────────────────────────
-        # Instead of blocking and waiting for `bulk_upsert`, we queue a job.
+        # ── Background import via FastAPI BackgroundTasks ────────────────
+        # Runs inside the API process — no external worker required.
         job_id = str(uuid.uuid4())
-        
+
         # 1. Create the persistent Job record
         db.client.table("jobs").insert({
             "id": job_id,
@@ -203,30 +204,29 @@ async def import_contacts(
             "total_items": len(contacts_to_import),
         }).execute()
 
-        # 2. Create the import batch early so we have the ID to pass to the worker
+        # 2. Create the import batch
         batch_id = BatchService.create_batch(
             tenant_id=tenant_id,
             file_name=file.filename,
             total_rows=len(contacts_to_import),
             imported_count=0
         )
-        
-        # 3. Queue the task to RabbitMQ (New queue: `background_tasks`)
-        task_payload = {
-            "job_id": job_id,
-            "tenant_id": tenant_id,
-            "batch_id": batch_id,
-            "task_type": "csv_import",
-            "contacts": contacts_to_import
-        }
-        await mq_client.publish_background_task(task_payload)
 
-        # 4. Return immediately to the client (202 Accepted)
+        # 3. Schedule the import as a background task (no RabbitMQ needed)
+        background_tasks.add_task(
+            process_csv_import,
+            job_id=job_id,
+            tenant_id=tenant_id,
+            batch_id=batch_id,
+            contacts=contacts_to_import,
+        )
+
+        # 4. Return immediately — import runs in background
         return {
             "status": "accepted",
             "job_id": job_id,
             "batch_id": batch_id,
-            "message": "Import queued for processing.",
+            "message": "Import started. Poll /contacts/jobs/{job_id} for progress.",
             "skipped_blank": skipped_blank,
             "accepted_rows": len(contacts_to_import)
         }
