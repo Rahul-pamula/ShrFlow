@@ -7,19 +7,18 @@
 
 ## 📊 Live Project Tracker
 
-Instead of a static list, here is our live architectural flow and completion status for Phase 1 of the Sh_R_Mail platform:
+You can monitor our granular, task-by-task engineering progress directly at our hosted tracker:  
+🌍 **[Open Live Phase Tracker](https://rahul-pamula.github.io/Sh_R_Mail/progress.html)**
 
-```mermaid
-pie title Platform MVP Completion Status
-    "Core Infrastructure & Dockerization" : 85
-    "NextJS Frontend UI & Templates" : 70
-    "FastAPI & Background Workers" : 80
-    "AWS SES / SMTP Integrations" : 90
-    "Pending Security Hardening" : 30
-    "Stripe Payments & Quotas" : 10
-```
+**Active Architectural Phases:**
+- **Phase 0:** UI/UX Foundation & Design System
+- **Phase 1:** Auth, Tenant Identity & Audit Logging 
+- **Phase 2:** Contacts Engine & Ingestion Async Workers
+- **Phase 3:** Template Engine & AI Content Creation 
+- **Phase 4:** Campaign Orchestration & Schedulers
+- **Phase 5:** Delivery Engine (AWS SES Dual Pipeline)
 
-*We are heavily focused on MVP hardening. Not all features are 100% complete yet, but the core pipeline is fully operational.*
+*(The tracker automatically reflects code shipped directly to the `main` branch).*
 
 ---
 
@@ -121,3 +120,20 @@ Because everything is containerized, you just spin up your Docker Desktop applic
 docker-compose up -d
 ```
 *That's it. Never run local terminals again!*
+
+---
+
+## 🤝 Open Source Contributions
+
+**Sh_R_Mail is fully open source, and we actively welcome contributions!** 
+
+Whether you're fixing a bug, hardening security, or building out a massive new feature (like our upcoming Stripe integration or advanced analytics), we want your Pull Requests.
+
+### How to Contribute:
+1. **Fork** the repository and clone your fork locally.
+2. **Create a branch** for your feature: `git checkout -b feature/amazing-new-tracker`
+3. **Commit** your isolated changes: `git commit -m 'feat: added amazing new tracker UI'`
+4. **Push** your branch: `git push origin feature/amazing-new-tracker`
+5. **Open a Pull Request** against our `main` branch. 
+
+Please ensure your code follows the existing PEP8 (Python) and ESLint (Next.js) standards. All PRs will be rigorously reviewed before merging into the main orchestrations. Let's build the best self-hosted email engine together!
