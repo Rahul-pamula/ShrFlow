@@ -5,7 +5,7 @@
 
 # Reference repositories (excluded per user request)
 reference_repos/
-
+notes.txt
 # Logs
 logs/
 *.log

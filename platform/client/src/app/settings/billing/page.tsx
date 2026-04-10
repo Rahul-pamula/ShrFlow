@@ -18,6 +18,13 @@ const PLAN_FEATURES: Record<string, string[]> = {
     Enterprise: ['500,000 contacts', '1,000,000 emails/mo', 'Dedicated IPs', 'SLA 99.9%', '24/7 Support', 'Custom contracts', 'SSO / SAML'],
 };
 
+const PLAN_PRICE_INR: Record<string, string> = {
+    Free: '0',
+    Starter: '999',
+    Pro: '3,499',
+    Enterprise: '24,999',
+};
+
 const PLAN_COLOR: Record<string, { ring: string; badge: string; text: string; bg: string }> = {
     Free: { ring: 'border-white/10', badge: 'bg-white/10 text-[var(--text-muted)]', text: 'text-[var(--text-muted)]', bg: '' },
     Starter: { ring: 'border-emerald-500/30', badge: 'bg-emerald-500/15 text-emerald-400', text: 'text-emerald-400', bg: 'rgba(16,185,129,0.04)' },
@@ -180,7 +187,7 @@ export default function BillingPage() {
                             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">Active</span>
                         </div>
                         <p className="text-sm text-[var(--text-muted)]">
-                            ${plan_details.price_monthly}/month
+                            ₹{PLAN_PRICE_INR[plan_details.name] ?? plan_details.price_monthly}/month
                             {billing_cycle_end && <> · Renews <strong className="text-[var(--text-secondary)]">{fmtDate(billing_cycle_end)}</strong></>}
                         </p>
                     </div>
@@ -262,7 +269,7 @@ export default function BillingPage() {
 
                                     <h4 className="text-sm font-semibold text-[var(--text-primary)] mt-3 mb-0.5">{plan.name}</h4>
                                     <p className="text-2xl font-bold text-[var(--text-primary)] mb-4">
-                                        ${plan.price_monthly}
+                                        ₹{PLAN_PRICE_INR[plan.name] ?? plan.price_monthly}
                                         <span className="text-xs font-normal text-[var(--text-muted)]">/mo</span>
                                     </p>
 
@@ -342,7 +349,7 @@ export default function BillingPage() {
                             {dialog.type === 'upgrade' && dialog.plan && (
                                 <>
                                     <p className="text-[var(--text-secondary)] mb-2">
-                                        You'll be upgraded to <strong>{dialog.plan.name}</strong> at <strong>${dialog.plan.price_monthly}/month</strong>.
+                                        You'll be upgraded to <strong>{dialog.plan.name}</strong> at <strong>₹{PLAN_PRICE_INR[dialog.plan.name] ?? dialog.plan.price_monthly}/month</strong>.
                                     </p>
                                     <ul className="space-y-1 text-xs text-[var(--text-muted)]">
                                         <li className="flex items-center gap-2"><Zap className="w-3.5 h-3.5 text-blue-400" /> Takes effect <strong className="text-blue-400">immediately</strong></li>
@@ -354,7 +361,7 @@ export default function BillingPage() {
                             {dialog.type === 'downgrade' && dialog.plan && billing_cycle_end && (
                                 <>
                                     <p className="text-[var(--text-secondary)] mb-2">
-                                        Your plan will change to <strong>{dialog.plan.name}</strong> at ${dialog.plan.price_monthly}/month.
+                                        Your plan will change to <strong>{dialog.plan.name}</strong> at ₹{PLAN_PRICE_INR[dialog.plan.name] ?? dialog.plan.price_monthly}/month.
                                     </p>
                                     <ul className="space-y-1 text-xs text-[var(--text-muted)]">
                                         <li className="flex items-center gap-2"><CalendarClock className="w-3.5 h-3.5 text-amber-400" /> Takes effect on <strong className="text-amber-400">{fmtDate(billing_cycle_end)}</strong></li>
@@ -366,7 +373,7 @@ export default function BillingPage() {
                             {dialog.type === 'cancel' && (
                                 <p className="text-[var(--text-secondary)]">
                                     The scheduled downgrade to <strong>{scheduled_plan?.name}</strong> will be cancelled.
-                                    You will remain on <strong>{plan_details.name}</strong> and continue to be billed at ${plan_details.price_monthly}/month.
+                                    You will remain on <strong>{plan_details.name}</strong> and continue to be billed at ₹{PLAN_PRICE_INR[plan_details.name] ?? plan_details.price_monthly}/month.
                                 </p>
                             )}
                         </div>
