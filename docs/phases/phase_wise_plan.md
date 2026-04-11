@@ -626,6 +626,7 @@ graph TD
 - Spam score checker (SpamAssassin-style heuristics before campaign send)
 - Mobile preview mode (375px viewport toggle in template editor)
 - Inbox preview simulation (Gmail, Outlook, Apple Mail rendering)
+- Template Accessibility Scanner (WCAG 2.1 color contrast & alt-text heuristic checks before saving)
 
 ---
 
@@ -850,6 +851,7 @@ graph TD
 - [GAP 7] Transient / General → retry 3× over 72h
 - [GAP 7] Undetermined / General → retry 2×, then escalate to CRITICAL audit log
 - [GAP 7] Complaint (any subtype) → immediate unsubscribe (`status = 'unsubscribed'`)
+- [NEW] Recipient Preference Center (Granular topic-based opt-outs instead of global unsubscribe)
 
 > 💡 **Worker Architecture Note (Gap 5):** This phase creates the initial worker. Full microservice decomposition into 5 focused workers (sender, webhook-handler, reputation-worker, warmup-scheduler, dispatch-logger) happens in **Phase 13**.
 
@@ -868,6 +870,7 @@ graph TD
 - [GAP 4] Write PL/pgSQL function to auto-generate monthly partition tables
 - [GAP 4] Set up pg_cron (or worker CRON) to execute partition generation on the 25th of every month
 - [GAP 4] Scope all campaign analytic queries to explicitly utilize `occurred_at` indexes for partition pruning
+- [NEW] Campaign Health Early Warning System (Auto-pause RabbitMQ dispatch queue if hard bounce rate spikes early)
 
 ---
 
@@ -965,6 +968,7 @@ graph TD
 - FIX: Human-filtered toggle removed — all signals shown natively
 - Dashboard homepage sender health widget
 - Export analytics as CSV / PDF summary
+- [NEW] Direct Feedback Widgets (Interactive 1-5 Star/Yes-No embedded tracking parameters in footers)
 - [GAP 2 — Click Tracking Architecture Fix] `campaigns.click_tracking_enabled` BOOLEAN column (default: `False`)
 - [GAP 2] Plan gate: only `plan IN ('pro', 'enterprise')` may enable click tracking on a campaign
 - [GAP 2] Worker: conditionally wraps links via `https://trk.shrmail.app/c/{hmac_signed_token}` in MJML compile step when `click_tracking_enabled=True`
@@ -1459,7 +1463,7 @@ graph TD
 - A/B Testing: Two subject line variants sent to a split audience, winner auto-sent
 - Audience A/B split logic partitioning recipients (open-rate winner auto-selected)
 - Drip campaign orchestration via chronological state machines
-- Send-time optimization using historical recipient logs
+- Predictive Send-Time Optimization (Machine Learning algorithm determining peak individual inbox-checking minute)
 - Visual canvas drag-and-drop Drip sequence builder
 - Multi-variant A/B creation UI inside the campaign builder
 - Knowledge RAG Bot Service (Vector DB + LangChain orchestrator)
@@ -1488,6 +1492,8 @@ graph TD
 - **Prompt Library UI**: Curated list of starter questions ("Analyze my last 3 campaigns", "Generate a segment for unengaged users").
 - **Segment / Filter Generator**: Natural language input box on the Contacts page that auto-configures complex dropdown filters based on AI interpretation.
 - **Deliverability Explainer Modal**: "Explain this" button next to raw SMTP bounce codes that opens an AI-generated, plain-English summary of the exact fix needed.
+- **Multi-Language "Smart Translation"**: Allow user to draft a template and instantly generate localized copies for international scaling.
+
 
 ---
 
