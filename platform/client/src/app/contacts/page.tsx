@@ -15,7 +15,8 @@ import {
     Check,
     FileText,
     Download,
-    Globe2
+    Globe2,
+    Loader2
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -135,7 +136,7 @@ function ErrorRow({ err, idx, batchId, token, colors, onResolved }: {
 }
 
 export default function ContactsPage() {
-    const { token } = useAuth();
+    const { token, user } = useAuth();
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<"contacts" | "history">("contacts");
 
@@ -189,6 +190,8 @@ export default function ContactsPage() {
     const [columnMappings, setColumnMappings] = useState<Record<string, string>>({});
     const [importResult, setImportResult] = useState<any>(null);
     const [uploading, setUploading] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
+    const [downloadingBatch, setDownloadingBatch] = useState<string | null>(null);
 
     // Phase 7.5: Job progress polling
     const [jobProgress, setJobProgress] = useState<{ id: string; progress: number; status: string; processed_items: number; total_items: number; failed_items: number } | null>(null);
@@ -544,24 +547,95 @@ export default function ContactsPage() {
 
     const handleExport = async () => {
         if (!token) return;
+        setIsExporting(true);
         try {
-            const res = await fetch(`${API_BASE}/contacts/export`, { headers: apiHeaders(token) });
+            const res = await fetch(`${API_BASE}/contacts/export/async`, { 
+                method: "POST",
+                headers: apiHeaders(token) 
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.job_id) {
+                    const poll = setInterval(async () => {
+                        try {
+                            const jr = await fetch(`${API_BASE}/contacts/jobs/${data.job_id}`, { headers: apiHeaders(token) });
+                            if (jr.ok) {
+                                const job = await jr.json();
+                                if (job.status === 'completed') {
+                                    clearInterval(poll);
+                                    setIsExporting(false);
+                                    let url = '';
+                                    try {
+                                        const errorLog = JSON.parse(job.error_log);
+                                        url = errorLog.result_url;
+                                    } catch (e) {}
+                                    if (url) {
+                                        const workspacePrefix = user?.fullName?.split(' ')[0] || user?.email?.split('@')[0] || "workspace";
+                                        const exportFilename = `${workspacePrefix.toLowerCase()}_contacts.csv.gz`;
+                                        const finalUrl = url + (url.includes('?') ? '&' : '?') + `download=${encodeURIComponent(exportFilename)}`;
+                                        
+                                        const a = document.createElement("a");
+                                        a.href = finalUrl;
+                                        a.download = exportFilename;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        document.body.removeChild(a);
+                                    } else {
+                                        alert("Export completed but no download URL found.");
+                                    }
+                                } else if (job.status === 'failed') {
+                                    clearInterval(poll);
+                                    setIsExporting(false);
+                                    alert("Export failed.");
+                                }
+                            }
+                        } catch (e) {}
+                    }, 2000);
+                } else {
+                    setIsExporting(false);
+                    alert("No export job ID returned.");
+                }
+            } else {
+                setIsExporting(false);
+                alert("Failed to start export.");
+            }
+        } catch (e) {
+            setIsExporting(false);
+            console.error("Export error:", e);
+            alert("An error occurred starting export.");
+        }
+    };
+
+    const handleBatchExport = async (batchId: string, batchFileName: string) => {
+        if (!token) return;
+        setDownloadingBatch(batchId);
+        try {
+            const res = await fetch(`${API_BASE}/contacts/export/batch/${batchId}`, {
+                method: "GET",
+                headers: apiHeaders(token),
+            });
             if (res.ok) {
                 const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
+                const cleanName = batchFileName.replace(/\.[^/.]+$/, ""); // Strip original file extension
+                const exportFilename = `batch_${cleanName}.csv.gz`;
+                const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
-                a.download = "contacts_export.csv";
+                a.download = exportFilename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
+                URL.revokeObjectURL(url);
+            } else if (res.status === 429) {
+                alert("An export is already running for this workspace.");
             } else {
-                alert("Failed to export contacts");
+                alert("Failed to export batch.");
             }
         } catch (e) {
-            console.error("Export error:", e);
-            alert("An error occurred during export.");
+            console.error("Batch Export error:", e);
+            alert("An error occurred during batch export.");
+        } finally {
+            setDownloadingBatch(null);
         }
     };
 
@@ -597,9 +671,13 @@ export default function ContactsPage() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
                 <h1 style={{ fontSize: "24px", fontWeight: 600, color: colors.text, margin: 0 }}>Contacts</h1>
                 <div style={{ display: "flex", gap: "12px" }}>
-                    <button onClick={handleExport} style={btnOutline}>
-                        <Download style={{ width: "16px", height: "16px" }} /> Export CSV
+                    <button onClick={handleExport} disabled={isExporting} style={{...btnOutline, opacity: isExporting ? 0.7 : 1}}>
+                        {isExporting ? <Loader2 style={{ width: "16px", height: "16px", animation: "spin 2s linear infinite" }} /> : <Download style={{ width: "16px", height: "16px" }} />}
+                        {isExporting ? "Preparing Export..." : "Export CSV"}
                     </button>
+                    <style dangerouslySetInnerHTML={{__html: `
+                        @keyframes spin { 100% { transform: rotate(360deg); } }
+                    `}} />
                     <button
                         onClick={() => stats && stats.usage_percent < 100 ? setShowUpload(true) : null}
                         disabled={stats?.usage_percent === 100}
@@ -1004,7 +1082,7 @@ export default function ContactsPage() {
                                 <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 500, color: colors.textSecondary }}>Failed</th>
                                 <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 500, color: colors.textSecondary }}>Total Rows</th>
                                 <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 500, color: colors.textSecondary }}>Import Date</th>
-                                <th style={{ padding: "10px 16px", width: "120px" }}></th>
+                                <th style={{ padding: "10px 16px", width: "200px" }}></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1072,9 +1150,17 @@ export default function ContactsPage() {
                                             <td style={{ padding: "10px 16px", color: colors.textSecondary, fontSize: "13px" }}>
                                                 {new Date(b.created_at).toLocaleDateString()} {new Date(b.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                                             </td>
-                                            <td style={{ padding: "10px 16px" }}>
+                                            <td style={{ padding: "10px 16px", display: "flex", gap: "8px" }}>
+                                                <button
+                                                    onClick={() => handleBatchExport(b.id, b.file_name)}
+                                                    disabled={downloadingBatch === b.id}
+                                                    style={{ ...btnOutline, fontSize: "13px", padding: "6px 12px", width: "80px", display: "flex", justifyContent: "center" }}
+                                                >
+                                                    {downloadingBatch === b.id ? <Loader2 className="spinner" style={{ width: "13px", height: "13px" }} /> : <Download style={{ width: "13px", height: "13px" }} />}
+                                                    <span style={{ marginLeft: "4px" }}>Export</span>
+                                                </button>
                                                 <button onClick={() => setShowBatchDelete(b)} style={{ ...btnOutline, fontSize: "13px", padding: "6px 12px", color: colors.danger, borderColor: colors.dangerBorder }}>
-                                                    <Trash2 style={{ width: "13px", height: "13px" }} /> Delete Batch
+                                                    <Trash2 style={{ width: "13px", height: "13px" }} /> Delete
                                                 </button>
                                             </td>
                                         </tr>

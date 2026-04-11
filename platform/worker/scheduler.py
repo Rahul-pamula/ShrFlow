@@ -12,6 +12,8 @@ import os
 import uuid
 import logging
 import httpx
+import json
+from urllib.parse import urlparse
 from datetime import datetime, timezone
 from typing import List, Dict
 
@@ -143,6 +145,47 @@ async def _check_monthly_summary(db: Client):
             logger.warning(f"Monthly summary failed for {tenant['id']}: {e}")
 
 
+async def _empty_old_exports(db: Client):
+    """Delete export files older than 24h to save DB storage"""
+    try:
+        from datetime import timedelta
+        twenty_four_hours_ago = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        res = (
+            db.table("jobs")
+            .select("id, tenant_id, error_log")
+            .eq("type", "csv_export")
+            .lt("updated_at", twenty_four_hours_ago)
+            .execute()
+        )
+        if res.data:
+            files_to_remove = []
+            for job in res.data:
+                # Try to infer the exact storage path from the signed URL stored in error_log
+                file_path = None
+                try:
+                    meta = json.loads(job.get("error_log") or "{}")
+                    url = meta.get("result_url") if isinstance(meta, dict) else None
+                    if url:
+                        parsed = urlparse(url)
+                        # Supabase signed URLs usually contain "/storage/v1/object/sign/exports/<path>"
+                        if "/exports/" in parsed.path:
+                            file_path = parsed.path.split("/exports/", 1)[1].split("?", 1)[0]
+                except Exception:
+                    file_path = None
+
+                if not file_path:
+                    # Fallback to the default non-batch naming pattern
+                    file_path = f"{job['tenant_id']}/export_{job['id']}.csv.gz"
+
+                files_to_remove.append(file_path)
+                db.table("jobs").delete().eq("id", job["id"]).execute()
+
+            db.storage.from_("exports").remove(files_to_remove)
+            logger.info(f"🧹 Cleaned up {len(files_to_remove)} old export files.")
+    except Exception as e:
+        logger.error(f"Cleanup of exports failed: {e}")
+
+
 # ── Main scheduler loop ────────────────────────────────────────────────
 async def run_scheduler():
     db: Client = create_client(
@@ -180,6 +223,9 @@ async def run_scheduler():
 
             # Phase 7: Monthly summary check
             await _check_monthly_summary(db)
+            
+            # Garbage Collection: Export buckets
+            await _empty_old_exports(db)
 
         except Exception as e:
             logger.error(f"Scheduler error: {e}")

@@ -352,11 +352,11 @@ graph TD
 - MFA via TOTP for workspace admins
 - [AUDIT FIX 1] Cross-tenant webhook suppression — add tenant_id filter to _suppress_contact()
 - [AUDIT FIX 2] JWT refresh token model — 30-min access token + HttpOnly refresh cookie + token_version revocation
-- [AUDIT FIX 3] Lock CORS to FRONTEND_URL env var — no wildcard in production
+- [x] [AUDIT FIX 3] Lock CORS to FRONTEND_URL env var — no wildcard in production
 - [AUDIT FIX 4] Enable SSL cert verification in worker — remove ssl.CERT_NONE
 - [AUDIT FIX 5] Delete /contacts/upload + /test-send from main.py; remove dev scripts from repo root
 - [AUDIT FIX 6] Remove duplicate events router registration in main.py
-- [FRIEND AUDIT FIX 17] OAuth State Parameter — validate random state string in Google/GitHub OAuth flow
+- [x] [FRIEND AUDIT FIX 17] OAuth State Parameter — validate random state string in Google/GitHub OAuth flow
 - [GAP 1 — System Email Provider Risk] Track daily system email count in Redis key `system:emails:sent:{date}`
 - [GAP 1] Auto-trigger CRITICAL audit log when system email count exceeds 1,600/day (80% of Workspace limit)
 - [GAP 1] Add `SYSTEM_MAILER=gmail|ses` env flag — abstraction layer for future migration

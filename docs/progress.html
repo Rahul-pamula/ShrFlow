@@ -441,7 +441,7 @@
       },
       {
         "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[AUDIT FIX 3]</span> Lock CORS to FRONTEND_URL env var — no wildcard in production (0.5d)",
-        "done": false,
+        "done": true,
         "desc": "Security fix: the API currently allows requests from any website (CORS wildcard). Fix: restrict it to only your frontend domain by reading FRONTEND_URL from the environment."
       },
       {
@@ -461,7 +461,7 @@
       },
       {
         "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[FRIEND AUDIT FIX 17]</span> OAuth State Parameter — Require and validate a random state string in the Google/GitHub OAuth flow to prevent CSRF (0.5d)",
-        "done": false,
+        "done": true,
         "desc": "Security fix: the Google/GitHub login flow is missing a state parameter. Without it, an attacker can trick users into logging in under the attacker's account (OAuth CSRF). Fix: generate and validate a random state string on each login attempt."
       }
     ]

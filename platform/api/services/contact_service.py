@@ -508,15 +508,19 @@ class ContactService:
         }
 
     @staticmethod
-    def export_contacts(tenant_id: str) -> str:
+    def export_contacts(tenant_id: str, batch_id: Optional[str] = None) -> str:
         """Fetch all contacts for export and return CSV format string."""
         import csv
         import io
         
-        result = db.client.table("contacts")\
+        query = db.client.table("contacts")\
             .select("email, first_name, last_name, status, bounce_reason, custom_fields, tags, created_at")\
-            .eq("tenant_id", tenant_id)\
-            .execute()
+            .eq("tenant_id", tenant_id)
+            
+        if batch_id:
+            query = query.eq("import_batch_id", batch_id)
+            
+        result = query.execute()
             
         contacts = result.data or []
         

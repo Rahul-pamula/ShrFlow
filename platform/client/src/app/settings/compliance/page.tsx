@@ -51,21 +51,50 @@ export default function ComplianceSettings() {
     const handleExport = async () => {
         setExporting(true);
         try {
-            const res = await fetch(`${API_BASE}/contacts/export`, {
+            const res = await fetch(`${API_BASE}/contacts/export/async`, {
+                method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
             });
-            if (!res.ok) throw new Error('Export failed');
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `contacts_export_${new Date().toISOString().split('T')[0]}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
+            if (!res.ok) throw new Error('Failed to start export');
+            const data = await res.json();
+            if (!data.job_id) throw new Error('No job ID returned');
+            
+            const poll = setInterval(async () => {
+                try {
+                    const jr = await fetch(`${API_BASE}/contacts/jobs/${data.job_id}`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                    });
+                    if (jr.ok) {
+                        const job = await jr.json();
+                        if (job.status === 'completed') {
+                            clearInterval(poll);
+                            setExporting(false);
+                            let url = '';
+                            try {
+                                const errorLog = JSON.parse(job.error_log);
+                                url = errorLog.result_url;
+                            } catch (e) {}
+                            if (url) {
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `contacts_export_${new Date().toISOString().split('T')[0]}.csv.gz`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                            } else {
+                                alert('Export completed but no download URL found.');
+                            }
+                        } else if (job.status === 'failed') {
+                            clearInterval(poll);
+                            setExporting(false);
+                            alert('Export failed.');
+                        }
+                    }
+                } catch (e) {}
+            }, 2000);
         } catch (e: any) {
-            alert(e.message);
-        } finally {
             setExporting(false);
+            alert(e.message);
         }
     };
 

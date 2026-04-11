@@ -499,6 +499,48 @@ async def update_contact(
         raise HTTPException(status_code=500, detail=f"Failed to update contact: {str(e)}")
 
 
+class ExportAsyncRequest(BaseModel):
+    batch_id: Optional[str] = None
+
+@router.post("/export/async")
+async def export_contacts_async(
+    background_tasks: BackgroundTasks,
+    payload: Optional[ExportAsyncRequest] = None,
+    tenant_id: str = Depends(require_active_tenant),
+    _ = Depends(require_admin_or_owner)
+):
+    """Start an async background task to export all contacts for the tenant"""
+    try:
+        from utils.redis_client import redis_client
+        lock_key = f"tenant:{tenant_id}:export_running"
+        if not await redis_client.client.set(lock_key, "1", nx=True, ex=3600):
+            raise HTTPException(status_code=429, detail="An export is already running for this workspace.")
+
+        job_id = str(uuid.uuid4())
+        
+        # 1. Create the persistent Job record
+        db.client.table("jobs").insert({
+            "id": job_id,
+            "tenant_id": tenant_id,
+            "type": "csv_export",
+            "status": "pending",
+            "progress": 0,
+            "total_items": 0,
+        }).execute()
+        
+        # 2. Schedule the background task
+        from services.export_service import process_csv_export
+        batch_id = payload.batch_id if payload else None
+        background_tasks.add_task(process_csv_export, job_id=job_id, tenant_id=tenant_id, batch_id=batch_id)
+        
+        return {
+            "status": "accepted",
+            "job_id": job_id,
+            "message": "Export started. Poll /contacts/jobs/{job_id} for progress."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to queue export: {str(e)}")
+
 @router.get("/export")
 async def export_contacts(tenant_id: str = Depends(require_active_tenant), _ = Depends(require_admin_or_owner)):
     """Export all contacts for the tenant as a CSV file"""
@@ -511,6 +553,26 @@ async def export_contacts(tenant_id: str = Depends(require_active_tenant), _ = D
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
+@router.get("/export/batch/{batch_id}")
+async def export_batch_contacts_sync(
+    batch_id: str,
+    tenant_id: str = Depends(require_active_tenant),
+    _ = Depends(require_admin_or_owner)
+):
+    """Fast synchronous export for a specific import batch — no job queue, no polling."""
+    import gzip as _gzip
+    try:
+        csv_data = ContactService.export_contacts(tenant_id, batch_id=batch_id)
+        compressed = _gzip.compress(csv_data.encode("utf-8"))
+        return Response(
+            content=compressed,
+            media_type="application/gzip",
+            headers={"Content-Disposition": f"attachment; filename=batch_{batch_id}.csv.gz"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Batch export failed: {str(e)}")
 
 
 @router.delete("/{contact_id}")
