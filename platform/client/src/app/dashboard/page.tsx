@@ -125,7 +125,7 @@ export default function DashboardPage() {
 
             // Calculate if they just finished onboarding right now
             const checkHasDomain = doms.some((d: any) => d.status === 'verified');
-            const checkHasSender = snds.some((s: any) => s.is_verified);
+            const checkHasSender = snds.some((s: any) => s.status === 'verified');
             const checkSteps = 1 + (checkHasDomain ? 1 : 0) + (checkHasSender ? 1 : 0) + (contCount > 0 ? 1 : 0) + (campCount > 0 ? 1 : 0);
 
             if (checkSteps === 5) {
@@ -149,7 +149,7 @@ export default function DashboardPage() {
     };
 
     const hasDomain = domains.some(d => d.status === 'verified');
-    const hasSender = senders.some(s => s.is_verified);
+    const hasSender = senders.some(s => s.status === 'verified');
     const hasContacts = contactsCount > 0;
     const hasCampaigns = campaignsCount > 0;
 
