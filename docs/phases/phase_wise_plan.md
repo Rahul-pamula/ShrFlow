@@ -405,56 +405,61 @@ graph TD
     classDef api fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
     classDef worker fill:#8b5cf6,stroke:#6d28d9,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
     classDef database fill:#475569,stroke:#334155,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
+    classDef storage fill:#f59e0b,stroke:#b45309,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
 
     subgraph ContactsInterface [Frontend Contacts UI]
         List[Contacts List & Search Grid]
-        Segments[Segment Builder & Tag UI]
-        ImportModal[CSV / XLSX Import <br> Modal & Mapper]
+        ImportModal[CSV / XLSX Import <br> Wizard & Mapper]
+        WS[WebSocket Progress Listener]
         
-        List --> Segments
         List --> ImportModal
+        ImportModal --> WS
         class List frontend;
-        class Segments frontend;
         class ImportModal frontend;
+        class WS frontend;
     end
 
-    subgraph ContactsAPI [Contacts API Layer]
-        ContactCRUD[Contact CRUD & Filtering]
-        SyncInsert[Real-Time POST Insertion]
-        PreviewAPI[CSV Stream Previewer]
+    subgraph ContactsAPI [Contacts API Gateway]
+        InitAPI[POST /import/initialize <br> Presigned URL Gen]
+        ProcessAPI[POST /import/process <br> Queue Trigger]
+        WSGW[WebSocket Gateway <br> Redis Sub]
         
-        ContactsInterface -.-> |"Search/Filter"| ContactCRUD
-        ImportModal --> |"Form Upload"| PreviewAPI
-        class ContactCRUD api;
-        class SyncInsert api;
-        class PreviewAPI api;
+        ImportModal --> InitAPI
+        ImportModal --> |"Direct Upload"| S3[(Object Storage: S3/MinIO/Supabase)]
+        ImportModal --> ProcessAPI
+        WSGW --> WS
+        class InitAPI api;
+        class ProcessAPI api;
+        class WSGW api;
+        class S3 storage;
     end
 
-    subgraph ImportWorker [RabbitMQ Async Worker]
-        Chunker[Async Byte Stream Parser]
-        Validator[MX / Syntax Validator]
-        DeDupe[In-Memory Deduplicator]
+    subgraph ImportWorker [RabbitMQ Data Worker]
+        Chunker[Async Stream Parser <br> Chunksize=500]
+        Validator[Audit & Validation Service]
+        DLQ[RabbitMQ Dead-Letter Queue]
         
-        PreviewAPI --> |"Dispatches Job"| Chunker
+        ProcessAPI --> |"Job ID"| Chunker
+        Chunker --> |"Stream bytes"| S3
         Chunker --> Validator
-        Validator --> DeDupe
+        Validator -.-> |"Fails 3x"| DLQ
         class Chunker worker;
         class Validator worker;
-        class DeDupe worker;
+        class DLQ worker;
     end
 
-    subgraph DataLayer [Storage & Data Integrity]
-        Contacts[(Contacts Table <br> Soft Delete)]
-        Tags[(Tags / Segments)]
-        Batches[(Import Batches)]
+    subgraph DataLayer [Contact Storage & Audit]
+        Contacts[(Contacts Table <br> Upsert Logic)]
+        Rejections[(Import Rejected Rows <br> Failure Log)]
+        Redis[(Redis Pub/Sub <br> Progress Events)]
         
-        ContactCRUD --> Contacts
-        DeDupe --> |"Upsert tenant_id+email"| Contacts
-        Contacts --> Tags
-        DeDupe --> Batches
+        Validator --> Contacts
+        Validator --> Rejections
+        Validator --> Redis
+        Redis --> WSGW
         class Contacts database;
-        class Tags database;
-        class Batches database;
+        class Rejections database;
+        class Redis database;
     end
 
     classDef dualBox fill:#f8fafc,stroke:#cbd5e1,stroke-width:2px,stroke-dasharray: 4 4;
@@ -480,13 +485,18 @@ graph TD
 - Dynamic segment builder targeting specific field permutations.
 
 **📋 Planned Tasks — Phase 2**
-- CSV/XLSX ingestion
+- CSV/XLSX ingestion (Phase 2 Master Refactor)
+- POST /contacts/import/initialize (Presigned URL generator)
+- POST /contacts/import/process (Signal upload completion)
+- Import rejected rows table and audit service (Partial Success logic)
+- RabbitMQ Dead-Letter Queue (DLQ) for failed chunks
+- WebSocket progress updates via Redis Pub/Sub
 - Real-time contact ingestion API (POST /v1/contacts for forms/CRM webhooks)
 - Email validation: syntax check + MX record check + disposable email detection
 - Contact scoring system (engaged / at-risk / inactive / risky)
 - Upload preview endpoint
 - Async import job creation
-- FastAPI BackgroundTasks CSV import worker
+- Dedicated RabbitMQ Import Worker
 - Import batch history
 - Deduplication (in-memory + Supabase upsert on tenant_id, email)
 - Contact status (subscribed, unsubscribed, bounced, complained)
