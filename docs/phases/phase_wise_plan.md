@@ -469,6 +469,33 @@ graph TD
     class DataLayer dualBox;
 ```
 
+### 🔄 Contacts Import: Deep-Dive Execution Flow
+
+To support gigabyte-scale datasets without memory exhaustion, the import process follows a **Storage-First** and **Queue-Second** distributed pipeline:
+
+1.  **Step 1: Initialization (`POST /import/initialize`)**: The UI requests a Job ID and a **S3/MinIO Presigned URL**. No file data is sent to the API.
+2.  **Step 2: Direct-to-Storage Upload**: The Frontend uploads the raw CSV/XLSX directly to the object store. This bypasses API memory entirely.
+3.  **Step 3: Signal Process (`POST /import/process`)**: Once the upload is verified, the UI signals the API to enqueue the work.
+4.  **Step 4: RabbitMQ Tasking**: The API pushes a metadata message to the `import_tasks` queue.
+5.  **Step 5: Distributed Streaming Worker**: 
+    - A dedicated worker opens a stream from the object store.
+    - It reads content in **chunks of 500 rows** (OOM prevention).
+    - It validates each row (Syntax, MX Check, Disposable detection).
+    - **Upsert Layer**: Valid contacts are inserted into Postgres; collisions are merged based on tenant_id + email.
+    - **Audit Layer**: Failed rows are pushed to `import_rejected_rows` with specific error reasons.
+6.  **Step 6: Real-time Progress (WebSockets)**: The worker publishes progress updates to **Redis Pub/Sub**, which are broadcast to the user via the WebSocket Gateway.
+
+### 🚀 Why This Is Better (Old vs New)
+
+| Feature | Old Architecture | NEW Enterprise Architecture |
+| :--- | :--- | :--- |
+| **Upload Reliability** | API times out on large files | Direct-to-Storage (Impossible to timeout) |
+| **Memory Strategy** | Reads entire CSV into RAM (Crashes) | Streams in 500-row chunks (OOM safe) |
+| **User Feedback** | "Please wait..." (Static spinner) | Live progress bar with real-time failure stats |
+| **Fault Tolerance** | If API restarts, upload is lost | RabbitMQ ensures worker finishes tasks |
+| **Data Integrity** | Silently skips errors | Precision Audit Logs for every rejected row |
+
+
 **[BACKEND]**
 - High-performance, streaming CSV/XLSX ingestion running asynchronously via RabbitMQ to support gigabyte-scale datasets.
 - Real-time single contact insertion REST API designed for external CRM or web-form integrations.

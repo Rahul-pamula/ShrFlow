@@ -530,9 +530,39 @@
     "title": "PHASE 2 — Contacts Engine",
     "tasks": [
       {
-        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> CSV/XLSX ingestion",
-        "done": true,
-        "desc": "Tenants can upload a CSV or Excel file of contacts. The file is parsed and each row is inserted into the contacts table for the current tenant."
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> CSV/XLSX ingestion (Phase 2 Master Refactor)",
+        "done": false,
+        "desc": "The entire contact import pipeline is being refactored into a storage-first, queue-driven distributed system for enterprise scale."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> POST /contacts/import/initialize (Presigned URL generator)",
+        "done": false,
+        "desc": "Returns a limited-time S3/MinIO upload URL so the client can upload massive files directly to storage, bypassing API memory entirely."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> POST /contacts/import/process (Signal upload completion)",
+        "done": false,
+        "desc": "Triggers the background processing by pushing a task to RabbitMQ once the direct-to-storage upload is confirmed finished."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[DATABASE]</span> import_rejected_rows table and audit service",
+        "done": false,
+        "desc": "A dedicated table capturing every row that failed validation, allowing users to download a precision error report for correction."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[INFRA]</span> RabbitMQ Dead-Letter Queue (DLQ) for failed chunks",
+        "done": false,
+        "desc": "Ensures that if a specific chunk of contacts crashes the worker, it is isolated in a DLQ for inspection without blocking the rest of the pipeline."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[REAL-TIME]</span> WebSocket progress updates via Redis Pub/Sub",
+        "done": false,
+        "desc": "Moves from database polling to real-time event broadcasting. Workers push progress to Redis, which triggers instant UI updates via WebSockets."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[WORKER]</span> Dedicated RabbitMQ Import Worker",
+        "done": false,
+        "desc": "A standalone, stateless worker process that handles the heavy lifting of streaming, parsing, and validating imports asynchronously."
       },
       {
         "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> Real-time contact ingestion API (POST /v1/contacts for forms/CRM webhooks)",
@@ -558,11 +588,6 @@
         "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> Async import job creation",
         "done": true,
         "desc": "After the user confirms the column mapping, an import job record is created in the database and handed off to the background worker — the API returns immediately."
-      },
-      {
-        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> CSV Import via FastAPI BackgroundTasks",
-        "done": true,
-        "desc": "Migrated CSV import process to FastAPI's native BackgroundTasks to prevent system hangs when worker is offline."
       },
       {
         "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> Import batch history",
@@ -730,9 +755,9 @@
         "desc": "The contacts table shows a small scoring badge (Engaged / At-Risk / Inactive / Risky) for each contact."
       },
       {
-        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[FRIEND AUDIT FIX 18]</span> Streaming CSV Uploads — Replace pandas in-memory parser with async chunked byte stream parsing to prevent OOM API crashes (2d)",
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[FRIEND AUDIT FIX 18]</span> Streaming CSV Uploads — Replace pandas in-memory parser with async chunked byte stream parsing (2d)",
         "done": false,
-        "desc": "Performance fix: the current CSV import reads the entire file into RAM using pandas. For large files (100k+ rows), this crashes the API. Fix: parse the CSV as a streaming byte sequence so memory usage stays constant regardless of file size."
+        "desc": "Performance fix: moves from memory-bound pandas parsing to a robust, streaming-based worker to prevent API crashes on large datasets."
       }
     ]
   },
