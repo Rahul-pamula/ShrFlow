@@ -315,11 +315,11 @@ graph TD
 - JWT carries tenant identity
 - X-Tenant-ID is validated against JWT when used
 - Onboarding tenants are blocked from active-tenant routes
-- Social Auth (Google, GitHub) via OAuth 2.0 / Supabase
+- Social Auth (Google, GitHub) via OAuth 2.0
 - Rate limiting on login + registration endpoints (per IP, per email)
 - Email verification required before onboarding completes
 - Short-lived access tokens (15-30 min) + silent refresh tokens
-- Token revocation via token_version counter (force-logout all devices)
+- Token revocation via token_version counter
 
 ---
 
@@ -352,11 +352,11 @@ graph TD
 - MFA via TOTP for workspace admins
 - [AUDIT FIX 1] Cross-tenant webhook suppression — add tenant_id filter to _suppress_contact()
 - [AUDIT FIX 2] JWT refresh token model — 30-min access token + HttpOnly refresh cookie + token_version revocation
-- [x] [AUDIT FIX 3] Lock CORS to FRONTEND_URL env var — no wildcard in production
+- [AUDIT FIX 3] Lock CORS to FRONTEND_URL env var — no wildcard in production
 - [AUDIT FIX 4] Enable SSL cert verification in worker — remove ssl.CERT_NONE
 - [AUDIT FIX 5] Delete /contacts/upload + /test-send from main.py; remove dev scripts from repo root
 - [AUDIT FIX 6] Remove duplicate events router registration in main.py
-- [x] [FRIEND AUDIT FIX 17] OAuth State Parameter — validate random state string in Google/GitHub OAuth flow
+- [FRIEND AUDIT FIX 17] OAuth State Parameter — validate random state string in Google/GitHub OAuth flow
 - [GAP 1 — System Email Provider Risk] Track daily system email count in Redis key `system:emails:sent:{date}`
 - [GAP 1] Auto-trigger CRITICAL audit log when system email count exceeds 1,600/day (80% of Workspace limit)
 - [GAP 1] Add `SYSTEM_MAILER=gmail|ses` env flag — abstraction layer for future migration
