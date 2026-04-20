@@ -64,15 +64,15 @@ flowchart TD
 ```
 
 ## Acceptance Checklist
-- [x] Settings landing page renders cards for all subsections.
-- [x] Profile/Organization forms validate and persist via API with tenant scoping.
-- [x] Data export and right-to-erase flows respond with job/file; PII is nulled on erase.
-- [x] Compliance checklist visible and tenant-scoped.
-- [x] Domain verification UI shows SPF/DKIM/DMARC + verifies status.
-- [x] Sender verification flow (OTP) blocks unverified senders from campaigns.
-- [x] API key creation shows token once, stores SHA-256 hash only; list returns metadata only.
-- [ ] Team Management (invite/roles) implemented and gated by RLS.
-- [ ] Webhooks configuration page (URL + event selection) with signature secret.
+- Settings landing page renders cards for all subsections.
+- Profile/Organization forms validate and persist via API with tenant scoping.
+- Data export and right-to-erase flows respond with job/file; PII is nulled on erase.
+- Compliance checklist visible and tenant-scoped.
+- Domain verification UI shows SPF/DKIM/DMARC + verifies status.
+- Sender verification flow (OTP) blocks unverified senders from campaigns.
+- API key creation shows token once, stores SHA-256 hash only; list returns metadata only.
+- Team Management (invite/roles) implemented and gated by RLS.
+- Webhooks configuration page (URL + event selection) with signature secret.
 
 ## Risks / Next Steps
 - Add audit logging around key actions (new API key, domain deleted, export run).
