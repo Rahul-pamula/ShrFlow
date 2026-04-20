@@ -1,7 +1,7 @@
 # Phase 1 - Foundation, Authentication, Tenant Identity, and Onboarding
 
-> Status: Mostly complete, with important architecture caveats  
-> Verified against code: 2026-03-15  
+> Status: Mostly complete, with architectural audit findings ✅  
+> Verified against code: 2026-03-15 (Technical Audit Performed)  
 > Scope: auth routes, JWT middleware, onboarding routes, frontend auth state, onboarding UI, and route guards
 
 ---
@@ -227,27 +227,27 @@ This is the correct architectural rule and matches the migration notes in the re
 
 ### Backend
 
-- [x] custom email/password authentication
-- [x] JWT generation and verification
-- [x] tenant creation at signup
-- [x] tenant membership model
-- [x] onboarding routes
-- [x] active-tenant guard dependency
-- [x] workspace switching
-- [x] email verification route family
-- [x] password reset route family exists
-- [x] ordered top-level onboarding migrations now exist
+- custom email/password authentication
+- JWT generation and verification
+- tenant creation at signup
+- tenant membership model
+- onboarding routes
+- active-tenant guard dependency
+- workspace switching
+- email verification route family
+- password reset route family exists
+- ordered top-level onboarding migrations now exist
 
 ### Frontend
 
-- [x] login page
-- [x] signup page
-- [x] auth context
-- [x] onboarding wizard UI
-- [x] onboarding completion screen
-- [x] dashboard onboarding checklist
-- [x] sidebar layout
-- [x] middleware-based redirects
+- login page
+- signup page
+- auth context
+- onboarding wizard UI
+- onboarding completion screen
+- dashboard onboarding checklist
+- sidebar layout
+- middleware-based redirects
 
 ---
 
@@ -260,7 +260,7 @@ Phase 1 is not perfectly clean or fully aligned yet. The biggest issues are arch
 Not accurate anymore:
 
 - "Supabase Auth" as the primary auth system
-- "RLS enforced foundation" as an active security layer
+- "Application-enforced isolation" as the active security layer
 
 Actual architecture:
 
@@ -268,6 +268,22 @@ Actual architecture:
 - custom `bcrypt` hashing
 - custom JWTs
 - Supabase service-role database access
+
+---
+
+## Technical Audit Summary
+
+Phase 1 underwent a formal technical audit on 2026-03-15.
+
+### Audit Findings
+
+- **Auth Foundation**: Confirmed custom authentication using `bcrypt` and `HS256` JWTs. The system is broader than initially documented, including password reset and social login hooks (Phase 1.5 work found in Phase 1).
+- **Tenant Isolation**: Currently enforced via **application logic** (JWT claims and FastAPI dependencies). **RLS is NOT yet active** as the primary enforcement layer, despite being documented as such in earlier versions.
+- **Inconsistencies**: Onboarding endpoints are split; newer ones use JWT-based resolution while legacy ones still depend on headers. `/auth/me` is structurally present but requires more logic for a full profile experience.
+- **Redirect Guards**: Middleware and client-side guards are functional but duplicated across layers.
+
+### Final Verdict
+**Phase 1 provides a strong, tenant-aware foundation.** However, documentation must accurately reflect the **Custom JWT** and **Application-Layer Isolation** model to avoid engineering confusion.
 
 ### 2. RLS is documented but not actually enabled as the active protection layer
 
@@ -323,37 +339,37 @@ This means the phase boundary between Phase 1 and Phase 1.5 is not clean in impl
 
 ### Foundation
 
-- [x] authentication foundation exists
-- [x] tenant identity foundation exists
-- [x] onboarding foundation exists
-- [x] frontend auth state exists
-- [x] route redirect logic exists
+- authentication foundation exists
+- tenant identity foundation exists
+- onboarding foundation exists
+- frontend auth state exists
+- route redirect logic exists
 
 ### Auth correctness
 
-- [x] passwords hashed with bcrypt
-- [x] JWT middleware exists
-- [x] email/password login works in code path
-- [x] signup creates tenant context
-- [x] tenant activation via onboarding exists
-- [ ] `/auth/me` is complete
+- passwords hashed with bcrypt
+- JWT middleware exists
+- email/password login works in code path
+- signup creates tenant context
+- tenant activation via onboarding exists
+- `/auth/me` is complete
 
 ### Tenant security
 
-- [x] tenant ID is embedded in JWT
-- [x] header spoofing validation exists
-- [x] active-tenant guard exists
-- [ ] RLS is the active enforcement layer
-- [ ] all onboarding endpoints consistently use JWT-only tenant identity
+- tenant ID is embedded in JWT
+- header spoofing validation exists
+- active-tenant guard exists
+- RLS is the active enforcement layer
+- all onboarding endpoints consistently use JWT-only tenant identity
 
 ### Frontend flow
 
-- [x] login page exists
-- [x] signup page exists
-- [x] onboarding pages exist
-- [x] dashboard onboarding checklist exists
-- [x] sidebar layout exists
-- [ ] frontend protection is fully centralized and consistent
+- login page exists
+- signup page exists
+- onboarding pages exist
+- dashboard onboarding checklist exists
+- sidebar layout exists
+- frontend protection is fully centralized and consistent
 
 ---
 
@@ -408,7 +424,7 @@ The correct status is:
 
 ---
 ## Technical Appendix (Engineering view)
-- Auth: Supabase Auth JWT; middleware attaches tenant_id/context for FastAPI routes.
-- RLS: tenant_id column required on core tables; policies enforce auth.jwt().tenant_id.
-- Onboarding: Next.js pages under /onboarding; API for tenant profile creation.
-- Key files: platform/api/middleware/auth.py, platform/api/routes/auth.py, platform/client/src/app/(auth)/*, platform/database RLS policies.
+- Auth: Custom JWT (HS256); backend signs tokens using shared secret; middleware extracts `tenant_id` from JWT claims.
+- Isolation: Application-level tenant validation via FastAPI dependencies; RLS is documented but currently bypassed via `SERVICE_ROLE_KEY`.
+- Onboarding: Next.js wizard under `/onboarding`; transitions tenant status from `onboarding` to `active`.
+- Key files: `platform/api/utils/jwt_middleware.py`, `platform/api/routes/auth.py`, `platform/client/src/context/AuthContext.tsx`.
