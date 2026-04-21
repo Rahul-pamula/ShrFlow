@@ -1,572 +1,375 @@
-# Phase 2 Technical Audit - Contacts Engine
+# Phase 2 — Developer Implementation Guide & Technical Audit
+## Contacts Engine: How It's Built, How Every Piece Works, How to Extend It
 
-> Audit basis: code verification
-> Audit date: March 15, 2026
-> Scope: backend routes, services, worker, migrations, and contacts frontend
-> Verdict: Functional and production-usable, but documentation and checklist status are materially overstated
-
-## Executive Verdict
-
-Phase 2 is implemented as a real contacts subsystem. The platform can already import, validate, deduplicate, store, browse, batch-track, suppress, tag, delete, and export contacts.
-
-The major problem is not lack of implementation. The major problem is mismatch:
-
-- docs still describe an older synchronous import architecture
-- checklist items mark several features complete that do not exist in code
-- schema documentation does not reflect the actual active data path
-- frontend functionality is ahead of the docs in some areas and behind the docs in others
-
-The correct status is:
-
-- core contacts engine: implemented
-- import pipeline: implemented, now async
-- operational completeness against original Phase 2 promise: partial
-
-## Audit Scope
-
-Code paths reviewed:
-
-- `platform/api/routes/contacts.py`
-- `platform/api/services/contact_service.py`
-- `platform/api/services/batch_service.py`
-- `platform/api/utils/file_parser.py`
-- `platform/api/utils/rabbitmq_client.py`
-- `platform/worker/background_worker.py`
-- `platform/database/migrations/003_contacts_module_phase2.sql`
-- `platform/client/src/app/contacts/page.tsx`
-- `platform/client/src/app/contacts/[id]/page.tsx`
-- `platform/client/src/app/contacts/suppression/page.tsx`
-- `platform/client/src/app/contacts/batch/[batchId]/page.tsx`
-
-## Current Technical Architecture
-
-### API layer
-
-FastAPI exposes the contacts module under `/contacts`.
-
-Main verified routes:
-
-- `GET /contacts/stats`
-- `GET /contacts/`
-- `GET /contacts/domains`
-- `POST /contacts/upload/preview`
-- `POST /contacts/upload/import`
-- `GET /contacts/jobs/{job_id}`
-- `POST /contacts/bulk-delete`
-- `DELETE /contacts/all`
-- `GET /contacts/batches`
-- `DELETE /contacts/batch/{batch_id}`
-- `POST /contacts/resolve-error`
-- `GET /contacts/{contact_id}`
-- `PATCH /contacts/{contact_id}`
-- `POST /contacts/{contact_id}/tags`
-- `GET /contacts/suppression`
-- `GET /contacts/export`
-- `DELETE /contacts/{contact_id}`
-
-### Service layer
-
-`ContactService` is the business-logic core. It currently owns:
-
-- email validation
-- plan-limit enforcement
-- batch deduplication
-- paginated listing
-- domain normalization and domain-summary logic
-- batch upsert
-- bulk delete
-- delete all
-- subscribable-contact selection for campaigns
-- tags update
-- contact update
-- suppression query
-- export generation
-
-`BatchService` owns:
-
-- import batch creation
-- batch listing
-- batch deletion
-
-### Async processing layer
-
-The import path is split between:
-
-- API route creating a job and queue message
-- RabbitMQ exchange and queue for background tasks
-- background worker consuming and processing imports
-- `jobs` table used for polling and progress state
-
-This is the active runtime architecture. Any document still describing imports as only request-response work is outdated.
-
-## Verified Backend Logic
-
-## 1. Preview and parsing
-
-The preview route enforces a 2 MB max size and calls `parse_file`.
-
-`parse_file` behavior:
-
-- accepts only `.csv` and `.xlsx`
-- CSV uses `pandas.read_csv`
-- XLSX uses `pandas.read_excel` with `openpyxl`
-- top blank rows in XLSX are removed
-- first non-empty row becomes headers
-- fully empty rows are removed
-- column names are trimmed
-- empty result sets return HTTP 400
-
-This is a solid parser for small-to-medium imports. It is intentionally conservative and rejects unsupported formats instead of trying to infer them.
-
-## 2. Import route behavior
-
-The import route:
-
-- parses custom field mapping JSON
-- reads and validates the file
-- transforms each row into a normalized contact object
-- lowercases email values
-- attaches custom fields when mapped
-- skips fully blank rows before job creation
-- creates a job row
-- creates an import batch row
-- publishes a background task
-- returns immediately
-
-This route no longer inserts contacts directly.
-
-## 3. Worker behavior
-
-`background_worker.py` processes import tasks with these mechanics:
-
-- job status set to `processing`
-- input contacts processed in chunks of 50
-- each chunk passed into `ContactService.bulk_upsert`
-- job progress written back after each chunk
-- final job and batch status updated at completion
-
-This design gives a good user-facing progress signal without blocking the API process.
-
-### Important operational implication
-
-Because each chunk goes through `bulk_upsert` independently, the worker does not enforce import-level atomicity.
-
-Example:
-
-1. Tenant has room for 80 new contacts.
-2. User uploads 200 new contacts.
-3. First chunk of 50 succeeds.
-4. Second chunk of 30 may succeed.
-5. Later chunks fail once the limit is hit.
-
-Result:
-
-- partial import
-- not full rollback
-- batch marked with mixed success/failure
-
-If the intended product rule is "reject the entire import when it exceeds limit," current behavior does not satisfy that requirement.
-
-## 4. Validation logic
-
-`validate_email` uses a standard regex:
-
-- valid enough for application screening
-- not full RFC validation
-- acceptable for this phase
-
-Invalid rows are preserved as structured error objects rather than silently dropped.
-
-Blank rows are handled differently:
-
-- a row with no email and no mapped custom-field values is skipped
-- skipped blank rows are not counted as failed contacts
-- the route returns `skipped_blank` metadata for the frontend summary
-
-Captured error fields include:
-
-- row
-- email
-- first_name
-- last_name
-- reason
-
-This gives the frontend enough data to support row-level recovery.
-
-## 5. Deduplication logic
-
-Two layers exist:
-
-### In-memory upload deduplication
-
-- uses a Python `set()`
-- keeps the first occurrence of a repeated email in the same upload
-
-### Database-level deduplication
-
-- uses Supabase upsert with `on_conflict="tenant_id,email"`
-- existing tenant/email pairs become updates
-- new tenant/email pairs become inserts
-
-This is the correct basic strategy for Phase 2.
-
-## 6. Plan-limit logic
-
-`check_plan_limits`:
-
-- counts current tenant contacts
-- resolves `max_contacts` via `tenants -> plans`
-- falls back to `500` if relation data is missing
-
-`_count_existing_emails`:
-
-- checks existing emails in groups of 100
-- avoids large `IN` payload problems
-
-`bulk_upsert`:
-
-- computes `new_count = unique_contacts - existing_count`
-- only new contacts count against the quota
-
-This is one of the stronger pieces of the Phase 2 implementation. It avoids the common mistake of charging quota for updates or re-imports.
-
-## 7. List and search behavior
-
-`get_contacts` supports:
-
-- pagination
-- optional `batch_id`
-- optional multi-domain filtering
-- search across:
-  - `email`
-  - `first_name`
-  - `last_name`
-
-It does not support:
-
-- tag search
-- rules-based segments
-- field/operator/value segment composition
-
-So current docs must describe this as contact search, not segmentation.
-
-## 8. Domain-aware filtering and audience logic
-
-Verified implemented:
-
-- `email_domain` extraction during import and contact updates
-- `/contacts/domains` summary endpoint
-- batch-scoped domain summaries
-- suspicious typo-domain suggestions using close-match logic
-- campaign audience targets for:
-  - `domain:...`
-  - `domains:...`
-  - `batch_domain:batch:domain`
-  - `batch_domains:batch:domain1,domain2`
-
-This is an implemented audience-filtering layer, but it is still not a generic segment builder.
-
-## 9. Status and suppression behavior
-
-`get_subscribable_contacts` returns only:
-
-- `status = subscribed`
-
-`get_suppression_list` returns:
-
-- `bounced`
-- `unsubscribed`
-- `complained`
-
-This aligns Phase 2 data with later send-exclusion behavior in delivery and campaign phases.
-
-## 10. Export behavior
-
-`export_contacts`:
-
-- fetches all tenant contacts
-- dynamically discovers all custom field keys across the result set
-- writes CSV headers including built-in and custom fields
-- serializes tags as comma-separated text
-
-This is a practical export implementation and more capable than the older docs imply.
-
-## 11. Batch history and failure recovery
-
-Batch history is implemented through `import_batches`.
-
-Stored fields include:
-
-- `id`
-- `file_name`
-- `total_rows`
-- `imported_count`
-- `failed_count`
-- `errors`
-- `status`
-- `created_at`
-
-`resolve-error` allows manual correction and insertion of a failed row.
-
-Current limitations:
-
-- it assumes the corrected row costs one new contact
-- it does not distinguish update-vs-insert before applying the limit check
-- error removal is index-based, which is workable but brittle if concurrent edits ever appear
-
-## Verified Frontend Logic
-
-## 1. Contacts page
-
-The contacts page is feature-rich and does more than the old docs document.
-
-Verified features:
-
-- stats summary
-- usage-progress bar
-- warning banners at high usage
-- contacts list
-- search
-- dynamic custom-field columns
-- selection and bulk delete
-- delete all
-- upload modal
-- preview before import
-- import history tab
-- batch expansion and failed-row visibility
-- async job polling
-- CSV export
-- compact batch/domain filtering on the main contacts page
-
-The contacts page is also still heavily inline styled and not yet aligned with the shared Phase 0 component strategy.
-
-## 2. Contact detail page
-
-Verified features:
-
-- single-contact fetch
-- name, email, created date, and status display
-- custom fields display
-- tag editing
-- contact editing for email and custom fields
-
-Missing relative to earlier Phase 2 wording:
-
-- no activity log
-- no event timeline
-- no campaign interaction feed
-
-## 3. Suppression page
-
-Verified features:
-
-- paginated suppressed-contact list
-- reason/status badge
-- refresh button
-
-## 4. Batch detail page
-
-Verified features:
-
-- per-batch contact listing
-- search within batch
-- pagination
-- domain breakdown inside a batch
-- multi-domain filtering inside the batch
-- typo-domain warning banner when suspicious domains are detected
-
-Technical issue:
-
-- this page uses `http://127.0.0.1:8000` while the main contacts pages use `http://localhost:8000`
-
-That is not a production-safe configuration pattern.
-
-## Schema and Migration Truth
-
-## What the migration says
-
-`003_contacts_module_phase2.sql` adds:
-
-- `tenant_id`
-- `first_name`
-- `last_name`
-- `contact_custom_fields` table
-- contact indexes
-- RLS on `contact_custom_fields`
-
-The current top-level migration chain now also includes:
-
-- `019_phase2_contacts_alignment.sql`
-- `020_contacts_email_domain.sql`
-- `manual_apply_latest_runtime_sync.sql`
-
-## What the active code uses
-
-Active code stores custom fields on:
-
-- `contacts.custom_fields`
-
-not in:
-
-- `contact_custom_fields`
-
-That means the migration and the runtime model diverged. The audit must treat `contact_custom_fields` as an unused or legacy path until code actually reads and writes it.
-
-It also means the runtime now depends on newer schema fields that were not present in the older top-level migration sequence until the latest alignment work:
-
-- `import_batches`
-- `contacts.import_batch_id`
-- `contacts.custom_fields`
-- `contacts.tags`
-- `contacts.email_domain`
-
-## Multi-Tenant and Security Audit
-
-Current safety characteristics:
-
-- tenant identity derived from auth middleware
-- queries scoped by `tenant_id`
-- service-role database access used from backend
-
-This is acceptable only because the application code consistently applies tenant filters.
-
-What should not be claimed:
-
-- "RLS is the active contacts protection model"
-
-There is no evidence in the current running contacts flow that database RLS is the primary enforcement layer for contacts data access.
-
-## Documentation Mismatches That Needed Correction
-
-The previous Phase 2 docs and trackers incorrectly or incompletely stated:
-
-- imports are synchronous end-to-end
-- segmentation filters are complete
-- search includes tags
-- tags have full CRUD API coverage
-- soft delete with `deleted_at` exists
-- contact detail page includes activity history
-- Phase 2 is fully done
-
-These claims are not supported by the code that was reviewed.
-
-## Key Findings
-
-## Finding 1 - Async import design is real and should be documented as such
-
-The import route now creates `jobs` and pushes work to RabbitMQ. Any Phase 2 doc still describing a request-only import pipeline is outdated.
-
-Impact:
-
-- architecture diagrams are currently misleading
-- future maintainers can misunderstand failure semantics and debugging paths
-
-## Finding 2 - Imports are not atomic at file level
-
-The background worker imports in chunks of 50 and each chunk independently checks limits and upserts.
-
-## Finding 3 - Domain filtering is implemented, but only as targeted audience logic
-
-The current code supports domain-based filtering and campaign audience narrowing, including multi-domain selection inside a batch. That is a real feature and should not be omitted from the docs.
-
-What should still not be claimed:
-
-- full generic segment builder
-- tag-aware search
-- field/operator/value audience composition
-
-## Finding 4 - Contact detail page is no longer read-only
-
-The current detail page supports editing email and custom fields through `PATCH /contacts/{id}`. Any docs that still describe the page as read-only are stale.
-
-Impact:
-
-- partial imports are possible
-- quota behavior differs from an all-or-nothing expectation
-- support and UI messaging should account for mixed outcomes
-
-## Finding 3 - Segmentation is overstated
-
-Backend listing supports only simple search and batch filtering. There is no real segment builder on the backend.
-
-Impact:
-
-- product docs over-promise
-- downstream campaign-audience docs can become misleading
-
-## Finding 4 - Soft delete is not implemented
-
-No verified `deleted_at` contact flow, restore path, or retention window was found in the active Phase 2 code.
-
-Impact:
-
-- compliance and recovery expectations are inaccurate
-- the phase tracker currently marks a non-existent feature as done
-
-## Finding 5 - Custom field architecture is misdocumented
-
-The migration introduces `contact_custom_fields`, but the actual import and list flow use `contacts.custom_fields`.
-
-Impact:
-
-- schema docs are misleading
-- new developers can implement against the wrong model
-
-## Finding 6 - Frontend infrastructure still has environment hardcoding
-
-Contacts pages use hardcoded localhost URLs, and one page uses `127.0.0.1` instead of `localhost`.
-
-Impact:
-
-- brittle deployment behavior
-- duplicated config logic
-
-## Finding 7 - Contacts UI is functionally rich but not design-system aligned
-
-The module relies on large page-level inline style blocks rather than shared components from Phase 0.
-
-Impact:
-
-- inconsistent UX
-- slower maintenance
-- harder refactoring
-
-## Recommendations
-
-### Immediate
-
-1. Rewrite all Phase 2 docs and trackers to match the async queue-backed architecture.
-2. Change the phase status from "done" to "implemented with gaps" or equivalent.
-3. Remove soft-delete and segmentation completion claims from trackers.
-4. Move API base configuration into shared environment-driven frontend config.
-
-### Short-term
-
-1. Decide whether imports should be atomic or partial.
-2. If atomic, move limit evaluation to pre-flight whole-file logic before queueing or use transactional worker logic.
-3. If partial is acceptable, expose clearer batch-result semantics in UI and docs.
-4. Consolidate the custom-fields model and deprecate unused schema paths.
-
-### Medium-term
-
-1. Implement real segmentation if the roadmap still requires it.
-2. Add activity history only when analytics/event tables are wired to the contact detail page.
-3. Refactor the contacts UI to shared Phase 0 components.
-4. Remove or quarantine legacy contacts code paths that still use older `project_id` assumptions.
-
-## Final Assessment
-
-Phase 2 is one of the more substantial implemented areas of the product. The code proves there is a working contacts engine, and it already supports the core workflows the product needs to proceed into campaigns and delivery.
-
-But it is not accurate to call the phase fully complete. The truthful status is:
-
-- foundation and operational flows: present
-- architecture: modernized beyond old docs
-- product promises in docs/checklists: ahead of reality in several places
-
-The right maintenance action is not to rewrite the code first. It is to align the documentation to the current code, then decide which missing product promises still belong in Phase 2 versus a later cleanup phase.
+> **Who is this for?** Any developer — beginner or senior — who needs to understand exactly how Phase 2 is built, what every file does, how data flows from a user's CSV file into a queryable database, and how to implement or extend any part of the contacts pipeline from scratch.
 
 ---
-## Technical Appendix (Engineering view)
-- Endpoints, data model, RLS, and worker/queue behaviors summarized per phase.
-- See phase doc for full flow; audits now include concrete engineering artifacts to verify.
+
+## 1. Phase 2 Complete Architecture Map
+
+Read this diagram first. It shows the exact flow a CSV file takes from the user's browser to a stored database record.
+
+```mermaid
+graph TD
+    classDef frontend fill:#2563eb,stroke:#1d4ed8,color:#fff;
+    classDef api fill:#10b981,stroke:#047857,color:#fff;
+    classDef worker fill:#8b5cf6,stroke:#5b21b6,color:#fff;
+    classDef storage fill:#f59e0b,stroke:#b45309,color:#000;
+    classDef db fill:#475569,stroke:#334155,color:#fff;
+    classDef queue fill:#ef4444,stroke:#b91c1c,color:#fff;
+
+    subgraph "Browser"
+        A["contacts/page.tsx<br/>Upload Modal"]:::frontend
+        B["WebSocket listener<br/>Progress bar"]:::frontend
+    end
+
+    subgraph "FastAPI Backend"
+        C["POST /contacts/import/initialize<br/>→ Creates job_id + presigned URL"]:::api
+        D["POST /contacts/import/process<br/>→ Publishes to RabbitMQ queue"]:::api
+        E["GET /contacts/jobs/{job_id}<br/>→ Poll for progress"]:::api
+        F["WebSocket Gateway<br/>→ Subscribes to Redis channel"]:::api
+    end
+
+    subgraph "Object Storage"
+        G["Supabase Storage / S3<br/>Raw CSV file"]:::storage
+    end
+
+    subgraph "Message Queue"
+        H["RabbitMQ import_tasks queue"]:::queue
+        I["Dead Letter Queue (DLQ)<br/>Retries after 3 failures"]:::queue
+    end
+
+    subgraph "Background Worker"
+        J["background_worker.py<br/>Streams file in 500-row chunks"]:::worker
+        K["ContactService.bulk_upsert()<br/>Validate + Deduplicate + Upsert"]:::worker
+        L["Redis Pub/Sub Publisher<br/>Broadcasts progress events"]:::worker
+    end
+
+    subgraph "Database"
+        M[("contacts table")]:::db
+        N[("import_batches table")]:::db
+        O[("jobs table")]:::db
+        P[("import_rejected_rows")]:::db
+    end
+
+    A -->|"Step 1: Get presigned URL"| C
+    C -->|"Returns job_id + upload URL"| A
+    A -->|"Step 2: PUT file directly"| G
+    A -->|"Step 3: Signal ready"| D
+    D -->|"Creates batch row"| N
+    D -->|"Publishes job message"| H
+    H -->|"Worker consumes"| J
+    J -->|"Streams CSV chunks"| G
+    J --> K
+    K -->|"Valid rows"| M
+    K -->|"Failed rows"| P
+    K -->|"Progress events"| L
+    L -->|"Redis channel"| F
+    F -->|"WebSocket push"| B
+    H -.->|"Fails 3x"| I
+    E -->|"Polls status"| O
+    J -->|"Updates status"| O
+```
+
+---
+
+## 2. Complete File Index — Phase 2
+
+Every file relevant to Phase 2 and what it does:
+
+| File | Layer | Role |
+|---|---|---|
+| `platform/api/routes/contacts.py` | Backend | All contact endpoints: CRUD, import, search, export, suppression |
+| `platform/api/services/contact_service.py` | Backend | Core business logic: validation, deduplication, upsert, scoring |
+| `platform/api/services/batch_service.py` | Backend | Import batch lifecycle: create, list, delete batches |
+| `platform/api/utils/file_parser.py` | Backend | CSV/XLSX parsing: reads file bytes, normalizes headers, drops blank rows |
+| `platform/api/utils/rabbitmq_client.py` | Backend | RabbitMQ connection + message publishing |
+| `platform/worker/background_worker.py` | Worker | Async import processing: streams file, validates, upserts in 500-row chunks |
+| `platform/client/src/app/contacts/page.tsx` | Frontend | Main contacts list page: table, search, import modal, history tab |
+| `platform/client/src/app/contacts/[id]/page.tsx` | Frontend | Contact detail page: edit email, custom fields, tags |
+| `platform/client/src/app/contacts/suppression/page.tsx` | Frontend | Suppression list: bounced, unsubscribed, complained contacts |
+| `platform/client/src/app/contacts/batch/[batchId]/page.tsx` | Frontend | Batch detail: per-batch contacts, domain breakdown, error rows |
+| `migrations/003_contacts_module_phase2.sql` | Database | Base contacts schema: tenant_id, email, status, custom_fields |
+| `migrations/019_phase2_contacts_alignment.sql` | Database | Adds import_batches, contacts.import_batch_id |
+| `migrations/020_contacts_email_domain.sql` | Database | Adds contacts.email_domain column |
+| `migrations/manual_apply_latest_runtime_sync.sql` | Database | Catch-up SQL for environments missing recent migrations |
+
+---
+
+## 3. Database Schema — What We Built
+
+```sql
+-- Core contacts table
+contacts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  email TEXT NOT NULL,
+  first_name TEXT,
+  last_name TEXT,
+  status TEXT DEFAULT 'subscribed',  -- 'subscribed' | 'unsubscribed' | 'bounced' | 'complained'
+  tags TEXT[] DEFAULT '{}',          -- Array of label strings
+  custom_fields JSONB DEFAULT '{}',  -- All extra CSV columns stored here as key-value
+  email_domain TEXT,                 -- Extracted: 'gmail.com', 'accenture.com'
+  import_batch_id UUID REFERENCES import_batches(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(tenant_id, email)           -- Deduplication constraint
+)
+
+-- Import batch tracking
+import_batches (
+  id UUID PRIMARY KEY,
+  tenant_id UUID REFERENCES tenants(id),
+  file_name TEXT,
+  total_rows INTEGER,
+  imported_count INTEGER DEFAULT 0,
+  failed_count INTEGER DEFAULT 0,
+  skipped_blank INTEGER DEFAULT 0,
+  errors JSONB DEFAULT '[]',         -- Array of {row, email, reason} objects
+  status TEXT DEFAULT 'processing',  -- 'processing' | 'completed' | 'failed'
+  created_at TIMESTAMPTZ DEFAULT NOW()
+)
+
+-- Async job tracking for polling
+jobs (
+  id UUID PRIMARY KEY,
+  tenant_id UUID,
+  type TEXT,                         -- 'csv_import'
+  status TEXT DEFAULT 'pending',     -- 'pending' | 'processing' | 'completed' | 'failed'
+  progress INTEGER DEFAULT 0,        -- Rows processed so far
+  total INTEGER DEFAULT 0,           -- Total rows expected
+  result JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+)
+```
+
+**Important schema note:** An older migration (`003_contacts_module_phase2.sql`) creates a `contact_custom_fields` table. This table is **not used** by the running code. Custom fields are stored in `contacts.custom_fields` as a JSONB column. Do not implement against the `contact_custom_fields` table — it is a legacy artifact.
+
+---
+
+## 4. The 6-Step Import Pipeline — Step by Step
+
+### Step 1: Initialize (`POST /contacts/import/initialize`)
+```python
+# What the backend does:
+job = db.table("jobs").insert({"tenant_id": tenant_id, "type": "csv_import", "status": "pending"}).execute()
+presigned_url = supabase.storage.from_("imports").create_signed_upload_url(f"{tenant_id}/{job_id}.csv")
+return {"job_id": job_id, "upload_url": presigned_url["signedURL"]}
+```
+The frontend receives a signed URL valid for 10 minutes and a `job_id` to track the import.
+
+### Step 2: Direct Upload (Browser → Object Storage)
+```javascript
+// Frontend uploads directly to Supabase Storage — API server RAM is never touched
+await fetch(upload_url, {
+  method: "PUT",
+  body: csvFile,
+  headers: { "Content-Type": "text/csv" }
+});
+```
+
+### Step 3: Signal Process (`POST /contacts/import/process`)
+```python
+# Backend creates the batch record and queues the work
+batch = db.table("import_batches").insert({
+  "tenant_id": tenant_id, "job_id": job_id, "file_name": filename,
+  "total_rows": row_count, "status": "processing"
+}).execute()
+rabbitmq.publish("import_tasks", {"job_id": job_id, "tenant_id": tenant_id, "batch_id": batch_id})
+return {"job_id": job_id, "batch_id": batch_id}  # Returns immediately — no waiting
+```
+
+### Step 4: RabbitMQ Worker Picks Up the Job
+```python
+# background_worker.py
+async def process_csv_import(message: dict):
+    job_id, tenant_id, batch_id = message["job_id"], message["tenant_id"], message["batch_id"]
+    
+    # Download file from storage as a streaming reader — never loads full file into RAM
+    stream = supabase.storage.from_("imports").download(f"{tenant_id}/{job_id}.csv")
+    
+    # Process in chunks of 500 rows
+    for chunk in pd.read_csv(stream, chunksize=500):
+        valid_rows, failed_rows = validate_chunk(chunk)
+        await ContactService.bulk_upsert(valid_rows, tenant_id, batch_id)
+        
+        # Publish progress to Redis for WebSocket broadcast
+        await redis.publish(f"import:{job_id}", json.dumps({
+            "processed": processed_count, "total": total_rows, "failed": len(failed_rows)
+        }))
+        
+        # Update the jobs table for HTTP polling fallback
+        db.table("jobs").update({"progress": processed_count}).eq("id", job_id).execute()
+```
+
+### Step 5: Validation inside `ContactService.bulk_upsert()`
+```python
+def bulk_upsert(contacts: list, tenant_id: str, batch_id: str):
+    valid_rows, errors = [], []
+    seen_emails = set()  # In-memory deduplication within this chunk
+    
+    for row in contacts:
+        email = row.get("email", "").lower().strip()
+        
+        # Layer 1: Syntax check
+        if not validate_email(email): 
+            errors.append({"email": email, "reason": "invalid_email_syntax"})
+            continue
+        
+        # Layer 2: In-chunk deduplication
+        if email in seen_emails:
+            errors.append({"email": email, "reason": "duplicate_in_upload"})
+            continue
+        seen_emails.add(email)
+        
+        valid_rows.append({"tenant_id": tenant_id, "email": email, 
+                           "first_name": row.get("first_name"), "email_domain": email.split("@")[1],
+                           "custom_fields": row.get("custom_fields", {}), "import_batch_id": batch_id})
+    
+    # Layer 3: Database upsert — existing emails UPDATE, new emails INSERT
+    db.table("contacts").upsert(valid_rows, on_conflict="tenant_id,email").execute()
+    return valid_rows, errors
+```
+
+### Step 6: Frontend Polls + Receives WebSocket Updates
+```javascript
+// Dual tracking: WebSocket for live updates, HTTP polling as fallback
+const ws = new WebSocket(`ws://api/ws/import/${job_id}`);
+ws.onmessage = (event) => setProgress(JSON.parse(event.data));
+
+// HTTP polling fallback every 3 seconds
+const poll = setInterval(async () => {
+  const res = await fetch(`/contacts/jobs/${job_id}`);
+  const job = await res.json();
+  if (job.status === "completed") { clearInterval(poll); showResults(job); }
+}, 3000);
+```
+
+---
+
+## 5. Plan Limit Logic — How Quota is Tracked Fairly
+
+This is one of the most critical business logic pieces in Phase 2. The wrong implementation would either allow unlimited free contacts or charge users for re-importing existing contacts.
+
+```python
+def check_plan_limits(new_contacts: list, tenant_id: str):
+    # Count how many contacts the tenant already has
+    current_count = db.table("contacts").select("id", count="exact").eq("tenant_id", tenant_id).execute().count
+    
+    # Check the tenant's plan limit
+    plan = db.table("tenants").select("plans(max_contacts)").eq("id", tenant_id).execute()
+    max_contacts = plan.data[0]["plans"]["max_contacts"] if plan.data else 500  # Fallback to 500
+    
+    # Count how many uploaded emails ALREADY exist in the database
+    # (checked in batches of 100 to avoid large SQL IN() clauses)
+    emails = [c["email"] for c in new_contacts]
+    existing_count = count_existing_emails_in_batches(emails, tenant_id, batch_size=100)
+    
+    # Only truly NEW contacts count against quota
+    net_new = len(new_contacts) - existing_count
+    
+    if current_count + net_new > max_contacts:
+        raise PlanLimitExceeded(f"Would exceed limit of {max_contacts}")
+```
+
+**Known operational behavior:** Because limit checks happen per chunk (not pre-flight on the entire file), a 200-contact import when the tenant only has room for 80 will partially succeed — the first chunk of 50 imports, the second chunk of 30 might import, and later chunks fail. This is "partial import" behavior, not atomic all-or-nothing.
+
+---
+
+## 6. Domain-Aware Filtering — How It Works
+
+Every contact stores `email_domain` extracted during import:
+```python
+email_domain = email.split("@")[1].lower()  # "john@gmail.com" → "gmail.com"
+```
+
+The `/contacts/domains` endpoint aggregates these:
+```python
+# Returns: [{"domain": "gmail.com", "count": 5420}, {"domain": "accenture.com", "count": 312}]
+db.table("contacts").select("email_domain").eq("tenant_id", tenant_id).execute()
+```
+
+Typo-domain detection uses `difflib.get_close_matches()`:
+```python
+import difflib
+known_good = ["gmail.com", "outlook.com", "yahoo.com"]
+close = difflib.get_close_matches("gmial.com", known_good, n=1, cutoff=0.8)
+# → suggests "gmail.com", flags "gmial.com" as a likely typo
+```
+
+Campaign audience targets that can be passed:
+```
+all_contacts          → No filter, all subscribers
+batch:{batch_id}      → All contacts from a specific import 
+domain:{domain}       → All contacts with a specific email domain
+batch_domain:{batch}:{domain}       → Domain-scoped to one batch
+batch_domains:{batch}:{d1},{d2}     → Multiple domains within a batch
+```
+
+---
+
+## 7. Contact Search & Suppression — What's Implemented
+
+### Search (simple text search across 3 columns):
+```python
+# From ContactService.get_contacts()
+query = db.table("contacts").select("*").eq("tenant_id", tenant_id)
+if search_query:
+    query = query.or_(f"email.ilike.%{search}%,first_name.ilike.%{search}%,last_name.ilike.%{search}%")
+```
+**What is NOT implemented:** tag search, field/operator/value segment composition, rules-based dynamic segments.
+
+### Suppression list:
+```python
+# Only returns non-subscribed statuses
+query = db.table("contacts").select("*").eq("tenant_id", tenant_id)
+            .in_("status", ["bounced", "unsubscribed", "complained"])
+```
+
+### Subscribable contacts (for campaign sending):
+```python
+# Only subscribed contacts are eligible for campaign dispatch
+query = db.table("contacts").select("*").eq("tenant_id", tenant_id).eq("status", "subscribed")
+```
+
+---
+
+## 8. Export Implementation
+
+The export endpoint dynamically discovers all custom field keys across the entire result set before building the CSV headers:
+
+```python
+def export_contacts(tenant_id: str):
+    contacts = db.table("contacts").select("*").eq("tenant_id", tenant_id).execute().data
+    
+    # Discover all unique custom field keys across all contacts
+    all_custom_keys = set()
+    for c in contacts:
+        all_custom_keys.update((c.get("custom_fields") or {}).keys())
+    
+    headers = ["email", "first_name", "last_name", "status", "tags"] + sorted(all_custom_keys)
+    
+    # Write CSV rows
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=headers)
+    writer.writeheader()
+    for c in contacts:
+        row = {k: c.get(k, "") for k in ["email", "first_name", "last_name", "status"]}
+        row["tags"] = ",".join(c.get("tags") or [])  # Tags serialized as comma-separated
+        for key in all_custom_keys:
+            row[key] = (c.get("custom_fields") or {}).get(key, "")
+        writer.writerow(row)
+    
+    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv")
+```
+
+---
+
+## 9. Known Architectural Notes
+
+- **`contact_custom_fields` table is a legacy artifact.** The current runtime stores all custom field data in `contacts.custom_fields` (JSONB). Do not implement new features against the separate `contact_custom_fields` table.
+- **Partial imports are the current behavior.** The worker chunks imports and applies plan limits chunk-by-chunk, meaning a large over-limit import partially succeeds rather than being atomically rejected. This is a known technical gap, not a bug that was missed.
+- **Hardcoded localhost URLs exist in the frontend.** `platform/client/src/app/contacts/batch/[batchId]/page.tsx` uses `http://127.0.0.1:8000` while `contacts/page.tsx` uses `http://localhost:8000`. These must be replaced with a shared `NEXT_PUBLIC_API_URL` environment variable before any staging or production deployment.
+- **The suppression route ordering matters.** `GET /contacts/suppression` must be registered BEFORE `GET /contacts/{contact_id}` in `contacts.py`. FastAPI matches routes top-to-bottom, and registering the wildcard first would cause `suppression` to be treated as a contact ID string, breaking the endpoint.
+- **`contact_activity_timeline` is not implemented.** The contact detail page shows static profile data, tags, and custom fields — but does not yet show a history of campaign sends, opens, or clicks to that contact. This requires the analytics/events infrastructure from a later phase.
+- **Soft delete is not implemented.** The `deleted_at` column and restore window described in the Phase 2 checklist has not been built. All current deletes are hard deletes.

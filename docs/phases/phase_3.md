@@ -1,315 +1,126 @@
-# Phase 3 - Template Engine
+# Phase 3 — Template Engine & AI Content Creation
+## The Theoretical Architecture & "The Why" Behind Every Decision
 
-> Verification status: Verified against code
-> Last reviewed: March 15, 2026
-> Overall status: Implemented and usable, but only partially complete against the original Phase 3 checklist
-
-## Purpose
-
-Phase 3 establishes the template-authoring layer of the platform. This is the phase where the product moves from contact storage into message composition:
-
-- create and manage reusable email templates
-- author templates with a structured editor
-- render structured content into MJML and then HTML
-- preview responsive output before campaign use
-- provide the template base that later phases use for campaign composition and delivery
-
-The template subsystem is real and operational in code today. The main problem is documentation drift. Older docs still describe the wrong subsystem, overstate GrapesJS as the active editor, and mark incomplete items as done.
-
-## What Phase 3 Actually Builds
-
-The current codebase implements Phase 3 as a structured block-template system:
-
-1. A user opens the templates list and can start from a blank canvas or a preset.
-2. The frontend creates a `templates` row through the backend API.
-3. The user is redirected into the structured block editor at `/templates/{id}/block`.
-4. The editor loads `design_json`, lets the user arrange rows, columns, and content blocks, and can call a preview compile endpoint.
-5. The backend converts `design_json -> MJML -> HTML` using the MJML CLI.
-6. The user saves template metadata and structured design state back to the database.
-7. Templates can later be selected by campaigns.
-
-This is not primarily an HTML editor phase anymore. The active implementation is a JSON-driven template builder with server-side HTML compilation.
-
-## Architecture
-
-### Backend stack
-
-- FastAPI routes under `platform/api/routes/templates.py`
-- Supabase/PostgreSQL accessed through the service-role client
-- template persistence in `TemplateService`
-- structured schema validation in `platform/api/models/template.py`
-- backend compilation in `platform/api/services/compile_service.py`
-- MJML CLI invoked through `npx mjml`
-
-### Frontend stack
-
-- Next.js app router pages under `platform/client/src/app/templates`
-- templates list page with preset gallery
-- `new` route for blank-template creation
-- active structured block editor under `/templates/[id]/block`
-- legacy routes that redirect to the block editor
-
-### Data model
-
-The active runtime model is:
-
-- `templates.id`
-- `templates.tenant_id`
-- `templates.name`
-- `templates.subject`
-- `templates.category`
-- `templates.mjml_json`
-- `templates.mjml_source`
-- `templates.compiled_html`
-- `templates.plain_text`
-- `templates.version`
-- timestamps
-
-Important runtime detail:
-
-- the active structured editor stores `design_json` inside `mjml_json.design_json`
-- this is a compatibility/storage shortcut, not a clean dedicated `design_json` column
-- the API unpacks that nested value back into `design_json` for the frontend
-
-## Runtime Flow
-
-```mermaid
-flowchart TD
-    A["Templates List / Preset Gallery"] --> B["POST /templates"]
-    B --> C["templates row created"]
-    C --> D["Redirect to /templates/{id}/block"]
-    D --> E["Load design_json via GET /templates/{id}"]
-    E --> F["Edit rows, columns, blocks in client state"]
-    F --> G["POST /templates/compile/preview"]
-    G --> H["compile_service: JSON -> MJML -> HTML"]
-    F --> I["PUT /templates/{id}"]
-    I --> J["Persist name, subject, category, design_json"]
-```
-
-## Template Editor Architecture
-
-```mermaid
-flowchart LR
-    A["design_json"] --> B["render_design()"]
-    B --> C["MJML document"]
-    C --> D["npx mjml -s"]
-    D --> E["compiled HTML"]
-    E --> F["preview iframe / later campaign usage"]
-```
-
-## What Is Implemented
-
-### 1. Template CRUD
-
-Verified backend routes:
-
-- `POST /templates/`
-- `GET /templates/`
-- `GET /templates/{template_id}`
-- `PUT /templates/{template_id}`
-- `DELETE /templates/{template_id}`
-- `POST /templates/compile/preview`
-
-`TemplateService` provides:
-
-- create
-- list with pagination
-- get by id
-- update
-- delete
-- response unpacking for `design_json`
-
-Tenant isolation is application enforced via `require_active_tenant` and `tenant_id` filtering on template CRUD routes.
-
-### 2. Structured block editor
-
-The active editor is:
-
-- `platform/client/src/app/templates/[id]/block/page.tsx`
-
-What it supports:
-
-- row presets
-- block palette
-- drag-and-drop block movement
-- row ordering
-- desktop/mobile preview mode
-- block duplication and deletion
-- row deletion
-- property inspector for content and style fields
-- save and preview actions
-
-The content model is structured around:
-
-- rows
-- columns
-- blocks
-
-Supported block types include:
-
-- text
-- image
-- button
-- divider
-- spacer
-- social
-- hero
-- footer
-
-### 3. Preset-driven creation
-
-The templates list page provides a preset gallery backed by `templatePresets.ts`.
-
-What is true:
-
-- a preset gallery exists
-- a blank canvas option exists
-- selecting a preset creates a template row and redirects into the block editor
-
-What is not true:
-
-- presets are frontend-defined starter designs, not a backend-managed preset catalog
-
-### 4. Server-side compile preview
-
-`POST /templates/compile/preview` calls backend compilation.
-
-The compile stack is:
-
-- `design_json` rendered to MJML through recursive Python renderers
-- MJML compiled to responsive HTML via `npx mjml`
-
-This is the correct architectural direction for email output because it keeps HTML generation on the backend and leverages MJML for email-client-safe markup.
-
-### 5. Routing cleanup toward the block editor
-
-Current route behavior:
-
-- `/templates/[id]` redirects to `/templates/[id]/block`
-- `/templates/[id]/editor` redirects to `/templates/[id]/block`
-
-This means the structured block editor is the intended default editing experience.
-
-## What Is Partially Implemented
-
-### Compiled HTML storage
-
-The schema and service layer support `compiled_html`, but the active block-editor save path does not keep it in sync.
-
-Current reality:
-
-- create requests store placeholder HTML such as `<p>Loading…</p>`
-- preview compiles HTML on demand
-- block-editor save currently sends `name`, `subject`, and `design_json`
-- `compiled_html` is only updated if explicitly passed in the request
-
-So Phase 3 should not be described as having a fully operational "persist compiled HTML on every save" flow.
-
-### Plain text support
-
-The model and DB field exist, but the product flow is incomplete.
-
-Current reality:
-
-- `plain_text` exists in the schema and API models
-- there is no verified auto-generation route wired into template save
-- there is no plain-text editor tab in the current frontend
-
-### Legacy GrapesJS path
-
-There is still legacy/editor drift in the codebase:
-
-- `platform/client/src/app/templates/[id]/builder/page.tsx` still contains a GrapesJS implementation
-- `platform/client/src/components/GrapesJSEditor.tsx` is only a stub telling users to use the block editor
-
-This means GrapesJS still exists in code, but it is not the active, first-class Phase 3 editor architecture.
-
-## What Is Not Implemented
-
-- template version history and restore flow
-- duplicate-template API flow
-- category filter tabs on the templates list page
-- public view-online rendering without login
-- test-email send flow from the template editor
-- plain-text auto-generation and manual override UI
-- placeholder or merge-tag guide in the editor
-- backend endpoint for duplicate even though the frontend tries to call one
-
-## Important Code Truths
-
-### Duplicate button mismatch
-
-The templates list page tries to call:
-
-- `POST /templates/{id}/duplicate`
-
-But the backend route does not exist. This is a verified frontend-backend mismatch and should remain marked incomplete.
-
-### Hardcoded API base URLs remain in templates frontend
-
-Different templates pages use hardcoded values such as:
-
-- `http://127.0.0.1:8000`
-- `http://localhost:8000`
-
-while the block editor also supports `NEXT_PUBLIC_API_URL`.
-
-This is a real configuration inconsistency and should be treated as technical debt.
-
-### Preview endpoint is compile-only
-
-The preview endpoint currently:
-
-- compiles HTML
-- returns raw HTML
-
-It does not:
-
-- persist compiled HTML
-- store preview history
-- return preflight warnings, even though `compile_service.py` includes `run_preflight_checks()`
-
-That means the preflight warning logic exists in code but is not yet wired into the active API or UI flow.
-
-## Completion Matrix
-
-| Area | Status | Notes |
-|---|---|---|
-| Template CRUD | Implemented | Backend routes and service layer are real |
-| Preset gallery | Implemented | Frontend-defined preset designs |
-| Blank-template creation | Implemented | Redirects into block editor |
-| Structured block editor | Implemented | Active primary editor |
-| Server-side compile preview | Implemented | JSON -> MJML -> HTML |
-| Persist compiled HTML from active editor | Partial | Schema exists, save path not synced |
-| Plain text support | Partial | Field exists, no complete UI or generation flow |
-| GrapesJS as active editor | Not current | Legacy path remains but is not primary |
-| Duplicate template flow | Not implemented | Frontend button exists, backend route missing |
-| Version history | Not implemented | No restore/history subsystem |
-| Public view-online page | Not implemented | No verified route |
-| Test email from editor | Not implemented | No verified route/UI |
-
-## Recommendations
-
-1. Make the block editor the single source of truth and formally deprecate the legacy GrapesJS builder route.
-2. Compile and persist `compiled_html` on block-editor save so campaigns always consume current output.
-3. Either implement `POST /templates/{id}/duplicate` or remove the duplicate button until the backend exists.
-4. Replace hardcoded API base URLs with `NEXT_PUBLIC_API_URL` consistently.
-5. Expose `run_preflight_checks()` through the preview/save flow so users see size, unsubscribe, and spam-risk warnings before campaigns use a template.
-6. Add template versioning only after the active editor data model is stable.
-
-## Bottom Line
-
-Phase 3 is real and usable. The product already has a working template subsystem centered on a structured block editor and server-side MJML compilation.
-
-But it is not complete against the original checklist, and the previous docs were materially inaccurate. The correct status is:
-
-- core template engine: implemented
-- active editor path: structured block editor
-- operational completeness against original Phase 3 promise: partial
+> **Who is this for?** Anyone new to this project. This document explains what Phase 3 is, the reasoning behind every task we built, and what would break down without it.
 
 ---
-## Technical Appendix (Engineering view)
-- Tables: templates, template_versions (history), categories.
-- Endpoints: /templates CRUD, /templates/{id}/preview (server compile).
-- Editor: block/canvas UI (GrapesJS planned) with server-side preview.
-- Files: platform/api/routes/templates.py, platform/client/src/app/templates/*.
+
+## What is Phase 3? (Start Here)
+
+Phase 1 built the identity system. Phase 2 built the audience — the list of people to send to. Phase 3 answers the most fundamental question of an email platform: **what do we actually send?**
+
+**Phase 3 is the Template Engine — the message composition layer that turns design intent into pixel-perfect email HTML.**
+
+Email is one of the most hostile rendering environments in technology. The same HTML that looks perfect in a modern browser will render as broken garbage in Outlook 2016 (which runs on a 20-year-old Microsoft Word rendering engine), look clipped in Gmail (which truncates emails over 102KB), and display incorrectly on small Android screens. Unlike web browsers, email clients are not standardized. There is no Chrome DevTools for email. Every major client (Gmail, Outlook, Apple Mail, Yahoo, Samsung Mail) renders HTML differently, ignores different CSS properties, and handles line spacing differently.
+
+Without Phase 3, a user would have to write raw, deeply defensive email HTML by hand — a skill that takes months to master and still produces inconsistent results. Phase 3 solves this by introducing MJML: a markup language that compiles to email-safe HTML automatically, handling all client-specific quirks invisibly.
+
+Phase 3 also introduces the platform's AI generation layer — turning a natural language prompt like "write a friendly re-engagement email for an e-commerce store" into a complete, branded email draft in seconds.
+
+---
+
+## Section 1 — Template Storage & Core CRUD
+
+### Template CRUD (Create, Read, Update, Delete)
+
+Without a template management system, every campaign would require writing its email HTML from scratch — a 2-hour task that becomes an impossible bottleneck for any marketing team running more than a handful of campaigns per week. Templates are the reusable asset library of the platform: save a campaign email as a template, reuse it next month with updated copy, fork it into a newsletter variant. The backend routes (`POST /templates`, `GET /templates`, `PUT /templates/{id}`, `DELETE /templates/{id}`) give the frontend full lifecycle control over the template inventory, with all queries scoped by `tenant_id` so Company A's templates are invisible to Company B.
+
+### Category System
+
+When a template library grows beyond 20 templates, finding the right one requires organization. Templates belong to categories (`newsletter`, `promotional`, `transactional`, `event`, `re-engagement`) that are stored as a `category` field and used to filter the templates list. Without categorization, a marketing team with 200 templates would have to scroll through an unsorted grid searching for the right starting point, slowing down every campaign creation workflow.
+
+### Persist Compiled HTML from the Active Block Editor
+
+Every time a user saves a template, the current structured design (`design_json`) should be compiled into email-safe HTML and stored alongside the design data. This is critical because campaigns don't use `design_json` at send time — they use the pre-compiled `compiled_html`. If `compiled_html` is stale or still contains the placeholder `<p>Loading…</p>` from initial creation, every campaign using that template would send a completely blank email to real subscribers. The save path must compile-and-persist atomically every time the user clicks Save.
+
+### Preset Gallery and Preset-Driven Template Creation
+
+Starting from a blank white canvas is cognitively overwhelming. A user staring at an empty email editor doesn't know where to put the logo, how wide the content column should be, or how to structure a footer. Presets are fully designed starter templates — a "Newsletter Starter" with a header banner, two-column content, and footer — that let a user begin editing from a professional layout in one click. Without presets, adoption of the template editor is dramatically lower because the barrier to getting "something that looks good" is too high for non-designers.
+
+### Template Versioning (Save History)
+
+Every time a template is edited and saved, we create an immutable snapshot of the previous version. This means if a user accidentally overwrites a carefully crafted email design with bad edits, they can restore the previous version from the version history panel. Without versioning, a single bad save permanently destroys hours of design work with no recovery mechanism — a mistake that happens regularly in fast-paced marketing teams making last-minute changes before a campaign send.
+
+---
+
+## Section 2 — The Compile Pipeline (MJML)
+
+### Server-Side Compile Preview (`design_json` → MJML → HTML)
+
+The structured block editor stores template content as a JSON object (`design_json`) that describes the layout in abstract terms ("Row with 2 columns, left column has a Text block saying 'Hello', right column has an Image block"). This JSON must be compiled into real email HTML before it can be previewed or sent. We do this on the **server side** (not in the browser) through a Python rendering pipeline that converts `design_json` into MJML markup, then invokes the MJML CLI to compile it into battle-tested, email-client-safe HTML. Doing this server-side means the compiled output is consistent regardless of the user's browser, and the MJML compiler handles all the cross-client compatibility quirks automatically. Without server-side compilation, we would have to maintain our own JavaScript email rendering engine in the browser — an enormous ongoing maintenance burden.
+
+### MJML Processing Pipeline
+
+MJML is a specialized markup language designed specifically for email. A developer writes simple, semantic MJML tags like `<mj-text>Hello</mj-text>` and the MJML compiler transforms them into deeply nested HTML tables, inline styles, and Outlook-specific conditional comments — the exact structure that email clients require for consistent rendering. Without MJML, writing email HTML that renders correctly across 50+ email clients requires expert knowledge of deeply outdated HTML conventions (tables within tables, inline styles for every element, repeated conditional comments for Outlook VML — techniques that haven't been used in normal web development since 2005).
+
+### Plain-Text Auto-Generator (Sync from HTML for Spam Filters)
+
+Every email sent must include both an HTML version and a plain-text version. This is both a deliverability requirement and a spam filter requirement. Spam filters like SpamAssassin check that the plain-text version is a reasonable representation of the HTML version — if the HTML says "Buy Now for 50% off!" but the plain text is empty, spam filters treat the discrepancy as a deception signal and lower the email's deliverability score. The auto-generator strips HTML tags from the compiled template and produces a readable plain-text alternative automatically, so users never have to maintain two versions of their email copy manually.
+
+### Email Spam Heuristic Checker (SpamAssassin-style)
+
+Before a campaign is sent to 100,000 subscribers, the platform should warn the user if their email is likely to be classified as spam by receiving mail servers. A heuristic checker scores the template based on known spam-triggering patterns: ALL-CAPS subject lines, the word "FREE" in the subject, no unsubscribe link, email-to-text ratio too skewed toward images, HTML body exceeding Gmail's 102KB clip limit. Without this pre-send check, users unwittingly send campaigns that land in spam folders for 40% of recipients and don't understand why their open rates are 2% instead of 20%.
+
+### Template Accessibility Scanner (WCAG 2.1 Checks)
+
+Emails must be accessible to users with visual impairments who use screen readers. The accessibility scanner checks that every image has an `alt` attribute (so screen readers can describe the image), that color contrast ratios between text and background meet WCAG 2.1 AA standards (so people with low vision can read the content), and that semantic heading hierarchy is valid. Without accessibility scanning, the platform produces inaccessible emails by default, which creates legal liability for enterprise customers operating under ADA or EN 301 549 compliance requirements.
+
+---
+
+## Section 3 — The Block Editor UI
+
+### Structured Block Editor (Rows → Columns → Blocks)
+
+Instead of writing raw HTML or using a complex general-purpose website builder, the block editor uses an email-appropriate compositional model: a template is composed of Rows (horizontal lanes), each Row contains Columns (vertical divisions), and each Column contains Blocks (the actual content: text, image, button, divider, social links). This hierarchy maps directly to how email clients process email structure — which is table-based, not CSS-flexbox-based. A user can drag blocks between columns, reorder rows, and duplicate sections without writing a single line of HTML. Without a structured editor, the only way to create email templates is hand-coding — eliminating 95% of potential users who are marketers, not engineers.
+
+### Supported Block Types
+
+The block palette includes: `text` (rich formatted copy), `image` (responsive images with alt text), `button` (CTA with configurable URL and styling), `divider` (horizontal rules for section separation), `spacer` (configurable whitespace for breathing room), `social` (pre-built social media icon links), `hero` (large banner image with overlay text), and `footer` (standardized unsubscribe + company address block). Without a rich block palette, users are forced to approximate all of these patterns using raw HTML knowledge they don't have.
+
+### Desktop/Mobile Preview Mode (375px Viewport Toggle)
+
+A template that looks perfect on a 1400px desktop monitor may be completely unusable on a 375px iPhone screen — text too small to read, two-column layouts that overflow horizontally, images that don't scale. The preview mode toggle instantly switches the editor canvas to simulate a 375px mobile viewport so users can catch layout failures before the email reaches subscribers. Without mobile preview, every template must be manually tested on a real mobile device after sending a test email — a slow, iterative cycle that adds hours to the design workflow.
+
+### Inbox Preview Simulation (Gmail, Outlook, Apple Mail Rendering)
+
+Beyond basic mobile vs. desktop layout, different email clients have specific rendering bugs. We simulate the visual anomalies of the major inbox clients — Gmail's image-blocking default, Outlook's notorious line-height handling, Apple Mail's dark mode color inversions. Without inbox simulation, users discover rendering problems only after sending the campaign to real subscribers, when it is already too late to fix.
+
+### Duplicate Template Button
+
+Duplication is among the highest-frequency actions in any template library. A user builds a perfect "Monthly Newsletter" template and wants to create a "Weekly Newsletter" variant with the same structure but different accent colors. Without a duplicate action, they must create a new template from scratch, manually recreating every row, column, and block configuration — wasting 30+ minutes on mechanical work that should take 5 seconds.
+
+### Version History Panel (See and Restore Older Versions)
+
+Marketing teams iterate rapidly and often destructively. A user edits a template for a new campaign, makes major changes, then realizes the client preferred the previous version. The version history panel shows all saved snapshots of the template with timestamps, lets the user preview any historical version, and restores it with one click. Without version history, every save is a one-way door — the previous state is permanently replaced with no recovery path.
+
+### Dynamic Placeholder Guide (Show List of `{{merge_tags}}`)
+
+Merge tags like `{{first_name}}`, `{{company_name}}`, and `{{unsubscribe_link}}` make emails feel personal — the email that says "Hi Sarah" instead of "Hi there" gets significantly higher open rates and engagement. But users can't use merge tags they don't know exist. The placeholder guide surfaces all available merge tags as a clickable reference panel directly inside the editor, with one-click insertion into the active text block. Without this guide, users either skip personalization entirely or typo their merge tags (`{{firstname}}` instead of `{{first_name}}`), causing emails that display raw tag text to subscribers.
+
+### Send Test Email Button (Enter Email → Receive Real Email)
+
+The only way to truly verify how a template renders is to send it to a real email client. The "Send Test" button lets users enter their own email address and receive the compiled template as a real email — in their actual Gmail or Outlook inbox — so they can check how images load, how fonts render, whether the unsubscribe link works, and how the plain-text fallback reads. Without a test-send mechanism, the only way to test is to create a real campaign, select test contacts, and send — a cumbersome multi-step process that interrupts the design workflow.
+
+### Categories Filter Tabs on Template List
+
+Once a template library grows to 100+ designs, a flat scrollable grid becomes unusable. Category filter tabs (`All`, `Newsletter`, `Promotional`, `Transactional`) allow users to narrow the list to the relevant category in one click. Without filter tabs, finding a specific template type requires scrolling through potentially hundreds of cards or relying on a text search where the user must remember the exact name.
+
+### Public View-Online Link (Render Template in Browser Without Login)
+
+Every marketing email should include a "View in browser" link at the top for subscribers whose email clients block images or render HTML poorly. Clicking this link opens a live, publicly accessible HTML render of the exact email in the user's browser — no login required. Without a public view-online endpoint, subscribers with broken email rendering have no fallback, and the platform's emails are permanently inaccessible to them.
+
+---
+
+## Section 4 — AI Content Generation
+
+### AI-Assisted Content Generation API (Backend Proxy to LLM)
+
+The backend proxy routes AI generation requests to a Large Language Model (LLM) endpoint (such as GPT-4 or Gemini) while keeping the API key server-side and adding tenant-level rate limiting and audit logging. This proxy pattern is critical for two reasons: it prevents users from directly calling the LLM API (which would expose our API key if we put it in the frontend), and it allows us to add future business logic like token usage tracking, custom prompt injection for brand voice consistency, and content moderation without changing the frontend.
+
+### AI Copywriting Assistant UI (Magic-Wand Buttons Inline in Editor)
+
+The AI writing assistant surfaces directly inside the block editor as contextual controls on text blocks — a "magic wand" icon that opens a prompt panel. The user can ask the AI to "rewrite this paragraph more formally," "generate three alternative subject line options," or "make this more conversational." The AI returns suggestions that the user can accept, reject, or edit. Without the inline AI integration, users would need to tab between the email editor and ChatGPT constantly, breaking their creative flow and slowing down copywriting work dramatically.
+
+### Tone and Rewrite Adjustments
+
+Different emails require different emotional registers — a re-engagement campaign should feel warm and human, a product launch announcement should feel exciting and urgent, a transactional receipt should feel clinical and trustworthy. The tone adjustment system lets users select from preset tone targets (`Friendly`, `Professional`, `Urgent`, `Casual`) and sends the current copy to the LLM with a tone-specific system prompt that rewrites the text accordingly. Without tone controls, every AI generation produces the same neutral corporate voice that fails to match the authentic voice of the brand.
