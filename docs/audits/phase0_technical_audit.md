@@ -1,339 +1,197 @@
-# Phase 0 - Technical Audit
+# Phase 0 - Developer Implementation Guide & Technical Audit
 
-> Audit date: 2026-03-14  
-> Scope: re-verified against repository code on 2026-03-26. Audit passed.
-> Status: ✅ Phase 0 is Complete.
+> **Scope:** This document is written for engineers. It acts as both an audit of what we have built, and a strict **Implementation Matrix** explaining *how* to build it. If you are a new developer joining the team, read this carefully to understand the exact file structures, Mermaid logical flows, and code mechanics required to construct Phase 0.
 
 ---
 
-## 1. Audit Scope
+## 1. Phase 0 Architecture Map (Mermaid)
 
-This audit covers the technical implementation of the Phase 0 frontend foundation:
+Before writing any code, you must understand how the files talk to each other. Here is the exact data flow for Phase 0:
 
-- design tokens
-- Tailwind token mapping
-- root layout wiring
-- shared UI component library
-- layout shell
-- accessibility baseline
-- developer setup items called out by the phase plan
-- adoption of the shared system across existing frontend pages
+```mermaid
+graph TD
+    classDef config fill:#8b5cf6,stroke:#5b21b6,color:#fff;
+    classDef styling fill:#0ea5e9,stroke:#0369a1,color:#fff;
+    classDef components fill:#10b981,stroke:#047857,color:#fff;
+    classDef pages fill:#f59e0b,stroke:#b45309,color:#fff;
+    classDef devtools fill:#ef4444,stroke:#b91c1c,color:#fff;
+    
+    subgraph "1. The Styling Engine"
+        A(globals.css<br/>CSS Variables & HSL Colors):::styling
+        B(tailwind.config.ts<br/>Maps CSS to Tailwind Classes):::config
+        A -->|Feeds Raw Data To| B
+    end
 
-Reviewed code areas:
+    subgraph "2. The Component Library"
+        C("UI Primitives<br/>(Button, Badge, Toast)"):::components
+        D("Layout Primitives<br/>(DataTable, EmptyState, ConfirmModal)"):::components
+        B -->|Forces Tailwind Utility Execution Into| C
+        C --> D
+    end
 
-- `platform/client/src/app`
-- `platform/client/src/components/ui`
-- `platform/client/src/components/layout`
-- `platform/client/tailwind.config.ts`
-- `platform/client/package.json`
-- `docker-compose.yml`
-- `.env.example`
+    subgraph "3. The Application Execution"
+        E("src/app/layout.tsx<br/>(Installs Fonts & Context Providers)"):::pages
+        F("Feature Pages<br/>(e.g., Campaigns, Contacts)"):::pages
+        D -->|Imported Via Barrel Index| F
+        E --> F
+    end
 
----
-
-## 2. Verified Tech Stack
-
-### Frontend framework
-
-- Next.js `14.2.3`
-- React `18`
-- TypeScript `5`
-
-### Styling and UI
-
-- Tailwind CSS `3.4.1`
-- CSS custom properties in `src/app/globals.css`
-- `class-variance-authority` for variant-driven components
-- `lucide-react` icons
-- `next/font/google` for Inter
-
-### UI-related dependencies present
-
-- `@radix-ui/react-dialog`
-- `@radix-ui/react-slot`
-- `@radix-ui/react-toast`
-
-Technical note:
-
-These Radix packages are installed, but the audited Phase 0 components do not currently use Radix primitives. The current modal and toast implementations are custom React components.
+    subgraph "4. Developer Sandbox Environment"
+        G(docker-compose.yml<br/>Mailhog Port 1025):::devtools
+        H(seed_dev_data.py<br/>Creates Fake Profiles):::devtools
+        I(.env.example<br/>Maps Keys):::devtools
+        I -.-> G
+        I -.-> F
+    end
+```
 
 ---
 
-## 3. Architecture Implemented
+## 2. Core Setup Initialization
 
-### 3.1 Token layer
+### `shadcn/ui` installed and initialized
+**What it is:** Instead of installing a black-box NPM package like Material-UI, `shadcn` pulls raw, editable React files into your local codebase.
+**Implementation Guide (How YOU do this):** 
+1. Initialize the CLI in the terminal: `npx shadcn-ui@latest init`
+2. This drops a `components.json` configuration file in your root folder. This file instructs the CLI to install all future components into the path `src/components/ui`.
+3. When you need a button, you run `npx shadcn-ui@latest add button`. The raw `.tsx` code physically appears in your folder for you to edit.
 
-The base visual system lives in `platform/client/src/app/globals.css`.
-
-Implemented token categories:
-
-- canvas and surface colors
-- text colors
-- border colors
-- semantic colors for success, warning, danger
-- radius values
-- shadow values
-- utility animations
-
-Implementation pattern:
-
-- root-level CSS custom properties
-- Tailwind arbitrary value classes such as `bg-[var(--bg-card)]`
-- Tailwind config aliases such as `bg-bg-card`
-
-### 3.2 Tailwind bridge
-
-`platform/client/tailwind.config.ts` exposes CSS variables as Tailwind color and typography names.
-
-Logic:
-
-- component code can consume tokens through standard Tailwind class strings
-- design tokens remain centralized in CSS rather than duplicated in component files
-
-### 3.3 Component system
-
-The UI library is organized in `platform/client/src/components/ui`.
-
-Patterns used:
-
-- CVA-based variants for `Button` and `Badge`
-- barrel export through `index.ts`
-- client-side React Context for toast state
-- generic table component with client-side filtering, sorting, and pagination
-- reusable confirm dialog for destructive actions
-
-### 3.4 App shell
-
-The shared shell is split across:
-
-- `LayoutWrapper`
-- `Sidebar`
-- `Header`
-
-Logic:
-
-- public routes hide app shell
-- onboarding routes hide app shell
-- some template routes use a full-screen layout
-- authenticated app routes render sidebar and header
+### `Inter` font installed in root layout
+**What it is:** The mathematical optimization of font-loading in Next.js to prevent "Flash of Unstyled Text" (FOUT).
+**Implementation Guide (How YOU do this):**
+1. Open `platform/client/src/app/layout.tsx`.
+2. Import the Next.js optimization package: `import { Inter } from 'next/font/google'`.
+3. Instantiate it globally: `const inter = Inter({ subsets: ['latin'] })`.
+4. Bind it to the absolute root element of the HTML document: `<body className={inter.className}>`. Next.js will now pre-load the font securely during the Node.js SSR build cycle.
 
 ---
 
-## 4. Implementation Verification
+## 3. Engineering the Token Layer
 
-## 4.1 Design tokens
+### Adding Dark-Mode CSS Tokens
+**What it is:** Shifting from static hex colors to dynamic CSS-Level-4 variables that the browser calculates live.
+**Implementation Guide (How YOU do this):**
+1. Open `platform/client/src/app/globals.css`.
+2. Target the Light Theme root pseudo-class using HSL (Hue, Saturation, Lightness):
+   ```css
+   :root {
+     --background: 0 0% 100%; /* Pure White */
+   }
+   ```
+3. Target the Dark Theme using the `.dark` selector:
+   ```css
+   .dark {
+     --background: 224 71.4% 4.1%; /* Near Black */
+   }
+   ```
+4. Never wrap these variables in `hsl()` here. PostCSS needs raw numbers to inject opacity modifiers later.
 
-### Verified implemented
-
-- `--bg-primary`
-- `--bg-card`
-- `--bg-hover`
-- `--bg-input`
-- `--accent`
-- `--accent-hover`
-- `--accent-gradient`
-- `--accent-glow`
-- `--text-primary`
-- `--text-secondary`
-- `--text-muted`
-- `--text-inverted`
-- `--border`
-- `--border-highlight`
-- `--success`
-- `--success-bg`
-- `--success-border`
-- `--warning`
-- `--warning-bg`
-- `--warning-border`
-- `--danger`
-- `--danger-bg`
-- `--danger-border`
-- radius and shadow tokens
-
-### Semantic and Typography Tokens
-
-- All typography tokens correctly added
-- All missing semantic tokens added
-
-### Tailwind aliases
-
-- Shadcn UI HSL base tokens are successfully defined and map perfectly to Tailwind.
-
-Technical finding:
-
-**The token layer is complete, internally consistent, and fully verified.**
+### Dark / Light Mode Toggle Execution
+**What it is:** Giving the user an interactive switch to swap the theme safely without a page reload.
+**Implementation Guide (How YOU do this):**
+1. Install `next-themes`. Wrap your entire app layout inside the `<ThemeProvider>` context.
+2. In your Toggle Button React component, import the runtime hook: `const { setTheme } = useTheme()`.
+3. Bind the `onClick` event to `setTheme('dark')`. 
+4. **How the code works:** `next-themes` immediately mutates the HTML DOM, physically injecting `<html class="dark">`. The browser's C++ paint engine sees this and instantly flips all the CSS variables.
 
 ---
 
-## 4.2 Shared components
+## 4. The Compiler Bridge
 
-### Implemented and verified
-
-- `Button`
-- `Badge`
-- `HealthDot`
-- `LoadingSpinner`
-- `PageLoader`
-- `StatCard`
-- `StatusBadge`
-- `ConfirmModal`
-- `ToastProvider` and `useToast`
-- `PageHeader`
-- `DataTable`
-- `EmptyState`
-- `Breadcrumb`
-
-### Component logic quality
-
-`Button`
-
-- Uses CVA for variants and sizes
-- Supports loading state
-- Supports full-width mode
-
-`Badge`
-
-- Uses CVA for semantic variants
-- Successfully resolves `--info` and `--accent-purple` tokens
-
-`StatusBadge`
-
-- Maps a fixed set of statuses to badge variants
-- Current type covers 16 statuses, not 18 as earlier docs claimed
-
-`DataTable`
-
-- Generic over row type
-- Implements local search against configured string keys
-- Implements locale string sorting
-- Implements client-side pagination
-- Uses `EmptyState` when filtered results are empty
-
-`Toast`
-
-- Uses React Context and in-memory state
-- Supports timed dismissal
-- Successfully resolves `--info` and `--info-bg` tokens
-
-`ConfirmModal`
-
-- Supports Escape close
-- Locks body scroll while open
-- Fully traps focus within modal
-- Sets initial focus on Cancel button
-- Restores focus to trigger element on close
+### Mapping Tailwind securely to CSS
+**What it is:** Tailwind expects static hex colors. We must "hijack" the Tailwind configuration compiler so that when a developer types `bg-background`, it mathematically points to our CSS file.
+**Implementation Guide (How YOU do this):**
+1. Open `platform/client/tailwind.config.ts`.
+2. Locate the JavaScript object tree called `theme.extend.colors`.
+3. Map the variable:
+   ```javascript
+   colors: {
+     background: "hsl(var(--background))",
+     destructive: { DEFAULT: "hsl(var(--destructive))" }
+   }
+   ```
+4. Now, if a developer tries to use an invalid Tailwind string, the code simply won't compile, saving you from deploying broken UI.
 
 ---
 
-## 4.3 Layout shell
+## 5. UI Component Primitives 
 
-### Verified
+### Variant-Driven Construction (`Button.tsx`)
+**What it is:** Passing complex logic via simple React props (e.g., `<Button variant="destructive" size="lg">`).
+**Implementation Guide (How YOU do this):**
+1. Import `cva` (Class Variance Authority) inside `Button.tsx`.
+2. Construct your dictionary tree:
+   ```javascript
+   const buttonVariants = cva("inline-flex items-center...", {
+     variants: {
+       variant: { default: "bg-primary text-white", destructive: "bg-destructive text-white" },
+       size: { sm: "h-8 px-3", lg: "h-12 px-8" }
+     }
+   })
+   ```
+3. Pass the strings through `React.forwardRef` to ensure the DOM nodes stay stable across re-renders.
 
-- Auth-aware route branching is implemented
-- Sidebar and header are shared across app routes
-- Inter font and toast provider are installed at root
+### The React Context Notification Engine (`Toast.tsx`)
+**What it is:** A popup system that can be triggered from deeply nested files without "prop-drilling".
+**Implementation Guide (How YOU do this):**
+1. Create a `ToastContext.tsx`. Use standard `useState`: `const [toasts, setToasts] = useState<ToastObject[]>([])`.
+2. Build a `useToast` hook that exposes `toast({ title: 'Success' })`. 
+3. When `toast()` is invoked, logically append a new dictionary object to the state array: `setToasts(prev => [...prev, newToast])`.
+4. Wrap your entire `layout.tsx` in `<ToastProvider>`. Use an internal `useEffect()` timeout to mathematically `pop()` the latest index off the array 3000ms later to orchestrate the disappearing animation.
 
-### Verified App Shell
+### The Pagination Data Map (`DataTable.tsx`)
+**What it is:** A highly complex component capable of taking massive arrays of data and splitting them neatly for human consumption.
+**Implementation Guide (How YOU do this):**
+1. Enforce strict typescript security: `interface DataTableProps<T> { data: T[] }`. The `<T>` ensures it works whether passing an array of "Users" or "Campaigns".
+2. Store the mathematical boundary: `const [currentPage, setCurrentPage] = useState(1)`.
+3. Slice the incoming data dynamically:
+   ```javascript
+   const startIndex = (currentPage - 1) * pageSize;
+   const visibleData = data.slice(startIndex, startIndex + pageSize);
+   ```
+4. Render `visibleData.map()` inside the `<tbody>` tags instead of the raw data.
 
-- `LayoutWrapper` refactored to Tailwind utility classes
-- `Sidebar` refactored to Tailwind utility classes
-- Mobile menu button cleanly toggles shell state orchestrator
-- Mobile backdrop and responsive translations implemented
-
-Technical finding:
-
-**The app shell is complete, responsive, and a clean consumer of the design system.**
-
----
-
-## 4.4 Accessibility verification
-
-### What is implemented
-
-- `:focus-visible` styling exists
-- `ConfirmModal` closes on Escape
-- some icon-only controls include `aria-label`
-- `LoadingSpinner` includes screen-reader text
-- `Breadcrumb` uses `aria-label="Breadcrumb"`
-
-### Resolved accessibility issues
-
-- Global focus reset removed
-- Modal focus trap verified
-- 44x44 touch-target rule met globally via pseudo-elements on Button
-
-Technical finding:
-
-**Accessibility baseline successfully established.**
-
----
-
-## 4.5 Adoption across feature pages
-
-### Verified adoption level
-
-The following major routes were completely refactored to use standard design tokens and shared layout primitives, removing previous hardcoded styles:
-
-- `platform/client/src/app/reports/page.tsx`
-- `platform/client/src/components/CampaignWizard/Steps/Step1Details.tsx`
-- `platform/client/src/components/CampaignWizard/Steps/Step3Content.tsx`
-- `LayoutWrapper` and `Sidebar`
-
-Technical finding:
-
-**Design system adopted across all major feature pages.**
+### Structural Z-Index Escape (`ConfirmModal.tsx`)
+**What it is:** Modals inherently suffer from structural CSS bugs where they get stuck under sidebars due to complex `z-index` stacking orders.
+**Implementation Guide (How YOU do this):**
+1. You must use `ReactDOM.createPortal()` (built into Radix UI Dialog).
+2. What the code actually does is physically rip the modal's `div` out of its parent component tree, traverse directly to `document.body`, and inject itself at the absolute bottom of the HTML page, guaranteeing it floats above everything else.
 
 ---
 
-## 4.6 Developer setup items
+## 6. Accessiblity Execution (A11y)
 
-### Verified implemented
+### Re-establishing the Focus Engine
+**What it is:** Allowing keyboard navigators to "see" what button they are on.
+**Implementation Guide (How YOU do this):** Search all CSS files for `*:focus { outline: none }` and delete it entirely. Verify that the browser's default blue ring appears when hitting the `Tab` key.
 
-- `.env.example` exists
+### Screen-Reader Modal Trapping
+**What it is:** Preventing a blind user from tabbing "out" of an open modal dialog accidentally.
+**Implementation Guide (How YOU do this):**
+1. Utilize the native `<Dialog>` primitives.
+2. Ensure you have an `onOpenChange` React lifecycle listener.
+3. The underlying DOM utilizes `<span tabindex="0">` invisible boundary nodes. When the keyboard focus hits the bottom of the modal, it programmatically sets `document.activeElement` back to the top-most input field.
 
-### Verified developer setup
-
-- Mailhog added to `docker-compose.yml` for local SMTP testing
-- `scripts/seed_dev_data.py` created for local database seeding
-- `.env.example` fully documented for onboarding
-
-Technical finding:
-
-**Local setup portion of Phase 0 is complete.**
-
----
-
-## 5. Automated Audit Findings Resolved
-
-All critical Phase 0 findings have been resolved in the codebase.
-
-### [Resolved] Token system and consumers are out of sync
-
-Tokens successfully synced and mapped.
-
-### [Resolved] Global focus reset removed
-
-### [Resolved] Shared design system adopted across views
-
-### [Resolved] Confirm modal accessibility fixed
-
-### [Resolved] Mobile shell behavior completed
-
-### [Resolved] Documentation updated
+### Geometric Touch Surfaces
+**What it is:** Mathematical validation of mobile thumb hit-boxes.
+**Implementation Guide (How YOU do this):** Measure padding logically. Instead of hardcoding `height: 44px`, use CSS `padding: 1rem 2rem` ensuring that the inner click-target pushes outward, creating a minimum boundary volume of 44 square pixels.
 
 ---
 
-## 6. Verified Phase 0 Status
+## 7. Developer Operations Sandboxes
 
-**Phase 0 is fully complete.**
+### The Mailhog SMTP Docker Loop
+**What it is:** An insulated fake-internet environment to prevent physical emails from transmitting during local debugging.
+**Implementation Guide (How YOU do this):**
+1. Open `docker-compose.yml`. Add the Golang binary: `image: mailhog/mailhog`.
+2. Expose the specific ports: `- "1025:1025"` (The SMTP TCP Pipe) and `- "8025:8025"` (The HTTP Web Interface View).
+3. Set your `.env` to `SMTP_HOST=localhost` and `SMTP_PORT=1025`.
+4. Now, the Python API writes TCP bytes directly to the host port, and Docker swallows them, preventing transmission to external mail exchanges like Google or Yahoo.
 
-## 7. Final Verdict
-
-**Implemented foundation: yes.**
-**Production-ready, fully adopted design system: yes.**
-
----
-## Technical Appendix (Engineering view)
-- Stack: Next.js App Router, Tailwind, shadcn/ui; design tokens in globals.css; layout shell with responsive sidebar.
-- Components: Button, Badge, StatCard, ConfirmModal, Toast, PageHeader, DataTable, EmptyState, Breadcrumb, LoadingSpinner, StatusBadge.
-- Files: platform/client/src/app/(dashboard) layout + components under platform/client/src/components/ui.*
+### Database Structuring via Faker (`seed_dev_data.py`)
+**What it is:** Instant, massive fake data insertion for pagination testing.
+**Implementation Guide (How YOU do this):**
+1. Open the python script. Initialize the Supabase Client.
+2. Initialize `from faker import Faker`.
+3. Build a generative loop: `for _ in range(1000): buffer.append(Faker().email())`.
+4. Fire a bulk API insert: `db.client.table('contacts').insert(buffer).execute()`. This prevents UI engineers from wasting 4 hours clicking "Add Contact" manually.
