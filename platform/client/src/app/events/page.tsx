@@ -11,11 +11,11 @@ import {
 const API_BASE = "http://127.0.0.1:8000";
 
 const STATUS_STYLES: Record<string, { color: string; bg: string; border: string }> = {
-    sent: { color: "#4ADE80", bg: "rgba(34,197,94,0.08)", border: "rgba(34,197,94,0.2)" },
-    sending: { color: "#60A5FA", bg: "rgba(59,130,246,0.08)", border: "rgba(59,130,246,0.2)" },
-    paused: { color: "#FDE047", bg: "rgba(234,179,8,0.08)", border: "rgba(234,179,8,0.2)" },
-    cancelled: { color: "#A1A1AA", bg: "rgba(113,113,122,0.08)", border: "rgba(113,113,122,0.2)" },
-    draft: { color: "#A1A1AA", bg: "rgba(113,113,122,0.08)", border: "rgba(113,113,122,0.2)" },
+    sent: { color: "var(--success)", bg: "var(--success-bg)", border: "var(--success-border)" },
+    sending: { color: "var(--info)", bg: "var(--info-bg)", border: "var(--border)" },
+    paused: { color: "var(--warning)", bg: "var(--warning-bg)", border: "var(--warning-border)" },
+    cancelled: { color: "var(--text-muted)", bg: "var(--bg-hover)", border: "var(--border)" },
+    draft: { color: "var(--text-muted)", bg: "var(--bg-hover)", border: "var(--border)" },
 };
 
 function timeAgo(ts: string) {
@@ -77,10 +77,10 @@ export default function EventsPage() {
 
     // Compute per-campaign dispatch stats from summary data
     const statCards = summary ? [
-        { label: "Total Emails", value: summary.total, color: "#60A5FA", icon: Zap },
-        { label: "Delivered", value: summary.sent, color: "#4ADE80", icon: Send },
-        { label: "Failed", value: summary.failed, color: "#F87171", icon: AlertTriangle },
-        { label: "Queued", value: summary.pending, color: "#FDE047", icon: Clock },
+        { label: "Total Emails", value: summary.total, color: "var(--accent)", icon: Zap },
+        { label: "Delivered", value: summary.sent, color: "var(--success)", icon: Send },
+        { label: "Failed", value: summary.failed, color: "var(--danger)", icon: AlertTriangle },
+        { label: "Queued", value: summary.pending, color: "var(--warning)", icon: Clock },
     ] : [];
 
     return (
