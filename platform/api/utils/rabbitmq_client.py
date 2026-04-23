@@ -45,6 +45,10 @@ class RabbitMQManager:
             )
             bg_queue = await self.channel.declare_queue("background_tasks", durable=True)
             await bg_queue.bind(self.bg_exchange, routing_key="task.process")
+
+            # Dedicated Import Queue
+            import_queue = await self.channel.declare_queue("import_tasks", durable=True)
+            await import_queue.bind(self.bg_exchange, routing_key="task.import")
             
             logger.info("Successfully connected to RabbitMQ and declared queues.")
         except Exception as e:
@@ -65,7 +69,7 @@ class RabbitMQManager:
             
         logger.info(f"Published {len(tasks)} messages to RabbitMQ")
 
-    async def publish_background_task(self, payload: Dict[str, Any]):
+    async def publish_background_task(self, payload: Dict[str, Any], routing_key: str = "task.process"):
         """Publish a generic background task (like CSV import)"""
         if not hasattr(self, 'bg_exchange') or not self.bg_exchange:
             await self.connect()
@@ -74,8 +78,8 @@ class RabbitMQManager:
             body=json.dumps(payload).encode(),
             delivery_mode=aio_pika.DeliveryMode.PERSISTENT
         )
-        await self.bg_exchange.publish(message, routing_key="task.process")
-        logger.info(f"Published background task {payload.get('task_type')} to RabbitMQ")
+        await self.bg_exchange.publish(message, routing_key=routing_key)
+        logger.info(f"Published background task {payload.get('task_type')} to RabbitMQ via {routing_key}")
 
     async def close(self):
         """Close connection gracefully"""
