@@ -13,6 +13,7 @@ Endpoints:
 """
 
 from fastapi import APIRouter, HTTPException, Request, Header
+from typing import Optional
 from utils.supabase_client import db
 import logging
 import json
@@ -48,7 +49,7 @@ def _resolve_tenant_ids_for_email(email: str) -> list[str]:
         return []
 
 
-def _suppress_contact(email: str, reason: str, bounce_reason=None, tenant_id: str | None = None):
+def _suppress_contact(email: str, reason: str, bounce_reason=None, tenant_id: Optional[str] = None):
     """
     Mark a contact as suppressed — SCOPED TO A SPECIFIC TENANT.
 

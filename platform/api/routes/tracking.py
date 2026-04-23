@@ -12,6 +12,7 @@ import os
 from fastapi import APIRouter, Request, Query, HTTPException
 from fastapi.responses import Response, RedirectResponse
 from utils.supabase_client import db
+from typing import Optional
 import logging
 
 # Rate limiting
@@ -97,7 +98,7 @@ def _classify_source(user_agent: str, ip: str, honeypot: bool, rapid_click: bool
 def _record_event(
     dispatch_id: str,
     event_type: str,
-    url: str | None,
+    url: Optional[str],
     ip: str,
     user_agent: str,
     source: str,
@@ -177,7 +178,7 @@ def _record_event(
 
 # ── Open Tracking ──────────────────────────────────────────────────────────────
 
-def _verify_signature(dispatch_id: str, payload: str | None, signature: str | None) -> None:
+def _verify_signature(dispatch_id: str, payload: Optional[str], signature: Optional[str]) -> None:
     if not signature:
         raise HTTPException(status_code=400, detail="missing signature")
     base = dispatch_id if payload is None else f"{dispatch_id}:{payload}"
@@ -188,7 +189,7 @@ def _verify_signature(dispatch_id: str, payload: str | None, signature: str | No
 
 @router.get("/open/{dispatch_id}")
 @limiter.limit("5000/minute")
-async def track_open(dispatch_id: str, request: Request, s: str | None = Query(None)):
+async def track_open(dispatch_id: str, request: Request, s: Optional[str] = Query(None)):
     """
     Email open tracking pixel.
     Returns a 1×1 transparent GIF. Browser loads this image on email open.
@@ -225,8 +226,8 @@ async def track_click(
     request: Request,
     u: str = Query(..., description="Destination URL (base64url encoded)"),
     d: str = Query(..., description="dispatch_id"),
-    s: str | None = Query(None, description="HMAC signature"),
-    hp: int | None = Query(None, description="Honeypot flag"),
+    s: Optional[str] = Query(None, description="HMAC signature"),
+    hp: Optional[int] = Query(None, description="Honeypot flag"),
 ):
     """
     Link click tracker.
