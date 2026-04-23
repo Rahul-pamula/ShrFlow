@@ -516,7 +516,7 @@ To support gigabyte-scale datasets without memory exhaustion, the import process
 - POST /contacts/import/initialize (Presigned URL generator)
 - POST /contacts/import/process (Signal upload completion)
 - Import rejected rows table and audit service (Partial Success logic)
-- RabbitMQ Dead-Letter Queue (DLQ) for failed chunks
+- [x] RabbitMQ Dead-Letter Queue (DLQ) for failed chunks
 - WebSocket progress updates via Redis Pub/Sub
 - Real-time contact ingestion API (POST /v1/contacts for forms/CRM webhooks)
 - Email validation: syntax check + MX record check + disposable email detection

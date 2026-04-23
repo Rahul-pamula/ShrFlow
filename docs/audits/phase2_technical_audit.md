@@ -36,7 +36,7 @@ graph TD
 
     subgraph "Message Queue"
         H["RabbitMQ import_tasks queue"]:::queue
-        I["Dead Letter Queue (DLQ)<br/>Retries after 3 failures"]:::queue
+        I["Dead Letter Queue (DLQ)<br/>Quarantines failed/poison tasks"]:::queue
     end
 
     subgraph "Background Worker"
@@ -66,7 +66,7 @@ graph TD
     K -->|"Progress events"| L
     L -->|"Redis channel"| F
     F -->|"WebSocket push"| B
-    H -.->|"Fails 3x"| I
+    H -.->|"NACK (requeue=False)"| I
     E -->|"Polls status"| O
     J -->|"Updates status"| O
 ```

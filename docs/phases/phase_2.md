@@ -47,9 +47,9 @@ Every import also creates an `import_batches` row that permanently records the f
 
 Not every row in a CSV file is valid. A user's spreadsheet might have a row with a typo in the email (`john@`, no domain), a blank row, or an email from a known disposable provider. Rather than silently skipping bad rows or rejecting the entire file, we store every failed row in `import_batches.errors` with a specific reason per row (`invalid_email`, `duplicate`, `plan_limit_exceeded`). This partial success model means a file with 10,000 valid rows and 50 bad rows will still import the 9,950 valid contacts while surfacing a precise error report. Without this, every import would be an all-or-nothing gamble — one formatting mistake in 500 rows would reject a production customer's entire list.
 
-### RabbitMQ Dead-Letter Queue (DLQ) for Failed Chunks
+### RabbitMQ Dead-Letter Queue (DLQ) for Failed Chunks (COMPLETED ✅)
 
-A Dead-Letter Queue is a special RabbitMQ destination that receives messages which have failed processing three consecutive times. If the database goes down momentarily during an import, the chunk of 500 rows that was being processed doesn't get silently lost — it goes to the DLQ. An engineer can inspect the DLQ, diagnose the failure, and re-queue those rows for reprocessing. Without a DLQ, any transient infrastructure failure during an import permanently loses a portion of the user's contact data with no recovery path and no alert that anything went wrong.
+A Dead-Letter Queue is a special RabbitMQ destination that receives messages which have failed processing after a rejection without requeue. If a "poison message" (a message that causes a crash) enters the system, or if the database goes down momentarily, the chunk of rows doesn't get silently lost or stuck in an infinite loop — it goes to the `failed_tasks` queue. An engineer can inspect the DLQ, diagnose the failure, and re-queue those rows for reprocessing. We implemented the `dead_letter_exchange` and `failed_tasks` queue to ensure that no user data is ever permanently lost during infrastructure hiccups.
 
 ### WebSocket Progress Updates via Redis Pub/Sub
 
