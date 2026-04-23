@@ -445,7 +445,7 @@ class ContactService:
         offset = (page - 1) * limit
         
         result = db.client.table("contacts")\
-            .select("id, email, first_name, last_name, status, created_at", count="exact")\
+            .select("id, email, first_name, last_name, status, bounce_reason, created_at", count="exact")\
             .eq("tenant_id", tenant_id)\
             .in_("status", ["bounced", "unsubscribed", "complained"])
             

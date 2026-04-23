@@ -31,6 +31,7 @@ interface SuppressedContact {
     first_name: string | null;
     last_name: string | null;
     status: string;
+    bounce_reason?: string;
     created_at: string;
 }
 
@@ -131,12 +132,16 @@ export default function SuppressionListPage() {
                                         {[c.first_name, c.last_name].filter(Boolean).join(" ") || "—"}
                                     </td>
                                     <td style={{ padding: "16px 24px" }}>
-                                        <span style={{
-                                            padding: "4px 10px", borderRadius: "16px", fontSize: "12px", fontWeight: 600, textTransform: "capitalize",
-                                            backgroundColor: c.status === "bounced" ? `${colors.statusError}15` : `${colors.statusWarning}15`,
-                                            color: c.status === "bounced" ? colors.statusError : colors.statusWarning,
-                                            display: "inline-flex", alignItems: "center", gap: "4px"
-                                        }}>
+                                        <span 
+                                            title={c.bounce_reason || "No bounce reason recorded"}
+                                            style={{
+                                                padding: "4px 10px", borderRadius: "16px", fontSize: "12px", fontWeight: 600, textTransform: "capitalize",
+                                                backgroundColor: c.status === "bounced" ? `${colors.statusError}15` : `${colors.statusWarning}15`,
+                                                color: c.status === "bounced" ? colors.statusError : colors.statusWarning,
+                                                display: "inline-flex", alignItems: "center", gap: "4px",
+                                                cursor: c.bounce_reason ? "help" : "default"
+                                            }}
+                                        >
                                             <AlertTriangle style={{ width: "12px", height: "12px" }} />
                                             {c.status}
                                         </span>

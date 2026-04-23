@@ -1,19 +1,36 @@
 # ============================================================
 # Email Engine — Backend API (FastAPI)
 # ============================================================
+# ── Builder Stage ──────────────────────────────────────────
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+# Install build dependencies (e.g., gcc) if needed for some python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a virtual environment so we can easily copy it to the final stage
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY platform/api/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ── Final Stage ────────────────────────────────────────────
 FROM python:3.11-slim
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install only runtime system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies first (layer caching)
-COPY platform/api/requirements.txt ./platform/api/
-RUN pip install --no-cache-dir -r platform/api/requirements.txt
+# Copy the compiled virtual environment from the builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy source code exactly matching the nested directory structure
 COPY platform/api/ ./platform/api/
