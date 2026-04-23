@@ -11,8 +11,10 @@ from services.contact_service import ContactService
 from services.batch_service import BatchService
 from services.import_service import process_csv_import
 from utils.jwt_middleware import require_active_tenant, verify_jwt_token, JWTPayload, require_admin_or_owner, apply_data_isolation
-from utils.supabase_client import db
 from utils.file_parser import parse_file
+from utils.rabbitmq_client import mq_client
+from services.storage import get_storage_provider
+from utils.supabase_client import db
 import uuid
 
 logger = logging.getLogger("email_engine.contacts")
@@ -41,6 +43,39 @@ class BulkDeleteRequest(BaseModel):
 class UpdateContactRequest(BaseModel):
     email: str
     custom_fields: Dict[str, str] = {}
+
+
+class ImportInitializeRequest(BaseModel):
+    filename: str
+    content_type: str
+    estimated_rows: int = 0
+
+
+class ImportInitializeResponse(BaseModel):
+    job_id: str
+    upload_url: str
+    fields: Dict[str, str]
+    file_key: str
+
+
+class ImportInitializeResponse(BaseModel):
+    job_id: str
+    upload_url: str
+    fields: Dict[str, str]
+    file_key: str
+
+
+class ImportProcessRequest(BaseModel):
+    email_col: str
+    first_name_col: Optional[str] = None
+    last_name_col: Optional[str] = None
+    custom_mappings: Optional[Dict[str, str]] = None
+
+
+class ImportProcessResponse(BaseModel):
+    job_id: str
+    status: str
+    message: str
 
 
 # ===== STATS & LIST =====
@@ -117,135 +152,148 @@ async def preview_csv(
         raise HTTPException(status_code=500, detail=f"File parsing error: {str(e)}")
 
 
-@router.post("/upload/import")
-async def import_contacts(
-    file: UploadFile = File(...),
-    background_tasks: BackgroundTasks = None,
-    email_col: str = "email",
-    first_name_col: Optional[str] = None,
-    last_name_col: Optional[str] = None,
-    custom_mappings: Optional[str] = None,
-    tenant_id: str = Depends(require_active_tenant),
-    jwt_payload: JWTPayload = Depends(verify_jwt_token)
+# ===== NEW ROBUST IMPORT FLOW (PHASE 2) =====
+
+@router.post("/import/initialize", response_model=ImportInitializeResponse)
+async def initialize_import(
+    request: ImportInitializeRequest,
+    project_id: str, # For now passing via query param
+    tenant_id: str = Depends(require_active_tenant)
 ):
     """
-    Import contacts with field mapping + batch tracking.
-    
-    Supports dynamic custom fields via custom_mappings parameter:
-    custom_mappings is a JSON string like: {"phone": "Phone Number", "company": "Company Name"}
-    where keys = custom field names, values = CSV column names.
+    Step 1: Create an import job and get a presigned URL for direct S3 upload.
+    This bypasses the API for the actual file transfer.
     """
-    import json as json_lib
-    
-    # Parse custom mappings if provided
-    custom_field_map = {}
-    if custom_mappings:
-        try:
-            custom_field_map = json_lib.loads(custom_mappings)
-        except json_lib.JSONDecodeError:
-            raise HTTPException(status_code=400, detail="Invalid custom_mappings JSON")
-
     try:
-        contents = await file.read()
-        if len(contents) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=400, detail="File too large. Maximum size is 2MB.")
-
-        df = parse_file(contents, file.filename)
-
-        # Map columns with safe type conversion
-        contacts_to_import = []
-        skipped_blank = 0
-        for _, row in df.iterrows():
-            raw_email = row.get(email_col, "")
-            normalized_email = str(raw_email).strip().lower() if pd.notna(raw_email) else ""
-            custom = {}
-            if custom_field_map:
-                for field_name, csv_col in custom_field_map.items():
-                    val = row.get(csv_col, "")
-                    if pd.notna(val) and str(val).strip():
-                        custom[field_name] = str(val).strip()
-
-            meaningful_values = [normalized_email, *custom.values()]
-            if not any(value.strip() for value in meaningful_values):
-                skipped_blank += 1
-                continue
-
-            contact = {
-                "email": normalized_email,
-                "email_domain": ContactService.extract_email_domain(normalized_email),
-                "first_name": str(row.get(first_name_col, "")).strip() if first_name_col and pd.notna(row.get(first_name_col)) else "",
-                "last_name": str(row.get(last_name_col, "")).strip() if last_name_col and pd.notna(row.get(last_name_col)) else "",
-                "created_by_user_id": jwt_payload.user_id
-            }
-            
-            # Build custom fields from dynamic mapping
-            if custom:
-                contact["custom_fields"] = custom
-            
-            contacts_to_import.append(contact)
-
-        if not contacts_to_import:
+        # 1. Verify plan limits (pessimistic check)
+        can_add, stats = ContactService.check_plan_limits(tenant_id, request.estimated_rows)
+        if not can_add:
             raise HTTPException(
-                status_code=400,
-                detail=f"No valid contact rows found after skipping {skipped_blank} blank rows."
+                status_code=403, 
+                detail=f"Plan limit reached. You can only add {stats['available']} more contacts."
             )
 
-        # ── Background import via FastAPI BackgroundTasks ────────────────
-        # Runs inside the API process — no external worker required.
+        # 2. Generate unique file key
+        file_ext = request.filename.split(".")[-1] if "." in request.filename else "csv"
         job_id = str(uuid.uuid4())
+        file_key = f"imports/{tenant_id}/{job_id}.{file_ext}"
 
-        # 1. Create the persistent Job record
-        db.client.table("jobs").insert({
+        # 3. Create the job record and the batch history record
+        # We need BOTH for the foreign key constraints to pass in the worker.
+        job_data = {
+            "id": job_id,
+            "file_key": file_key,
+            "status": "initializing",
+            "total_rows": request.estimated_rows
+        }
+        
+        batch_data = {
             "id": job_id,
             "tenant_id": tenant_id,
-            "type": "csv_import",
-            "status": "pending",
-            "progress": 0,
-            "total_items": len(contacts_to_import),
-        }).execute()
-
-        # 2. Create the import batch
-        batch_id = BatchService.create_batch(
-            tenant_id=tenant_id,
-            file_name=file.filename,
-            total_rows=len(contacts_to_import),
-            imported_count=0
-        )
-
-        # 3. Schedule the import as a background task (no RabbitMQ needed)
-        background_tasks.add_task(
-            process_csv_import,
-            job_id=job_id,
-            tenant_id=tenant_id,
-            batch_id=batch_id,
-            contacts=contacts_to_import,
-        )
-
-        # 4. Return immediately — import runs in background
-        return {
-            "status": "accepted",
-            "job_id": job_id,
-            "batch_id": batch_id,
-            "message": "Import started. Poll /contacts/jobs/{job_id} for progress.",
-            "skipped_blank": skipped_blank,
-            "accepted_rows": len(contacts_to_import)
+            "file_name": request.filename,
+            "total_rows": request.estimated_rows,
+            "imported_count": 0,
+            "failed_count": 0,
+            "status": "processing"
         }
+        
+        if project_id and project_id != "default":
+            job_data["project_id"] = project_id
 
+        # Insert both
+        db.client.table("import_jobs").insert(job_data).execute()
+        db.client.table("import_batches").insert(batch_data).execute()
+
+        # 4. Generate Supabase Native Signed PUT URL
+        try:
+            url_data = db.client.storage.from_("imports").create_signed_upload_url(file_key)
+            presigned_url = url_data.get("signedUrl", url_data.get("signed_url"))
+            upload_fields = {}
+        except Exception as e:
+            logger.error(f"Failed to generate signed url: {str(e)}")
+            raise HTTPException(status_code=500, detail="Storage generation failed")
+
+        return ImportInitializeResponse(
+            job_id=job_id,
+            upload_url=presigned_url,
+            fields=upload_fields,
+            file_key=file_key
+        )
     except HTTPException:
         raise
     except Exception as e:
-        # Mark batch as failed if it was created
-        try:
-            if 'batch_id' in dir():
-                db.client.table("import_batches")\
-                    .update({"status": "failed"})\
-                    .eq("id", batch_id)\
-                    .eq("tenant_id", tenant_id)\
-                    .execute()
-                logger.error(f"[IMPORT_CRASH] tenant={tenant_id} batch={batch_id} error={str(e)}")
-        except Exception:
-            pass
-        raise HTTPException(status_code=500, detail=f"Failed to queue import: {str(e)}")
+        logger.error(f"Failed to initialize import job: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to initialize import.")
+
+
+@router.post("/import/process/{job_id}", response_model=ImportProcessResponse)
+async def process_import_signal(
+    job_id: str,
+    request: ImportProcessRequest,
+    tenant_id: str = Depends(require_active_tenant)
+):
+    """
+    Step 3: Signal that the file upload to S3 is complete.
+    This triggers the RabbitMQ worker to start parsing.
+    """
+    # 1. Fetch job to verify ownership and current status
+    job_result = db.client.table("import_jobs")\
+        .select("*")\
+        .eq("id", job_id)\
+        .eq("status", "initializing")\
+        .execute()
+    
+    if not job_result.data:
+        # Check if it exists but is already processing
+        existing = db.client.table("import_jobs").select("status").eq("id", job_id).execute()
+        if existing.data:
+            return ImportProcessResponse(
+                job_id=job_id,
+                status=existing.data[0]["status"],
+                message="Job is already further in the pipeline."
+            )
+        raise HTTPException(status_code=404, detail="Import job not found or not in 'initializing' state.")
+
+    job = job_result.data[0]
+
+    # 2. Update status to 'pending'
+    try:
+        db.client.table("import_jobs")\
+            .update({"status": "pending"})\
+            .eq("id", job_id)\
+            .execute()
+    except Exception as e:
+        logger.error(f"Failed to update job status: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update job status in database.")
+
+    # 3. Publish to RabbitMQ
+    try:
+        task_payload = {
+            "task_type": "contact_import",
+            "job_id": job_id,
+            "tenant_id": tenant_id,
+            "project_id": job.get("project_id"),
+            "file_key": job["file_key"],
+            "email_col": request.email_col,
+            "first_name_col": request.first_name_col,
+            "last_name_col": request.last_name_col,
+            "custom_mappings": request.custom_mappings
+        }
+        await mq_client.publish_background_task(task_payload, routing_key="task.import")
+        logger.info(f"Triggered async import for job {job_id}")
+    except Exception as e:
+        logger.error(f"Failed to queue import task: {str(e)}")
+        db.client.table("import_jobs").update({"status": "failed", "error_message": "Failed to queue task"}).eq("id", job_id).execute()
+        raise HTTPException(status_code=500, detail="Failed to trigger background processing.")
+
+    return ImportProcessResponse(
+        job_id=job_id,
+        status="pending",
+        message="Import triggered successfully. Monitoring progress via jobs table."
+    )
+
+
+# Legacy endpoint removed: Use /import/initialize and /import/process instead.
 
 # ===== ASYNC JOB STATUS (POLLING) =====
 
@@ -253,10 +301,17 @@ async def import_contacts(
 async def get_job_status(job_id: str, tenant_id: str = Depends(require_active_tenant)):
     """Fetch the realtime progress of a specific background job"""
     try:
-        res = db.client.table("jobs").select("*").eq("id", job_id).eq("tenant_id", tenant_id).single().execute()
-        if not res.data:
-            raise HTTPException(status_code=404, detail="Job not found")
-        return res.data
+        # Check import_jobs first
+        res = db.client.table("import_jobs").select("*").eq("id", job_id).execute()
+        if res.data:
+            return res.data[0]
+            
+        # Fallback to general jobs table (for exports)
+        res_legacy = db.client.table("jobs").select("*").eq("id", job_id).execute()
+        if res_legacy.data:
+            return res_legacy.data[0]
+
+        raise HTTPException(status_code=404, detail="Job not found")
     except HTTPException:
         raise
     except Exception as e:
