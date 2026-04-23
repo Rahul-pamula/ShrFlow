@@ -43,11 +43,37 @@ class RabbitMQManager:
             self.bg_exchange = await self.channel.declare_exchange(
                 "background_exchange", aio_pika.ExchangeType.DIRECT, durable=True
             )
-            bg_queue = await self.channel.declare_queue("background_tasks", durable=True)
+
+            # --- DLQ SETUP (The Safety Net) ---
+            # 1. Declare the Dead Letter Exchange
+            self.dlx_exchange = await self.channel.declare_exchange(
+                "dead_letter_exchange", aio_pika.ExchangeType.DIRECT, durable=True
+            )
+            # 2. Declare the Dead Letter Queue
+            dlq_queue = await self.channel.declare_queue("failed_tasks", durable=True)
+            # 3. Bind DLQ to DLX
+            await dlq_queue.bind(self.dlx_exchange, routing_key="task.failed")
+
+            # Update Background Queue with DLX
+            bg_queue = await self.channel.declare_queue(
+                "background_tasks_v4", 
+                durable=True,
+                arguments={
+                    "x-dead-letter-exchange": "dead_letter_exchange",
+                    "x-dead-letter-routing-key": "task.failed"
+                }
+            )
             await bg_queue.bind(self.bg_exchange, routing_key="task.process")
 
-            # Dedicated Import Queue
-            import_queue = await self.channel.declare_queue("import_tasks", durable=True)
+            # Update Dedicated Import Queue with DLX
+            import_queue = await self.channel.declare_queue(
+                "import_tasks_v4", 
+                durable=True,
+                arguments={
+                    "x-dead-letter-exchange": "dead_letter_exchange",
+                    "x-dead-letter-routing-key": "task.failed"
+                }
+            )
             await import_queue.bind(self.bg_exchange, routing_key="task.import")
             
             logger.info("Successfully connected to RabbitMQ and declared queues.")
