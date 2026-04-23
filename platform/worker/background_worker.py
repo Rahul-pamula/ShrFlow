@@ -56,7 +56,6 @@ async def process_csv_import(job_id: str, tenant_id: str, batch_id: str, contact
         "status": "processing",
         "progress": 0,
         "total_items": total,
-        "meta": json.dumps({"skipped_duplicates": skipped_duplicates}),
         "updated_at": "now()"
     }).eq("id", job_id).execute()
 
@@ -116,7 +115,6 @@ async def process_csv_import(job_id: str, tenant_id: str, batch_id: str, contact
         "processed_items": total,
         "failed_items": failed,
         "error_log": json.dumps(errors[:50]),  # Store top 50 errors only
-        "meta": json.dumps(job_meta),
         "updated_at": "now()"
     }).eq("id", job_id).execute()
 
@@ -128,18 +126,8 @@ async def process_csv_import(job_id: str, tenant_id: str, batch_id: str, contact
         "status": batch_status,
     }).eq("id", batch_id).eq("tenant_id", tenant_id).execute()
 
-    # Best-effort meta update (skip silently if column doesn't exist)
-    try:
-        db.client.table("import_batches").update({
-            "meta": json.dumps({
-                **job_meta,
-                "total_processed": success + failed,
-                "failed": failed,
-                "success": success,
-            })
-        }).eq("id", batch_id).eq("tenant_id", tenant_id).execute()
-    except Exception as e:
-        logger.warning(f"[BATCH_META_SKIP] meta column missing? tenant={tenant_id} batch={batch_id} err={e}")
+    # Batch meta logic was removed because column 'meta' doesn't exist in Supabase schema.
+    # Count data is now stored in explicit 'imported_count' and 'failed_count' columns.
 
     logger.info(f"[{job_id}] Finished CSV import: {success} ok, {failed} failed.")
 
@@ -157,10 +145,15 @@ async def process_message(message: aio_pika.abc.AbstractIncomingMessage):
                     batch_id=payload.get("batch_id"),
                     contacts=payload.get("contacts", [])
                 )
+                await message.ack()
             else:
-                logger.warning(f"Unknown task type: {task_type}")
+                # CRITICAL: Unknown task types (e.g. 'contact_import' handled by import_worker)
+                # must be REQUEUED so the correct worker can process them.
+                # Silently ACKing here would cause the task to be lost forever.
+                logger.info(f"Task type '{task_type}' is not for this worker — requeuing for import_worker.")
+                if not message.processed:
+                    await message.nack(requeue=True)
                 
-            await message.ack()
         except Exception as e:
             logger.error(f"Error processing background task: {e}")
             if not message.processed:
