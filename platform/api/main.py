@@ -93,7 +93,18 @@ async def _run_scheduler():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: launch background scheduler. Shutdown: cancel it."""
+    """Startup: launch background scheduler + connect RabbitMQ. Shutdown: cancel it."""
+    from utils.rabbitmq_client import mq_client
+    import logging
+    startup_logger = logging.getLogger("api_startup")
+    
+    # Ensure RabbitMQ queues are declared with correct arguments (DLX) before workers connect
+    try:
+        await mq_client.connect()
+        startup_logger.info("RabbitMQ connected and queues declared on startup.")
+    except Exception as e:
+        startup_logger.error(f"Failed to connect to RabbitMQ on startup: {e}")
+
     task = asyncio.create_task(_run_scheduler()) if ENABLE_EMBEDDED_CAMPAIGN_SCHEDULER else None
     yield
     if task is not None:

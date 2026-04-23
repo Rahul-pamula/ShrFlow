@@ -95,7 +95,7 @@ services:
       - S3_ENDPOINT=${S3_ENDPOINT}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - IMPORT_QUEUE_NAME=import_tasks
+      - IMPORT_QUEUE_NAME=import_tasks_v4
     command: python import_worker.py
     depends_on:
       api:
