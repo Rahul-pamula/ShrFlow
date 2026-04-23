@@ -14,11 +14,12 @@ export default function OnboardingLayout({ children }: OnboardingLayoutProps) {
     return (
         <div style={{
             minHeight: '100vh',
-            backgroundColor: '#f8fafc', // matches the page background
+            backgroundColor: 'var(--bg-primary)',
             position: 'relative',
         }}>
             <button
                 onClick={logout}
+                className="hover-lift"
                 style={{
                     position: 'absolute',
                     top: '24px',
@@ -28,10 +29,10 @@ export default function OnboardingLayout({ children }: OnboardingLayoutProps) {
                     gap: '8px',
                     padding: '8px 16px',
                     backgroundColor: 'var(--bg-card)',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '6px',
-                    color: '#64748b',
-                    fontSize: '14px',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius)',
+                    color: 'var(--text-muted)',
+                    fontSize: 'var(--text-body)',
                     fontWeight: 500,
                     cursor: 'pointer',
                     zIndex: 50,
