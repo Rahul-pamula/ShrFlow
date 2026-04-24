@@ -747,24 +747,26 @@ graph TD
 - Instant Pause and Cancel actions surfaced on active dashboard panels.
 
 **📋 Planned Tasks — Phase 4**
-- Campaign CRUD
-- Snapshot campaign content + dispatch intents at send time
-- Spintax + merge tags
-- Scheduled sending
-- Pause/resume campaign
-- Cancel campaign mid-send
-- Resend to unopened contacts
-- FIX: exclude_suppressed=True enforced in scheduler.py, main.py, campaigns.py
-- Campaigns list page (status badges, stats)
-- Create campaign wizard (details > audience > content > review)
-- Campaign detail page
-- Pre-send checklist UI
-- Schedule picker (date/time input for scheduled send)
-- Pause button / Cancel button on in-progress campaign
-- Send test email modal (enter email address, preview)
-- Automated pre-send validation (no subject / no unsub / blank body blocks send)
-- Send throttling control (configurable per-minute rate, ETA shown in UI)
-- Send to 5% sample first mode (review analytics before full broadcast)
+- Campaign CRUD (Implemented)
+- Campaign wizard (details > audience > content > review) (Implemented)
+- Snapshot campaign content + dispatch intents at send time (Implemented)
+- Spintax + merge tags (Implemented)
+- Scheduled sending (Implemented; dual scheduler consolidation pending)
+- Pause/resume/cancel lifecycle (Implemented)
+- Resend to unopened contacts (Not implemented; depends on Phase 6 metrics)
+- FIX: exclude_suppressed=True enforced in scheduler.py, main.py, campaigns.py (Verified)
+- Campaigns list page (status badges, stats) (Implemented)
+- Campaign detail page (Implemented)
+- Pre-send checklist UI (Implemented)
+- Schedule picker (date/time input for scheduled send) (Implemented)
+- Pause button / Cancel button on in-progress campaign (Implemented)
+- Send test email modal (Implemented; contract fix required)
+- Automated pre-send validation (Implemented)
+- Send throttling control (Implemented)
+- Send to 5% sample first mode (Implemented)
+- Fix Step 3 template picker payload mismatch
+- Fix duplicate flow required fields
+- Normalize frontend API base URLs
 
 ---
 

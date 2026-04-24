@@ -1,8 +1,7 @@
 # Phase 4 - Campaign Orchestration
 
-> Verification status: Verified against code
-> Last reviewed: March 15, 2026
-> Overall status: Core orchestration is implemented, but the phase is only mostly complete against the original checklist
+> Verification status: Verified against code (Technical Audit 2026-03-15)
+> Overall status: **Mostly complete** (Core orchestration operational; minor contract mismatches persist)
 
 ## Purpose
 
@@ -31,7 +30,7 @@ The current codebase implements Phase 4 as a wizard-plus-orchestration system:
 7. The worker sends emails and updates dispatch status.
 8. Campaign state can be paused, resumed, cancelled, or scheduled.
 
-This means Phase 4 is not built around an `email_tasks` table. The active runtime orchestration model is campaign record + dispatch rows + RabbitMQ tasks.
+This means Phase 4 is not built around an `email_tasks` table for orchestration. The active runtime orchestration model is: **Campaign Record** + **Snapshot** + **Dispatch Rows** + **RabbitMQ Tasks**.
 
 ## Architecture
 
@@ -335,6 +334,28 @@ Redis is used so workers can respond immediately to live campaign actions. The D
 
 That is a valid design, but docs should state it explicitly instead of implying only one state source.
 
+---
+
+## Technical Audit Summary
+
+Phase 4 underwent a formal technical audit on 2026-03-15.
+
+### Audit Findings
+
+- **Orchestration Core**: Confirmed functional campaign lifecycle (Create -> Schedule/Send -> Snapshot -> Dispatch -> Worker). The system successfully leverages RabbitMQ for async delivery.
+- **Audience Targeting**: Verified support for advanced targeting (Batch, Domain, Batch-Domain), which exceeds the original Phase 4 requirements.
+- **Contract Mismatches**: Identified three critical frontend-backend drift areas:
+    - **Template Picker**: Frontend expects `json.templates` but backend returns `data`.
+    - **Test Email**: Frontend flow fails to include required sender/domain fields.
+    - **Duplicate Action**: Frontend flow omits required fields for the backend `CampaignCreate` model.
+- **Scheduler**: Logic is currently duplicated between the embedded API scheduler and a standalone worker scheduler.
+- **State Management**: Redis/DB split for campaign state is implemented and functional.
+
+### Final Verdict
+**Phase 4 is mostly complete and operational.** The core engine is strong, but user-facing "edge" flows (testing, templates, duplication) require contract alignment to be fully reliable.
+
+---
+
 ## Completion Matrix
 
 | Area | Status | Notes |
@@ -376,7 +397,8 @@ But the old docs were too optimistic. The correct status is:
 
 ---
 ## Technical Appendix (Engineering view)
-- Tables: campaigns, campaign_dispatch, email_tasks (queue); fields status, scheduled_at, locked_by.
-- Endpoints: /campaigns CRUD, /campaigns/{id}/pause|resume|cancel, scheduler loop; audience selection via batches/domains.
-- Worker: RabbitMQ consumer builds emails, respects pause/cancel, dispatch state machine.
-- UI: campaign wizard under platform/client/src/app/campaigns/*; audience domain filtering and batch selection implemented.
+- **Tables**: `campaigns`, `campaign_snapshots`, `campaign_dispatch`.
+- **Orchestration**: `POST /campaigns/{id}/send` resolves audience -> snapshots content -> inserts dispatch rows -> publishes to RabbitMQ.
+- **Worker**: `email_sender.py` consumes tasks, verifies Redis campaign state (SENDING/PAUSED/CANCELLED) before each dispatch.
+- **Scheduler**: Duplicated between `api/main.py` and `worker/scheduler.py`; both poll for `scheduled_at <= now`.
+- **UI**: Multi-step wizard under `platform/client/src/components/CampaignWizard`; local session persistence via `campaign_local_sessions`.
