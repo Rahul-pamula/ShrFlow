@@ -1,29 +1,16 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import Link from "next/link";
-import { ArrowLeft, AlertTriangle, ShieldOff, RefreshCcw } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { AlertTriangle, ArrowLeft, RefreshCcw, ShieldOff } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { Badge, Button, EmptyState, PageHeader, SectionCard, StatCard, TableToolbar, useToast } from '@/components/ui';
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = 'http://localhost:8000';
 
 function apiHeaders(token: string) {
     return { Authorization: `Bearer ${token}` };
 }
-
-// ===== Light Mode Colors =====
-const colors = {
-    bgPrimary: 'var(--bg-primary)',
-    bgSecondary: '#f8fafc',
-    bgCard: 'var(--bg-card)',
-    bgHover: 'var(--bg-hover)',
-    border: 'var(--border)',
-    textPrimary: 'var(--text-primary)',
-    textSecondary: 'var(--text-muted)',
-    accentBlue: '#2563eb',
-    statusWarning: '#ca8a04',
-    statusError: '#dc2626',
-};
 
 interface SuppressedContact {
     id: string;
@@ -37,6 +24,7 @@ interface SuppressedContact {
 
 export default function SuppressionListPage() {
     const { token } = useAuth();
+    const { error } = useToast();
 
     const [contacts, setContacts] = useState<SuppressedContact[]>([]);
     const [loading, setLoading] = useState(true);
@@ -49,18 +37,22 @@ export default function SuppressionListPage() {
         setLoading(true);
         try {
             const res = await fetch(`${API_BASE}/contacts/suppression?page=${page}&limit=50`, {
-                headers: apiHeaders(token)
+                headers: apiHeaders(token),
             });
             if (res.ok) {
                 const data = await res.json();
                 setContacts(data.data || []);
                 setTotalPages(data.meta?.total_pages || 1);
                 setTotal(data.meta?.total || 0);
+            } else {
+                throw new Error('Failed to fetch suppression list.');
             }
-        } catch (e) {
-            console.error("Failed to fetch suppression list", e);
+        } catch (fetchError) {
+            console.error('Failed to fetch suppression list', fetchError);
+            error('Failed to load the suppression list.');
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     useEffect(() => {
@@ -68,118 +60,83 @@ export default function SuppressionListPage() {
     }, [page, token]);
 
     return (
-        <div style={{ padding: "32px 40px", maxWidth: "1200px" }}>
-            {/* Header */}
-            <div style={{ marginBottom: "32px" }}>
-                <Link href="/contacts" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: colors.textSecondary, textDecoration: 'none', marginBottom: '16px' }}>
-                    <ArrowLeft style={{ width: '16px', height: '16px' }} />
-                    Back to Contacts
-                </Link>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                        <h1 style={{ fontSize: "28px", fontWeight: 600, color: colors.textPrimary, margin: "0 0 8px 0" }}>
-                            Suppression List
-                        </h1>
-                        <p style={{ color: colors.textSecondary, margin: 0, fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
-                            <ShieldOff style={{ width: "16px", height: "16px" }} />
-                            {total} contacts disabled due to bounces, complaints, or unsubscribes.
-                        </p>
-                    </div>
-                    <button onClick={fetchSuppressionList} style={{
-                        padding: "8px 16px", backgroundColor: colors.bgCard, border: `1px solid ${colors.border}`,
-                        borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px",
-                        color: colors.textPrimary, fontSize: "14px", fontWeight: 500
-                    }}>
-                        <RefreshCcw style={{ width: "16px", height: "16px" }} />
-                        Refresh
-                    </button>
-                </div>
+        <div className="space-y-8 pb-8">
+            <PageHeader
+                title="Suppression List"
+                subtitle="Review bounced, complained, and unsubscribed contacts before they affect future deliverability or segment quality."
+                breadcrumb={
+                    <Link href="/contacts" className="inline-flex items-center gap-1 text-sm text-[var(--text-muted)] transition hover:text-[var(--text-primary)]">
+                        <ArrowLeft className="h-4 w-4" />
+                        Back to Contacts
+                    </Link>
+                }
+                action={<Button variant="secondary" onClick={fetchSuppressionList}><RefreshCcw className="h-4 w-4" />Refresh</Button>}
+            />
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <StatCard label="Suppressed Contacts" value={total.toLocaleString()} icon={<ShieldOff className="h-5 w-5" />} />
+                <StatCard label="Current Page" value={page.toString()} icon={<ShieldOff className="h-5 w-5" />} />
+                <StatCard label="Pages" value={totalPages.toString()} icon={<ShieldOff className="h-5 w-5" />} />
             </div>
 
-            {/* Table */}
-            <div style={{ backgroundColor: colors.bgCard, border: `1px solid ${colors.border}`, borderRadius: "12px", overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                        <tr style={{ backgroundColor: "var(--bg-hover)", borderBottom: `1px solid ${colors.border}` }}>
-                            <th style={{ padding: "16px 24px", textAlign: "left", fontSize: "13px", fontWeight: 600, color: colors.textSecondary }}>Email</th>
-                            <th style={{ padding: "16px 24px", textAlign: "left", fontSize: "13px", fontWeight: 600, color: colors.textSecondary }}>Name</th>
-                            <th style={{ padding: "16px 24px", textAlign: "left", fontSize: "13px", fontWeight: 600, color: colors.textSecondary }}>Reason</th>
-                            <th style={{ padding: "16px 24px", textAlign: "left", fontSize: "13px", fontWeight: 600, color: colors.textSecondary }}>Date Added</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading && contacts.length === 0 ? (
-                            <tr>
-                                <td colSpan={4} style={{ padding: "48px", textAlign: "center", color: colors.textSecondary, fontSize: "14px" }}>
-                                    Loading suppression list...
-                                </td>
-                            </tr>
-                        ) : contacts.length === 0 ? (
-                            <tr>
-                                <td colSpan={4} style={{ padding: "48px", textAlign: "center", color: colors.textSecondary }}>
-                                    <ShieldOff style={{ width: "32px", height: "32px", margin: "0 auto 12px", opacity: 0.5 }} />
-                                    <div style={{ fontSize: "15px", fontWeight: 500, color: colors.textPrimary, marginBottom: "4px" }}>No suppressed contacts</div>
-                                    <div style={{ fontSize: "14px" }}>Your list is clean!</div>
-                                </td>
-                            </tr>
-                        ) : (
-                            contacts.map(c => (
-                                <tr key={c.id} style={{ borderBottom: `1px solid ${colors.border}`, transition: "background 150ms" }}>
-                                    <td style={{ padding: "16px 24px", color: colors.textPrimary, fontWeight: 500, fontSize: "14px" }}>
-                                        {c.email}
-                                    </td>
-                                    <td style={{ padding: "16px 24px", color: colors.textSecondary, fontSize: "14px" }}>
-                                        {[c.first_name, c.last_name].filter(Boolean).join(" ") || "—"}
-                                    </td>
-                                    <td style={{ padding: "16px 24px" }}>
-                                        <span 
-                                            title={c.bounce_reason || "No bounce reason recorded"}
-                                            style={{
-                                                padding: "4px 10px", borderRadius: "16px", fontSize: "12px", fontWeight: 600, textTransform: "capitalize",
-                                                backgroundColor: c.status === "bounced" ? `${colors.statusError}15` : `${colors.statusWarning}15`,
-                                                color: c.status === "bounced" ? colors.statusError : colors.statusWarning,
-                                                display: "inline-flex", alignItems: "center", gap: "4px",
-                                                cursor: c.bounce_reason ? "help" : "default"
-                                            }}
-                                        >
-                                            <AlertTriangle style={{ width: "12px", height: "12px" }} />
-                                            {c.status}
-                                        </span>
-                                    </td>
-                                    <td style={{ padding: "16px 24px", color: colors.textSecondary, fontSize: "14px" }}>
-                                        {new Date(c.created_at).toLocaleDateString()}
-                                    </td>
+            <SectionCard title="Suppressed Recipients" description="These contacts are disabled because of bounces, complaints, or unsubscribe activity.">
+                <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)]">
+                    <TableToolbar
+                        title="Deliverability Protection"
+                        description="Keep this list clean to reduce repeat bounces and preserve sender reputation."
+                        trailing={<Badge variant="outline">{total} total records</Badge>}
+                        className="rounded-none border-0 border-b border-[var(--border)]"
+                    />
+                    {loading && contacts.length === 0 ? (
+                        <div className="p-12 text-center text-sm text-[var(--text-muted)]">Loading suppression list...</div>
+                    ) : contacts.length === 0 ? (
+                        <EmptyState
+                            icon={<ShieldOff className="h-10 w-10" />}
+                            title="No suppressed contacts"
+                            description="Your suppression list is currently clear."
+                        />
+                    ) : (
+                        <table className="w-full border-collapse">
+                            <thead>
+                                <tr className="border-b border-[var(--border)] bg-[var(--bg-hover)]">
+                                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Email</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Name</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Reason</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Date Added</th>
                                 </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+                            </thead>
+                            <tbody>
+                                {contacts.map((contact) => (
+                                    <tr key={contact.id} className="border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--bg-hover)]">
+                                        <td className="px-6 py-4 text-sm font-medium text-[var(--text-primary)]">{contact.email}</td>
+                                        <td className="px-6 py-4 text-sm text-[var(--text-muted)]">{[contact.first_name, contact.last_name].filter(Boolean).join(' ') || '—'}</td>
+                                        <td className="px-6 py-4">
+                                            <span
+                                                title={contact.bounce_reason || 'No bounce reason recorded'}
+                                                className="inline-flex items-center gap-1 rounded-full border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-1 text-xs font-medium text-[var(--warning)]"
+                                            >
+                                                <AlertTriangle className="h-3.5 w-3.5" />
+                                                {contact.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-[var(--text-muted)]">{new Date(contact.created_at).toLocaleDateString()}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </SectionCard>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div style={{ padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: colors.bgPrimary, borderTop: `1px solid ${colors.border}` }}>
-                        <span style={{ fontSize: "14px", color: colors.textSecondary }}>
-                            Page {page} of {totalPages}
-                        </span>
-                        <div style={{ display: "flex", gap: "8px" }}>
-                            <button
-                                onClick={() => setPage(p => Math.max(1, p - 1))}
-                                disabled={page === 1}
-                                style={{ padding: "6px 12px", backgroundColor: colors.bgCard, border: `1px solid ${colors.border}`, borderRadius: "6px", cursor: page === 1 ? "not-allowed" : "pointer", opacity: page === 1 ? 0.5 : 1, color: colors.textPrimary }}
-                            >
-                                Previous
-                            </button>
-                            <button
-                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                disabled={page === totalPages}
-                                style={{ padding: "6px 12px", backgroundColor: colors.bgCard, border: `1px solid ${colors.border}`, borderRadius: "6px", cursor: page === totalPages ? "not-allowed" : "pointer", opacity: page === totalPages ? 0.5 : 1, color: colors.textPrimary }}
-                            >
-                                Next
-                            </button>
-                        </div>
+            {totalPages > 1 && (
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <span className="text-sm text-[var(--text-muted)]">Page {page} of {totalPages}</span>
+                    <div className="flex gap-2">
+                        <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</Button>
+                        <Button variant="secondary" size="sm" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>Next</Button>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
         </div>
     );
 }

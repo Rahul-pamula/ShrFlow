@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Mail, ArrowRight, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { AuthShell } from '@/components/auth';
+import { Button, InlineAlert } from '@/components/ui';
 
 export default function VerifyEmailPage() {
     const searchParams = useSearchParams();
@@ -43,47 +45,64 @@ export default function VerifyEmailPage() {
     }, [token]);
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] px-4">
-            <div className="w-full max-w-md">
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-[var(--accent)] mb-4">
-                        <Mail className="h-6 w-6 text-white" />
-                    </div>
-                    <h1 className="text-2xl font-bold text-[var(--text-primary)]">Email Engine</h1>
-                </div>
+        <AuthShell
+            title="Verify your email"
+            description="We’re checking your verification link and updating your account state."
+            asideTitle="Identity checks that stay readable"
+            asideDescription="Even technical account moments should feel calm and trustworthy, especially when someone is trying to get started."
+        >
+            <div className="space-y-6 text-center">
+                {status === 'loading' && (
+                    <>
+                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--accent)]/10 text-[var(--accent)]">
+                            <Loader2 className="h-8 w-8 animate-spin" />
+                        </div>
+                        <div className="space-y-2">
+                            <h3 className="text-lg font-semibold text-[var(--text-primary)]">Verifying your email</h3>
+                            <p className="text-sm leading-6 text-[var(--text-muted)]">
+                                Please wait while we confirm your email address.
+                            </p>
+                        </div>
+                    </>
+                )}
 
-                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-[var(--radius-lg)] p-8 text-center">
-                    {status === 'loading' && (
-                        <>
-                            <Loader2 className="h-12 w-12 text-[var(--accent)] mx-auto mb-4 animate-spin" />
-                            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Verifying...</h2>
-                            <p className="text-sm text-[var(--text-muted)]">Please wait while we verify your email address.</p>
-                        </>
-                    )}
+                {status === 'success' && (
+                    <>
+                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--success)]/10 text-[var(--success)]">
+                            <CheckCircle2 className="h-8 w-8" />
+                        </div>
+                        <InlineAlert
+                            variant="success"
+                            title="Email verified"
+                            description={message}
+                            className="text-left"
+                        />
+                        <Link href="/login">
+                            <Button size="lg" className="w-full">
+                                Go to login
+                                <ArrowRight className="h-4 w-4" />
+                            </Button>
+                        </Link>
+                    </>
+                )}
 
-                    {status === 'success' && (
-                        <>
-                            <CheckCircle2 className="h-12 w-12 text-[var(--success)] mx-auto mb-4 animate-fadeIn" />
-                            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Email Verified</h2>
-                            <p className="text-sm text-[var(--text-muted)] mb-6">{message}</p>
-                            <Link href="/login" className="w-full h-10 rounded-[var(--radius)] font-medium text-sm bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] transition-colors flex items-center justify-center gap-2">
-                                Go to Login <ArrowRight className="h-4 w-4" />
-                            </Link>
-                        </>
-                    )}
-
-                    {status === 'error' && (
-                        <>
-                            <XCircle className="h-12 w-12 text-[var(--danger)] mx-auto mb-4" />
-                            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Verification Failed</h2>
-                            <p className="text-sm text-[var(--text-muted)] mb-6">{message}</p>
-                            <Link href="/login" className="inline-flex items-center gap-2 text-sm text-[var(--accent)] hover:underline">
-                                Back to login
-                            </Link>
-                        </>
-                    )}
-                </div>
+                {status === 'error' && (
+                    <>
+                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--danger)]/10 text-[var(--danger)]">
+                            <XCircle className="h-8 w-8" />
+                        </div>
+                        <InlineAlert
+                            variant="danger"
+                            title="Verification failed"
+                            description={message}
+                            className="text-left"
+                        />
+                        <Link href="/login" className="inline-flex items-center gap-2 text-sm font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]">
+                            Back to login
+                        </Link>
+                    </>
+                )}
             </div>
-        </div>
+        </AuthShell>
     );
 }

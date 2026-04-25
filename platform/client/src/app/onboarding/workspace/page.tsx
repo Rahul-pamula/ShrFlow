@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2, ArrowRight } from 'lucide-react';
+import { OnboardingShell } from '@/components/onboarding';
+import { Button, InlineAlert, Input } from '@/components/ui';
 
 export default function WorkspaceOnboarding() {
     const router = useRouter();
@@ -60,99 +62,61 @@ export default function WorkspaceOnboarding() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)] p-4">
-            <div className="w-full max-w-lg rounded-2xl bg-[var(--bg-card)] p-8 shadow-xl border border-[var(--border)]">
-                {/* Progress Indicator */}
-                <div className="mb-4">
-                    <p className="text-center text-sm font-medium text-[var(--text-muted)]">Step 1 of 4</p>
-                    <div className="mt-2 h-1 w-full rounded-full bg-[var(--border)]">
-                        <div className="h-1 w-1/4 rounded-full bg-[var(--accent)]"></div>
-                    </div>
-                </div>
+        <OnboardingShell
+            step={1}
+            totalSteps={4}
+            icon={<Building2 className="h-6 w-6" />}
+            title="Set up your workspace"
+            description="We’ll use this to shape your initial defaults and make the rest of setup much smoother."
+        >
+            <form onSubmit={handleSubmit} className="space-y-6">
+                {errors.general && (
+                    <InlineAlert
+                        variant="danger"
+                        title="Couldn’t save workspace details"
+                        description={errors.general}
+                    />
+                )}
 
-                {/* Header */}
-                <div className="mb-8 text-center">
-                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--accent)]/10">
-                        <Building2 className="h-6 w-6 text-[var(--accent)]" />
-                    </div>
-                    <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] mb-2">
-                        Set up your workspace
-                    </h1>
-                    <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-                        This helps us configure your environment correctly.
-                    </p>
-                </div>
-
-                {/* Form */}
-                <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-                    {errors.general && (
-                        <div className="p-3 bg-[var(--danger)]/10 border border-[var(--danger)]/20 rounded-lg text-[var(--danger)] text-sm">
-                            {errors.general}
-                        </div>
-                    )}
-
-                    <div className="space-y-4">
-                        {/* Workspace Name */}
-                        <div>
-                            <label htmlFor="workspaceName" className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-                                Workspace / Company Name
-                            </label>
-                            <input
-                                type="text"
-                                id="workspaceName"
-                                value={formData.workspaceName}
-                                onChange={(e) => setFormData({ ...formData, workspaceName: e.target.value })}
-                                placeholder="Acme Corporation"
-                                disabled={loading}
-                                className={`w-full px-4 py-3 text-base border rounded-lg bg-[var(--bg-primary)] text-[var(--text-primary)] outline-none transition-colors ${errors.workspaceName ? 'border-[var(--danger)]' : 'border-[var(--border)] focus:border-[var(--accent)]'
-                                    }`}
-                            />
-                            {errors.workspaceName && (
-                                <p className="text-sm text-[var(--danger)] mt-1.5">
-                                    {errors.workspaceName}
-                                </p>
-                            )}
-                        </div>
-
-                        {/* Role */}
-                        <div>
-                            <label htmlFor="role" className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-                                Your Role
-                            </label>
-                            <select
-                                id="role"
-                                value={formData.role}
-                                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                                disabled={loading}
-                                className={`w-full px-4 py-3 text-base border rounded-lg bg-[var(--bg-primary)] text-[var(--text-primary)] outline-none transition-colors cursor-pointer ${errors.role ? 'border-[var(--danger)]' : 'border-[var(--border)] focus:border-[var(--accent)]'
-                                    }`}
-                            >
-                                <option value="">Select your role</option>
-                                {roles.map((role) => (
-                                    <option key={role} value={role}>
-                                        {role}
-                                    </option>
-                                ))}
-                            </select>
-                            {errors.role && (
-                                <p className="text-sm text-[var(--danger)] mt-1.5">
-                                    {errors.role}
-                                </p>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Continue Button */}
-                    <button
-                        type="submit"
+                <div className="grid gap-5">
+                    <Input
+                        id="workspaceName"
+                        label="Workspace or company name"
+                        value={formData.workspaceName}
+                        onChange={(e) => setFormData({ ...formData, workspaceName: e.target.value })}
+                        placeholder="Acme Corporation"
                         disabled={loading}
-                        className="w-full mt-2 py-3.5 px-6 text-base font-semibold text-white bg-[var(--accent)] hover:bg-blue-600 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                        {loading ? 'Saving...' : 'Continue'}
-                        {!loading && <ArrowRight className="w-5 h-5" />}
-                    </button>
-                </form>
-            </div>
-        </div>
+                        error={errors.workspaceName}
+                        className="border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+                    />
+
+                    <div className="w-full">
+                        <label htmlFor="role" className="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">
+                            Your role
+                        </label>
+                        <select
+                            id="role"
+                            value={formData.role}
+                            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                            disabled={loading}
+                            className={`flex h-10 w-full rounded-lg border px-3 py-2 text-sm transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 ${errors.role ? 'border-[var(--danger)]' : 'border-[var(--border)]'} bg-[var(--bg-primary)] text-[var(--text-primary)]`}
+                        >
+                            <option value="">Select your role</option>
+                            {roles.map((role) => (
+                                <option key={role} value={role}>
+                                    {role}
+                                </option>
+                            ))}
+                        </select>
+                        {errors.role && <p className="mt-1.5 text-sm text-[var(--danger)]">{errors.role}</p>}
+                    </div>
+                </div>
+
+                <Button type="submit" size="lg" isLoading={loading} className="w-full">
+                    {loading ? 'Saving...' : 'Continue'}
+                    {!loading && <ArrowRight className="h-5 w-5" />}
+                </Button>
+            </form>
+        </OnboardingShell>
     );
 }

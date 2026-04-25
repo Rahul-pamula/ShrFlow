@@ -9,6 +9,8 @@ export { Button, buttonVariants } from './Button';
 export { Badge, badgeVariants } from './Badge';
 export { HealthDot } from './HealthDot';
 export { LoadingSpinner, PageLoader } from './LoadingSpinner';
+export { Input } from './Input';
+export { Card } from './Card';
 
 /**
  * MOLECULES — Combined atoms
@@ -25,6 +27,13 @@ export { PageHeader } from './PageHeader';
 export { DataTable } from './DataTable';
 export { EmptyState } from './EmptyState';
 export { Breadcrumb } from './Breadcrumb';
+export { SectionCard } from './SectionCard';
+export { InlineAlert } from './InlineAlert';
+export { FilterBar } from './FilterBar';
+export { KeyValueList } from './KeyValueList';
+export { TableToolbar } from './TableToolbar';
+export { InspectorPanel } from './InspectorPanel';
+export { ModalShell } from './ModalShell';
 
 /**
  * Type exports

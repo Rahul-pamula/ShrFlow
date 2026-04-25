@@ -1,434 +1,492 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-    Play,
+    AlertCircle,
+    Archive,
+    ArchiveRestore,
+    ChevronLeft,
+    ChevronRight,
+    Copy,
+    Loader2,
+    Megaphone,
     Pause,
-    MoreHorizontal,
+    PlayCircle,
     Plus,
     Search,
-    Filter,
-    Loader2,
-    AlertCircle,
-    PlayCircle,
     StopCircle,
-    Send,
-    Megaphone,
-    ChevronLeft,
-    ChevronRight
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { Button, ConfirmModal, EmptyState, FilterBar, InlineAlert, PageHeader, SectionCard, TableToolbar, StatusBadge, useToast } from "@/components/ui";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-/* ============================================================
-   CAMPAIGNS - Dark Glassmorphism Theme (matching app design)
-   ============================================================ */
+type CampaignStatus = "all" | "draft" | "scheduled" | "sending" | "sent" | "paused" | "cancelled" | "archived";
 
-function StatusBadge({ status }: { status: string }) {
-    const getStyle = (s: string) => {
-        switch (s) {
-            case 'sent': return { bg: 'rgba(16, 185, 129, 0.1)', text: '#10B981', border: 'rgba(16, 185, 129, 0.25)' };
-            case 'sending':
-            case 'processing': return { bg: 'rgba(245, 158, 11, 0.1)', text: '#F59E0B', border: 'rgba(245, 158, 11, 0.25)' };
-            case 'scheduled': return { bg: 'rgba(59, 130, 246, 0.1)', text: '#3B82F6', border: 'rgba(59, 130, 246, 0.25)' };
-            case 'paused': return { bg: 'rgba(139, 92, 246, 0.1)', text: '#8B5CF6', border: 'rgba(139, 92, 246, 0.25)' };
-            case 'cancelled': return { bg: 'rgba(239, 68, 68, 0.1)', text: '#EF4444', border: 'rgba(239, 68, 68, 0.25)' };
-            default: return { bg: 'rgba(63, 63, 70, 0.3)', text: '#71717A', border: 'rgba(63, 63, 70, 0.4)' };
-        }
-    };
-    const { bg, text, border } = getStyle(status);
-    const isPulsing = status === 'sending' || status === 'processing';
+const STATUS_TABS: { key: CampaignStatus; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "draft", label: "Draft" },
+    { key: "scheduled", label: "Scheduled" },
+    { key: "sending", label: "Sending" },
+    { key: "sent", label: "Sent" },
+    { key: "paused", label: "Paused" },
+    { key: "archived", label: "Archived" },
+];
 
-    return (
-        <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: '5px',
-            padding: '3px 9px', borderRadius: '5px', fontSize: '11px', fontWeight: 500,
-            backgroundColor: bg, color: text, border: `1px solid ${border}`,
-        }}>
-            {isPulsing && (
-                <span style={{
-                    width: '5px', height: '5px', borderRadius: '50%',
-                    backgroundColor: text, animation: 'pulse 2s infinite',
-                }} />
-            )}
-            {status.charAt(0).toUpperCase() + status.slice(1)}
-        </span>
-    );
+function actionButtonClass(tone: "default" | "success" | "warning" | "danger" = "default") {
+    if (tone === "success") return "border-[var(--success-border)] bg-[var(--success-bg)]/50 text-[var(--success)] hover:bg-[var(--success-bg)]";
+    if (tone === "warning") return "border-[var(--warning-border)] bg-[var(--warning-bg)]/50 text-[var(--warning)] hover:bg-[var(--warning-bg)]";
+    if (tone === "danger") return "border-[var(--danger-border)] bg-[var(--danger-bg)]/50 text-[var(--danger)] hover:bg-[var(--danger-bg)]";
+    return "border-[var(--border)] bg-transparent text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]";
 }
 
 export default function CampaignsPage() {
     const { token } = useAuth();
     const router = useRouter();
+    const { success, error: toastError, info } = useToast();
     const [campaigns, setCampaigns] = useState<any[]>([]);
-
-    // Pagination states
+    const [localDrafts, setLocalDrafts] = useState<any[]>([]);
+    const [activeTab, setActiveTab] = useState<CampaignStatus>("all");
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
     const [total, setTotal] = useState(0);
-
-    // Browser local multi-draft state
-    const [localDrafts, setLocalDrafts] = useState<any[]>([]);
-
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [search, setSearch] = useState("");
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [pendingAction, setPendingAction] = useState<{ kind: "discard_local" | "campaign"; id: string; action?: "cancel" | "archive" | "unarchive" | "delete"; title: string; message: string; confirmLabel: string; variant: "danger" | "warning" | "primary"; } | null>(null);
 
-    const fetchCampaigns = async (isBackground = false) => {
+    const fetchCampaigns = async (background = false) => {
         if (!token) return;
         try {
-            const params = new URLSearchParams({ page: String(page), limit: '15' });
+            const params = new URLSearchParams({ page: String(page), limit: "15" });
+            if (activeTab !== "all") params.set("status", activeTab);
             const res = await fetch(`${API_BASE}/campaigns/?${params}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
             });
-            if (!res.ok) throw new Error("Failed to fetch campaigns");
+            if (!res.ok) throw new Error("Failed");
             const json = await res.json();
             setCampaigns(json.campaigns || []);
             setTotal(json.meta?.total || 0);
             setTotalPages(json.meta?.total_pages || 0);
-            setError(""); // Clear error if recovered
-        } catch (err) {
-            if (!isBackground) setError("Failed to load campaigns.");
+            setError("");
+        } catch {
+            if (!background) setError("Failed to load campaigns.");
         } finally {
-            if (!isBackground) setLoading(false);
+            if (!background) setLoading(false);
         }
     };
 
     useEffect(() => {
-        // Load browser local multi-drafts
         try {
-            const raw = localStorage.getItem('campaign_local_sessions');
+            const raw = localStorage.getItem("campaign_local_sessions");
             if (raw) {
                 const sessions = JSON.parse(raw);
-                const drafts = [];
-                for (const [id, session] of Object.entries(sessions)) {
-                    if (session && (session as any).data && ((session as any).data.name || (session as any).data.subject)) {
-                        drafts.push({ id, ...(session as any).data, updatedAt: (session as any).updatedAt });
-                    }
-                }
-                // Sort by updatedAt descending
-                drafts.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+                const drafts = Object.entries(sessions)
+                    .filter(([, s]: any) => s?.data?.name || s?.data?.subject)
+                    .map(([id, s]: any) => ({ id, ...s.data, updatedAt: s.updatedAt }))
+                    .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
                 setLocalDrafts(drafts);
             }
         } catch { }
+    }, []);
 
+    useEffect(() => {
+        setLoading(true);
         fetchCampaigns(false);
+        const iv = setInterval(() => fetchCampaigns(true), 8000);
+        return () => clearInterval(iv);
+    }, [token, page, activeTab]);
 
-        // Auto-refresh the campaigns list every 5 seconds 
-        // so the "Sending" status updates to "Sent" automatically
-        const interval = setInterval(() => {
-            fetchCampaigns(true);
-        }, 5000);
-
-        return () => clearInterval(interval);
-    }, [token, page]); // Re-fetch when page changes
-
-    const filtered = campaigns.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+    const filtered = useMemo(() => campaigns.filter((campaign) => campaign.name?.toLowerCase().includes(search.toLowerCase())), [campaigns, search]);
 
     const handleCreateNew = () => {
-        const newId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
-        router.push(`/campaigns/new?draft_id=${newId}`);
+        const id = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
+        router.push(`/campaigns/new?draft_id=${id}`);
     };
 
-    const handleAction = async (id: string, action: 'pause' | 'resume' | 'cancel' | 'delete') => {
+    const handleAction = async (id: string, action: "pause" | "resume" | "cancel" | "delete" | "archive" | "unarchive" | "duplicate") => {
+        setActionLoading(id + action);
         try {
-            const isDelete = action === 'delete';
-            const url = isDelete
-                ? `${API_BASE}/campaigns/${id}`
-                : `${API_BASE}/campaigns/${id}/${action}`;
+            if (action === "duplicate") {
+                const res = await fetch(`${API_BASE}/campaigns/${id}/duplicate`, {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (!res.ok) throw new Error();
+                await fetchCampaigns(false);
+                return;
+            }
 
-            const res = await fetch(url, {
-                method: isDelete ? 'DELETE' : 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!res.ok) throw new Error(`Failed to ${action} campaign`);
+            if (action === "archive" || action === "unarchive") {
+                const res = await fetch(`${API_BASE}/campaigns/${id}/${action}`, {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (!res.ok) throw new Error();
+                if (action === "archive") {
+                    setCampaigns((prev) => prev.filter((campaign) => campaign.id !== id));
+                    success("Campaign archived.");
+                } else {
+                    await fetchCampaigns(false);
+                    success("Campaign restored.");
+                }
+                return;
+            }
+
+            const isDelete = action === "delete";
+            const res = await fetch(
+                isDelete ? `${API_BASE}/campaigns/${id}` : `${API_BASE}/campaigns/${id}/${action}`,
+                { method: isDelete ? "DELETE" : "POST", headers: { Authorization: `Bearer ${token}` } },
+            );
+            if (!res.ok) throw new Error();
 
             if (isDelete) {
-                // Remove from list regardless of whether it was permanently deleted or just archived
-                setCampaigns(prev => prev.filter(c => c.id !== id));
+                setCampaigns((prev) => prev.filter((campaign) => campaign.id !== id));
+                success("Draft deleted.");
             } else {
-                setCampaigns(prev => prev.map(c => {
-                    if (c.id === id) {
-                        let newStatus = c.status;
-                        if (action === 'pause') newStatus = 'paused';
-                        if (action === 'resume') newStatus = 'processing';
-                        if (action === 'cancel') newStatus = 'cancelled';
-                        return { ...c, status: newStatus };
+                setCampaigns((prev) => prev.map((campaign) => (
+                    campaign.id !== id ? campaign : {
+                        ...campaign,
+                        status: action === "pause" ? "paused" : action === "resume" ? "sending" : action === "cancel" ? "cancelled" : campaign.status,
                     }
-                    return c;
-                }));
+                )));
+                if (action === "pause") success("Campaign paused.");
+                if (action === "resume") success("Campaign resumed.");
+                if (action === "cancel") success("Campaign cancelled.");
             }
-        } catch (err) {
-            alert(`Error: Could not ${action} campaign.`);
+        } catch {
+            toastError(`Could not ${action} campaign.`);
+        } finally {
+            setActionLoading(null);
         }
     };
 
-    return (
-        <>
-            {/* Page Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
-                <div>
-                    <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>
-                        Campaigns
-                    </h1>
-                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-                        Create and manage your email campaigns
-                    </p>
-                </div>
-                <button
-                    onClick={handleCreateNew}
-                    className="btn-premium"
-                    style={{ textDecoration: 'none', fontSize: '13px', cursor: 'pointer', border: 'none' }}
-                >
-                    <Plus size={15} />
-                    Create Campaign
-                </button>
-            </div>
+    const discardLocalDraft = (draftId: string) => {
+        try {
+            const raw = localStorage.getItem("campaign_local_sessions");
+            if (raw) {
+                const sessions = JSON.parse(raw);
+                delete sessions[draftId];
+                localStorage.setItem("campaign_local_sessions", JSON.stringify(sessions));
+            }
+        } catch { }
+        setLocalDrafts((prev) => prev.filter((draft) => draft.id !== draftId));
+        info("Unsaved browser session discarded");
+    };
 
-            {/* Toolbar */}
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
-                <div style={{ position: 'relative', width: '280px' }}>
-                    <Search size={14} style={{
-                        position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)',
-                        color: 'var(--text-muted)'
-                    }} />
+    const showEmpty = !loading && !error && filtered.length === 0 && localDrafts.length === 0;
+    const showingRangeStart = total === 0 ? 0 : (page - 1) * 15 + 1;
+    const showingRangeEnd = Math.min(page * 15, total);
+
+    return (
+        <div className="space-y-6 pb-8">
+            <PageHeader
+                title="Campaigns"
+                subtitle="Create, schedule, pause, and archive outbound campaigns from one place."
+                action={
+                    <Button onClick={handleCreateNew}>
+                        <Plus className="h-4 w-4" />
+                        Create Campaign
+                    </Button>
+                }
+            />
+
+            <FilterBar
+                leading={
+                    <div className="flex flex-wrap items-center gap-2">
+                        {STATUS_TABS.map((tab) => {
+                            const isActive = activeTab === tab.key;
+                            return (
+                                <button
+                                    key={tab.key}
+                                    onClick={() => {
+                                        setActiveTab(tab.key);
+                                        setPage(1);
+                                    }}
+                                    className={`rounded-[var(--radius)] px-3 py-2 text-sm font-medium transition ${
+                                        isActive ? 'bg-[var(--accent)] text-white shadow-sm' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
+                                    }`}
+                                >
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                }
+                trailing={activeTab === "archived" ? (
+                    <div className="inline-flex items-center gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-xs text-[var(--text-muted)]">
+                        <Archive className="h-3.5 w-3.5" />
+                        Archived campaigns stay out of the active workflow, but analytics remain available.
+                    </div>
+                ) : null}
+            >
+                <div className="relative w-full max-w-sm">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
                     <input
                         type="text"
                         placeholder="Search campaigns..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        style={{
-                            width: '100%', padding: '9px 12px 9px 34px',
-                            background: 'var(--bg-input)', border: '1px solid var(--border)',
-                            borderRadius: '8px', fontSize: '13px', color: 'var(--text-primary)', outline: 'none',
-                        }}
+                        className="h-10 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-input)] pl-10 pr-4 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--accent)]"
                     />
                 </div>
-                <button style={{
-                    display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px',
-                    background: 'var(--bg-input)', border: '1px solid var(--border)',
-                    borderRadius: '8px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer',
-                }}>
-                    <Filter size={14} />
-                    Filter
-                </button>
-            </div>
+            </FilterBar>
 
-            {/* ERROR STATE */}
             {error && (
-                <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'var(--danger-bg)', border: '1px solid var(--danger-border)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--danger)', fontSize: '13px' }}>
-                    <AlertCircle size={15} /> {error}
-                </div>
+                <InlineAlert
+                    variant="danger"
+                    title="Campaign data unavailable"
+                    description={error}
+                    icon={<AlertCircle className="mt-0.5 h-4 w-4" />}
+                />
             )}
 
-            {/* LOADING STATE */}
-            {loading && (
-                <div style={{ display: 'flex', justifyContent: 'center', padding: '60px' }}>
-                    <Loader2 size={28} color="#3B82F6" style={{ animation: 'spin 1s linear infinite' }} />
-                </div>
-            )}
-
-            {/* EMPTY STATE */}
-            {!loading && !error && filtered.length === 0 && (
-                <div style={{
-                    textAlign: 'center', padding: '64px 24px',
-                    background: 'var(--bg-card)', border: '1px dashed var(--border)',
-                    borderRadius: '12px'
-                }}>
-                    <div style={{
-                        width: '56px', height: '56px', borderRadius: '14px', margin: '0 auto 16px',
-                        background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.15)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                        <Megaphone size={24} color="#3B82F6" />
+            {(activeTab === "all" || activeTab === "draft") && localDrafts.length > 0 && (
+                <SectionCard
+                    tone="subtle"
+                    title="Unsaved browser sessions"
+                    action={<Megaphone className="h-4 w-4 text-[var(--accent)]" />}
+                >
+                    <div className="space-y-3">
+                        {localDrafts.map((draft) => (
+                            <div key={draft.id} className="flex flex-col gap-3 rounded-[var(--radius)] border border-[var(--accent-border)] bg-[var(--bg-card)] p-4 md:flex-row md:items-center md:justify-between">
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <p className="truncate text-sm font-semibold text-[var(--text-primary)]">{draft.name || "Untitled Session"}</p>
+                                        <span className="rounded-full bg-[var(--accent)]/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">Unsaved</span>
+                                    </div>
+                                    <p className="mt-1 truncate text-sm text-[var(--text-muted)]">{draft.subject || "No subject yet"}</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Link href={`/campaigns/new?action=resume&draft_id=${draft.id}`}>
+                                        <Button variant="outline" size="sm">Resume</Button>
+                                    </Link>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setPendingAction({
+                                            kind: "discard_local",
+                                            id: draft.id,
+                                            title: "Discard Unsaved Session?",
+                                            message: "This local browser draft will be removed. Saved database drafts are unaffected.",
+                                            confirmLabel: "Discard",
+                                            variant: "warning",
+                                        })}
+                                    >
+                                        Discard
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                    <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
-                        No campaigns yet
-                    </h3>
-                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
-                        Create your first campaign and start sending emails.
-                    </p>
-                    <button
-                        onClick={handleCreateNew}
-                        className="btn-premium"
-                        style={{ textDecoration: 'none', fontSize: '13px', display: 'inline-flex', cursor: 'pointer', border: 'none' }}
-                    >
-                        <Plus size={14} /> Create Campaign
-                    </button>
+                </SectionCard>
+            )}
+
+            {loading && (
+                <div className="flex justify-center py-16">
+                    <Loader2 className="h-7 w-7 animate-spin text-[var(--accent)]" />
                 </div>
             )}
 
-            {/* DATA TABLE */}
-            {!loading && filtered.length > 0 && (
-                <div style={{
-                    background: 'var(--bg-card)', backdropFilter: 'blur(16px)',
-                    border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden'
-                }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                            <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                                {['Campaign', 'Status', 'Contacts', 'Created', 'Actions'].map((h, i) => (
-                                    <th key={h} style={{
-                                        padding: '12px 20px', fontSize: '11px', fontWeight: 500,
-                                        textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)',
-                                        textAlign: i >= 2 && i < 4 ? 'right' : i === 4 ? 'right' : 'left',
-                                        background: 'var(--bg-hover)'
-                                    }}>
-                                        {h}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {localDrafts.map(draft => (
-                                <tr
-                                    key={`localdraft-${draft.id}`}
-                                    style={{
-                                        borderBottom: '1px solid var(--border)',
-                                        transition: 'background 0.15s ease',
-                                        background: 'rgba(59, 130, 246, 0.04)'
-                                    }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(59, 130, 246, 0.08)')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = 'rgba(59, 130, 246, 0.04)')}
-                                >
-                                    <td style={{ padding: '16px 20px' }}>
-                                        <Link href={`/campaigns/new?action=resume&draft_id=${draft.id}`} style={{ textDecoration: 'none' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <p style={{ fontSize: '14px', fontWeight: 600, color: '#60A5FA', margin: 0 }}>
-                                                    {draft.name || 'Untitled Session'}
-                                                </p>
-                                                <span style={{ fontSize: '10px', fontWeight: 600, background: 'rgba(59,130,246,0.1)', color: '#60A5FA', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(59,130,246,0.2)', textTransform: 'uppercase' }}>Unsaved Browser Session</span>
-                                            </div>
-                                            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '300px' }}>{draft.subject || '—'}</p>
-                                        </Link>
-                                    </td>
-                                    <td style={{ padding: '16px 20px' }}>
-                                        <StatusBadge status="draft" />
-                                    </td>
-                                    <td style={{ padding: '16px 20px', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'right' }}>
-                                        —
-                                    </td>
-                                    <td style={{ padding: '16px 20px', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'right' }}>
-                                        Just now
-                                    </td>
-                                    <td style={{ padding: '16px 20px', textAlign: 'right' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', alignItems: 'center' }}>
-                                            <Link href={`/campaigns/new?action=resume&draft_id=${draft.id}`} style={{ padding: '5px 10px', background: 'transparent', border: '1px solid rgba(59, 130, 246, 0.4)', borderRadius: '6px', color: '#60A5FA', fontSize: '12px', fontWeight: 500, cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
-                                                Resume
-                                            </Link>
-                                            <button onClick={() => {
-                                                if (window.confirm('Discard this unsaved browser session?')) {
-                                                    try {
-                                                        const raw = localStorage.getItem('campaign_local_sessions');
-                                                        if (raw) {
-                                                            const sessions = JSON.parse(raw);
-                                                            delete sessions[draft.id];
-                                                            localStorage.setItem('campaign_local_sessions', JSON.stringify(sessions));
-                                                            setLocalDrafts(prev => prev.filter(d => d.id !== draft.id));
-                                                        }
-                                                    } catch { }
-                                                }
-                                            }} style={{ padding: '5px 10px', background: 'transparent', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', color: '#EF4444', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}>
-                                                Discard
-                                            </button>
-                                        </div>
-                                    </td>
+            {showEmpty && (
+                <EmptyState
+                    icon={activeTab === "archived" ? <Archive className="h-10 w-10" /> : <Megaphone className="h-10 w-10" />}
+                    title={activeTab === "archived" ? "No archived campaigns" : activeTab === "all" ? "No campaigns yet" : `No ${activeTab} campaigns`}
+                    description={activeTab === "archived" ? "Archived campaigns will appear here for later reference." : "Create your first campaign to start sending and tracking performance."}
+                    action={activeTab !== "archived" ? <Button onClick={handleCreateNew}>Create Campaign</Button> : undefined}
+                />
+            )}
+
+            {!loading && !showEmpty && (
+                <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)]">
+                    <TableToolbar
+                        title="Campaign List"
+                        description="Active, scheduled, paused, and archived campaigns in one operational view."
+                        trailing={<span className="text-xs text-[var(--text-muted)]">{filtered.length} visible</span>}
+                        className="rounded-none border-0 border-b border-[var(--border)]"
+                    />
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[900px] border-collapse">
+                            <thead>
+                                <tr className="border-b border-[var(--border)] bg-[var(--bg-hover)]">
+                                    {["Campaign", "Status", "Recipients", "Created", "Actions"].map((heading, index) => (
+                                        <th
+                                            key={heading}
+                                            className={`px-5 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)] ${index >= 2 ? 'text-right' : 'text-left'}`}
+                                        >
+                                            {heading}
+                                        </th>
+                                    ))}
                                 </tr>
-                            ))}
-                            {filtered.map((c, idx) => (
-                                <tr
-                                    key={c.id}
-                                    style={{
-                                        borderBottom: idx < filtered.length - 1 ? '1px solid var(--border)' : 'none',
-                                        transition: 'background 0.15s ease',
-                                    }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                                >
-                                    {/* Name + Subject */}
-                                    <td style={{ padding: '16px 20px' }}>
-                                        <Link href={`/campaigns/${c.id}`} style={{ textDecoration: 'none' }}>
-                                            <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{c.name}</p>
-                                            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '300px' }}>{c.subject}</p>
-                                        </Link>
-                                    </td>
-
-                                    {/* Status */}
-                                    <td style={{ padding: '16px 20px' }}>
-                                        <StatusBadge status={c.status} />
-                                    </td>
-
-                                    {/* Count */}
-                                    <td style={{ padding: '16px 20px', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                                        {c.stats?.[0]?.count ? c.stats[0].count.toLocaleString() : '—'}
-                                    </td>
-
-                                    {/* Date */}
-                                    <td style={{ padding: '16px 20px', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'right' }}>
-                                        {new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                    </td>
-
-                                    {/* Actions */}
-                                    <td style={{ padding: '16px 20px', textAlign: 'right' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', alignItems: 'center' }}>
-                                            {c.status === 'paused' && (
-                                                <button onClick={() => handleAction(c.id, 'resume')} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '6px', color: '#10B981', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}>
-                                                    <PlayCircle size={12} /> Resume
-                                                </button>
-                                            )}
-                                            {(c.status === 'sending' || c.status === 'processing') && (
-                                                <button onClick={() => handleAction(c.id, 'pause')} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.2)', borderRadius: '6px', color: '#F59E0B', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}>
-                                                    <Pause size={12} /> Pause
-                                                </button>
-                                            )}
-                                            {['sending', 'processing', 'paused', 'scheduled'].includes(c.status) && (
-                                                <button onClick={() => window.confirm('Cancel this campaign?') && handleAction(c.id, 'cancel')} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', color: '#EF4444', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}>
-                                                    <StopCircle size={12} /> Cancel
-                                                </button>
-                                            )}
-                                            {(c.status === 'draft' || c.status === 'paused') && (
-                                                <Link href={`/campaigns/new?edit=${c.id}`} style={{ padding: '5px 10px', background: 'transparent', border: '1px solid rgba(63, 63, 70, 0.4)', borderRadius: '6px', color: '#A1A1AA', fontSize: '12px', fontWeight: 500, cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
-                                                    Edit
+                            </thead>
+                            <tbody>
+                                {filtered.map((campaign, index) => {
+                                    const isWorking = actionLoading ? actionLoading.startsWith(campaign.id) : false;
+                                    return (
+                                        <tr key={campaign.id} className={`border-b border-[var(--border)] transition hover:bg-[var(--bg-hover)] ${index === filtered.length - 1 ? 'border-b-0' : ''}`}>
+                                            <td className="px-5 py-4">
+                                                <Link href={`/campaigns/${campaign.id}`} className="block">
+                                                    <p className="text-sm font-semibold text-[var(--text-primary)]">{campaign.name}</p>
+                                                    <p className="mt-1 max-w-[360px] truncate text-sm text-[var(--text-muted)]">{campaign.subject || "No subject"}</p>
                                                 </Link>
-                                            )}
-                                            {c.status === 'draft' ? (
-                                                <button onClick={() => window.confirm('Permanently delete this draft?') && handleAction(c.id, 'delete')} style={{ padding: '5px 10px', background: 'transparent', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', color: '#EF4444', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}>
-                                                    Delete
-                                                </button>
-                                            ) : (
-                                                <button onClick={() => window.confirm('Archive this campaign? It will be removed from this list but analytics will be saved.') && handleAction(c.id, 'delete')} style={{ padding: '5px 10px', background: 'transparent', border: '1px solid rgba(63, 63, 70, 0.4)', borderRadius: '6px', color: '#A1A1AA', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}>
-                                                    Archive
-                                                </button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                                            </td>
+                                            <td className="px-5 py-4">
+                                                <StatusBadge status={(campaign.status === "completed" ? "sent" : campaign.status) as any} />
+                                            </td>
+                                            <td className="px-5 py-4 text-right text-sm text-[var(--text-muted)]">
+                                                {campaign.stats?.[0]?.count ? campaign.stats[0].count.toLocaleString() : "—"}
+                                            </td>
+                                            <td className="px-5 py-4 text-right text-sm text-[var(--text-muted)]">
+                                                {new Date(campaign.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                            </td>
+                                            <td className="px-5 py-4">
+                                                <div className="flex flex-wrap justify-end gap-2">
+                                                    {campaign.status === "paused" && (
+                                                        <button disabled={isWorking} onClick={() => handleAction(campaign.id, "resume")} className={`inline-flex items-center gap-1 rounded-[var(--radius)] border px-2.5 py-1.5 text-xs font-medium transition ${actionButtonClass("success")}`}>
+                                                            <PlayCircle className="h-3.5 w-3.5" />
+                                                            Resume
+                                                        </button>
+                                                    )}
+                                                    {(campaign.status === "sending" || campaign.status === "processing") && (
+                                                        <button disabled={isWorking} onClick={() => handleAction(campaign.id, "pause")} className={`inline-flex items-center gap-1 rounded-[var(--radius)] border px-2.5 py-1.5 text-xs font-medium transition ${actionButtonClass("warning")}`}>
+                                                            <Pause className="h-3.5 w-3.5" />
+                                                            Pause
+                                                        </button>
+                                                    )}
+                                                    {["sending", "processing", "paused", "scheduled"].includes(campaign.status) && (
+                                                        <button
+                                                            disabled={isWorking}
+                                                            onClick={() => setPendingAction({
+                                                                kind: "campaign",
+                                                                id: campaign.id,
+                                                                action: "cancel",
+                                                                title: "Cancel Campaign?",
+                                                                message: "This campaign will stop progressing and no further messages will be sent.",
+                                                                confirmLabel: "Cancel Campaign",
+                                                                variant: "danger",
+                                                            })}
+                                                            className={`inline-flex items-center gap-1 rounded-[var(--radius)] border px-2.5 py-1.5 text-xs font-medium transition ${actionButtonClass("danger")}`}
+                                                        >
+                                                            <StopCircle className="h-3.5 w-3.5" />
+                                                            Cancel
+                                                        </button>
+                                                    )}
+                                                    {(campaign.status === "draft" || campaign.status === "paused") && (
+                                                        <Link href={`/campaigns/new?edit=${campaign.id}`} className={`inline-flex items-center gap-1 rounded-[var(--radius)] border px-2.5 py-1.5 text-xs font-medium transition ${actionButtonClass()}`}>
+                                                            Edit
+                                                        </Link>
+                                                    )}
+                                                    <button
+                                                        disabled={isWorking}
+                                                        onClick={() => handleAction(campaign.id, "duplicate")}
+                                                        title="Duplicate campaign"
+                                                        className={`inline-flex items-center gap-1 rounded-[var(--radius)] border px-2.5 py-1.5 text-xs font-medium transition ${actionButtonClass()}`}
+                                                    >
+                                                        <Copy className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    {campaign.status === "archived" ? (
+                                                        <button
+                                                            disabled={isWorking}
+                                                            onClick={() => setPendingAction({
+                                                                kind: "campaign",
+                                                                id: campaign.id,
+                                                                action: "unarchive",
+                                                                title: "Restore Campaign?",
+                                                                message: "This campaign will return to the active workflow and become easier to find again.",
+                                                                confirmLabel: "Restore",
+                                                                variant: "primary",
+                                                            })}
+                                                            className={`inline-flex items-center gap-1 rounded-[var(--radius)] border px-2.5 py-1.5 text-xs font-medium transition ${actionButtonClass("success")}`}
+                                                        >
+                                                            <ArchiveRestore className="h-3.5 w-3.5" />
+                                                            Restore
+                                                        </button>
+                                                    ) : campaign.status === "draft" ? (
+                                                        <button
+                                                            disabled={isWorking}
+                                                            onClick={() => setPendingAction({
+                                                                kind: "campaign",
+                                                                id: campaign.id,
+                                                                action: "delete",
+                                                                title: "Delete Draft?",
+                                                                message: "This draft will be permanently removed.",
+                                                                confirmLabel: "Delete Draft",
+                                                                variant: "danger",
+                                                            })}
+                                                            className={`inline-flex items-center gap-1 rounded-[var(--radius)] border px-2.5 py-1.5 text-xs font-medium transition ${actionButtonClass("danger")}`}
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            disabled={isWorking}
+                                                            onClick={() => setPendingAction({
+                                                                kind: "campaign",
+                                                                id: campaign.id,
+                                                                action: "archive",
+                                                                title: "Archive Campaign?",
+                                                                message: "This campaign will move out of the active workflow. You can restore it from the Archived tab later.",
+                                                                confirmLabel: "Archive",
+                                                                variant: "warning",
+                                                            })}
+                                                            className={`inline-flex items-center gap-1 rounded-[var(--radius)] border px-2.5 py-1.5 text-xs font-medium transition ${actionButtonClass()}`}
+                                                        >
+                                                            <Archive className="h-3.5 w-3.5" />
+                                                            Archive
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
 
-                    {/* Pagination Controls */}
                     {totalPages > 1 && (
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: '16px 20px', borderTop: '1px solid var(--border)', background: 'var(--bg-hover)' }}>
-                            <span style={{ fontSize: "13px", color: 'var(--text-muted)' }}>
-                                Showing {(page - 1) * 15 + 1}–{Math.min(page * 15, total)} of {total} campaigns
+                        <div className="flex items-center justify-between border-t border-[var(--border)] bg-[var(--bg-hover)] px-5 py-4">
+                            <span className="text-sm text-[var(--text-muted)]">
+                                Showing {showingRangeStart}-{showingRangeEnd} of {total} campaigns
                             </span>
-                            <div style={{ display: "flex", gap: "8px" }}>
-                                <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-                                    style={{ padding: "6px 14px", fontSize: "13px", fontWeight: 500, color: 'var(--text-primary)', backgroundColor: "transparent", border: `1px solid var(--border)`, borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", opacity: page <= 1 ? 0.4 : 1 }}>
-                                    <ChevronLeft size={14} /> Prev
-                                </button>
-                                <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-                                    style={{ padding: "6px 14px", fontSize: "13px", fontWeight: 500, color: 'var(--text-primary)', backgroundColor: "transparent", border: `1px solid var(--border)`, borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", opacity: page >= totalPages ? 0.4 : 1 }}>
-                                    Next <ChevronRight size={14} />
-                                </button>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>
+                                    <ChevronLeft className="h-4 w-4" />
+                                    Prev
+                                </Button>
+                                <Button variant="ghost" size="sm" disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>
+                                    Next
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
                             </div>
                         </div>
                     )}
                 </div>
             )}
-        </>
+
+            <ConfirmModal
+                isOpen={!!pendingAction}
+                onClose={() => setPendingAction(null)}
+                onConfirm={() => {
+                    if (!pendingAction) return;
+                    const current = pendingAction;
+                    setPendingAction(null);
+                    if (current.kind === "discard_local") {
+                        discardLocalDraft(current.id);
+                        return;
+                    }
+                    if (current.kind === "campaign" && current.action) {
+                        void handleAction(current.id, current.action);
+                    }
+                }}
+                title={pendingAction?.title}
+                message={pendingAction?.message || ""}
+                confirmLabel={pendingAction?.confirmLabel}
+                variant={pendingAction?.variant}
+            />
+        </div>
     );
 }

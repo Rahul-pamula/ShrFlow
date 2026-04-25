@@ -1,19 +1,18 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Plus, Search, Trash2, Copy, FileText, ChevronRight } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Plus, Search, Trash2, Copy, FileText, ChevronRight, Sparkles, LayoutTemplate } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { TEMPLATE_PRESETS } from "./templatePresets";
+import { Button, ConfirmModal, FilterBar, EmptyState, PageHeader, SectionCard, StatCard, useToast } from "@/components/ui";
 
-// ===== API Helper =====
 const API_BASE = "http://127.0.0.1:8000";
 
 function apiHeaders(token: string) {
     return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 }
 
-// ===== Types =====
 interface Template {
     id: string;
     name: string;
@@ -21,14 +20,14 @@ interface Template {
     category: string;
     updated_at: string;
     compiled_html: string;
-    design_json?: { editor?: string;[key: string]: any };
+    design_json?: { editor?: string; [key: string]: any };
 }
 
 export default function TemplatesPage() {
     const { token, isLoading: authLoading } = useAuth();
     const router = useRouter();
+    const { success, error } = useToast();
 
-    // State
     const [templates, setTemplates] = useState<Template[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
@@ -36,8 +35,8 @@ export default function TemplatesPage() {
     const [total, setTotal] = useState(0);
     const [creatingPreset, setCreatingPreset] = useState<string | null>(null);
     const [showAllPresets, setShowAllPresets] = useState(false);
+    const [pendingAction, setPendingAction] = useState<{ type: "duplicate" | "delete"; id: string } | null>(null);
 
-    // Initial Fetch
     useEffect(() => {
         if (!authLoading && token) {
             fetchTemplates();
@@ -48,7 +47,7 @@ export default function TemplatesPage() {
         setLoading(true);
         try {
             const res = await fetch(`${API_BASE}/templates?page=${page}&limit=12`, {
-                headers: apiHeaders(token!)
+                headers: apiHeaders(token!),
             });
             if (res.ok) {
                 const data = await res.json();
@@ -62,12 +61,10 @@ export default function TemplatesPage() {
         }
     };
 
-    // Use a preset: create it in the DB and redirect to editor
     const handleUsePreset = async (presetId: string) => {
-        const preset = TEMPLATE_PRESETS.find(p => p.id === presetId);
+        const preset = TEMPLATE_PRESETS.find((entry) => entry.id === presetId);
         if (!preset) return;
 
-        // Blank canvas goes to /templates/new
         if (presetId === "blank") {
             router.push("/templates/new");
             return;
@@ -85,344 +82,245 @@ export default function TemplatesPage() {
                     design_json: preset.design || {},
                     compiled_html: "<p>Loading…</p>",
                     template_type: "block",
-                    schema_version: "2.0.0"
-                })
+                    schema_version: "2.0.0",
+                }),
             });
 
             if (res.ok) {
                 const data = await res.json();
                 router.push(`/templates/${data.id}/builder`);
             } else {
-                alert("Failed to create template from preset");
+                error("Failed to create template from preset");
             }
         } catch (err) {
             console.error(err);
-            alert("Error creating template");
+            error("Error creating template");
         } finally {
             setCreatingPreset(null);
         }
     };
 
-    const handleEdit = (id: string, editorType?: string) => {
+    const handleEdit = (id: string) => {
         router.push(`/templates/${id}/builder`);
     };
 
     const handleDuplicate = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        if (!confirm("Duplicate this template?")) return;
+        setPendingAction({ type: "duplicate", id });
+    };
+
+    const confirmDuplicate = async (id: string) => {
         try {
             const res = await fetch(`${API_BASE}/templates/${id}/duplicate`, {
                 method: "POST",
-                headers: apiHeaders(token!)
+                headers: apiHeaders(token!),
             });
-            if (res.ok) fetchTemplates();
-        } catch (err) {
-            alert("Failed to duplicate template");
+            if (res.ok) {
+                success("Template duplicated");
+                fetchTemplates();
+            } else {
+                error("Failed to duplicate template");
+            }
+        } catch {
+            error("Failed to duplicate template");
         }
     };
 
     const handleDelete = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        if (!confirm("Are you sure you want to delete this template?")) return;
+        setPendingAction({ type: "delete", id });
+    };
+
+    const confirmDelete = async (id: string) => {
         try {
             const res = await fetch(`${API_BASE}/templates/${id}`, {
                 method: "DELETE",
-                headers: apiHeaders(token!)
+                headers: apiHeaders(token!),
             });
-            if (res.ok) fetchTemplates();
-        } catch (err) {
-            alert("Failed to delete template");
+            if (res.ok) {
+                success("Template deleted");
+                fetchTemplates();
+            } else {
+                error("Failed to delete template");
+            }
+        } catch {
+            error("Failed to delete template");
         }
     };
 
-    if (authLoading) return <div style={{ padding: "40px" }}>Loading auth...</div>;
+    const filtered = useMemo(() => (
+        templates.filter((template) =>
+            template.name.toLowerCase().includes(search.toLowerCase()) ||
+            template.subject.toLowerCase().includes(search.toLowerCase()),
+        )
+    ), [templates, search]);
 
-    const filtered = templates.filter(t =>
-        t.name.toLowerCase().includes(search.toLowerCase()) ||
-        t.subject.toLowerCase().includes(search.toLowerCase())
-    );
-
-    // Show first row (6 presets) or all
     const visiblePresets = showAllPresets ? TEMPLATE_PRESETS : TEMPLATE_PRESETS.slice(0, 6);
 
+    const summaryMetrics = [
+        { label: "Templates", value: total.toLocaleString() },
+        { label: "Presets", value: TEMPLATE_PRESETS.length.toString() },
+        { label: "Visible Results", value: filtered.length.toString() },
+        { label: "Current Page", value: page.toString() },
+    ];
+
+    if (authLoading) {
+        return <div className="px-8 py-10 text-sm text-[var(--text-muted)]">Loading templates…</div>;
+    }
+
     return (
-        <div style={{ fontFamily: "Inter, sans-serif", color: "var(--text-primary)", minHeight: "100vh", backgroundColor: "var(--bg-primary)" }}>
-
-            {/* ====== TEMPLATE GALLERY ====== */}
-            <div style={{ backgroundColor: "var(--bg-card)", padding: "40px 0 32px", borderBottom: "1px solid var(--border)" }}>
-                <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "0 48px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-                        <h2 style={{ fontSize: "14px", fontWeight: 500, color: "var(--text-muted)", margin: 0, letterSpacing: "0.2px" }}>
-                            Start a new email from a template
-                        </h2>
-                        {TEMPLATE_PRESETS.length > 6 && (
-                            <button
-                                onClick={() => setShowAllPresets(!showAllPresets)}
-                                style={{
-                                    background: "none",
-                                    border: "none",
-                                    cursor: "pointer",
-                                    color: "#3B82F6",
-                                    fontSize: "13px",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "4px",
-                                    fontWeight: 500,
-                                    padding: "4px 8px",
-                                    borderRadius: "4px",
-                                    transition: "background-color 0.2s"
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(59, 130, 246, 0.1)"}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                            >
-                                {showAllPresets ? "Show less" : "Template gallery"}
-                                <ChevronRight size={16} style={{ transform: showAllPresets ? "rotate(90deg)" : "none", transition: "transform 0.2s" }} />
-                            </button>
-                        )}
+        <div className="space-y-8 pb-8">
+            <PageHeader
+                title="Templates"
+                subtitle="Create reusable email layouts, start from proven presets, and keep your sending system visually consistent."
+                action={
+                    <div className="flex gap-3">
+                        <Button variant="outline" onClick={() => setShowAllPresets((current) => !current)}>
+                            <Sparkles className="h-4 w-4" />
+                            {showAllPresets ? "Show Fewer Presets" : "Browse Presets"}
+                        </Button>
+                        <Button onClick={() => router.push("/templates/new")}>
+                            <Plus className="h-4 w-4" />
+                            New Template
+                        </Button>
                     </div>
+                }
+            />
 
-                    <div style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fill, minmax(148px, 1fr))",
-                        gap: "16px",
-                    }}>
-                        {visiblePresets.map(preset => (
-                            <div
-                                key={preset.id}
-                                onClick={() => handleUsePreset(preset.id)}
-                                style={{
-                                    cursor: creatingPreset === preset.id ? "wait" : "pointer",
-                                    opacity: creatingPreset === preset.id ? 0.6 : 1,
-                                    transition: "opacity 0.2s"
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        width: "100%",
-                                        aspectRatio: "3/4",
-                                        borderRadius: "8px",
-                                        border: "1px solid var(--border)",
-                                        overflow: "hidden",
-                                        backgroundColor: "var(--bg-hover)",
-                                        transition: "all 0.15s cubic-bezier(0.4,0.0,0.2,1)",
-                                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-                                        position: "relative"
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.borderColor = "#3B82F6";
-                                        e.currentTarget.style.boxShadow = "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.borderColor = "var(--border)";
-                                        e.currentTarget.style.boxShadow = "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)";
-                                    }}
-                                >
-                                    {/* Use PNG thumbnail if available, fallback to placeholder */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {summaryMetrics.map((metric) => (
+                    <StatCard key={metric.label} label={metric.label} value={metric.value} />
+                ))}
+            </div>
+
+            <SectionCard
+                title="Start from a proven structure"
+                description="Use these as launch points for onboarding, marketing, ecommerce, and lifecycle messaging."
+                action={TEMPLATE_PRESETS.length > 6 ? (
+                    <Button variant="ghost" onClick={() => setShowAllPresets((current) => !current)}>
+                        {showAllPresets ? "Show Less" : "Template Gallery"}
+                        <ChevronRight className={`h-4 w-4 transition ${showAllPresets ? "rotate-90" : ""}`} />
+                    </Button>
+                ) : undefined}
+            >
+                <div className="mb-5 flex items-center gap-2">
+                    <LayoutTemplate className="h-4 w-4 text-[var(--accent)]" />
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">Template Gallery</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+                    {visiblePresets.map((preset) => (
+                        <button
+                            key={preset.id}
+                            onClick={() => handleUsePreset(preset.id)}
+                            disabled={creatingPreset === preset.id}
+                            className="group text-left disabled:cursor-wait disabled:opacity-60"
+                        >
+                            <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)] transition group-hover:border-[var(--accent-border)] group-hover:bg-[var(--bg-hover)]">
+                                <div className="relative aspect-[3/4] overflow-hidden border-b border-[var(--border)] bg-[var(--bg-hover)]">
                                     {preset.thumbnail ? (
                                         <img
                                             src={preset.thumbnail}
                                             alt={preset.name}
-                                            style={{
-                                                width: "100%",
-                                                height: "100%",
-                                                objectFit: "cover",
-                                                display: "block"
-                                            }}
+                                            className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
                                         />
                                     ) : (
-                                        <div style={{
-                                            width: "100%",
-                                            height: "100%",
-                                            display: "flex",
-                                            flexDirection: "column",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            gap: "8px",
-                                            color: "#9CA3AF"
-                                        }}>
-                                            <Plus size={28} strokeWidth={1.5} />
-                                            <span style={{ fontSize: "12px", fontWeight: 500 }}>Blank Canvas</span>
+                                        <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-[var(--text-muted)]">
+                                            <Plus className="h-7 w-7" strokeWidth={1.5} />
+                                            <span className="text-xs font-medium">Blank Canvas</span>
                                         </div>
                                     )}
                                 </div>
-                                <div style={{ marginTop: "12px" }}>
-                                    <p style={{
-                                        fontSize: "14px",
-                                        fontWeight: 500,
-                                        margin: "0 0 4px 0",
-                                        color: "var(--text-primary)",
-                                        lineHeight: "20px",
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                        whiteSpace: "nowrap"
-                                    }}>
-                                        {preset.name}
-                                    </p>
-                                    <p style={{
-                                        fontSize: "12px",
-                                        color: "var(--text-muted)",
-                                        margin: 0,
-                                        textTransform: "capitalize",
-                                        fontWeight: 400
-                                    }}>
-                                        {preset.category}
-                                    </p>
+                                <div className="p-3">
+                                    <p className="truncate text-sm font-semibold text-[var(--text-primary)]">{preset.name}</p>
+                                    <p className="mt-1 truncate text-xs capitalize text-[var(--text-muted)]">{preset.category}</p>
                                 </div>
                             </div>
-                        ))}
-                    </div>
+                        </button>
+                    ))}
                 </div>
-            </div>
+            </SectionCard>
 
-            {/* ====== MY TEMPLATES ====== */}
-            <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "40px 48px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}>
-                    <div>
-                        <h1 style={{ fontSize: "18px", fontWeight: 500, marginBottom: "4px", color: "var(--text-primary)" }}>Recent email templates</h1>
-                        <p style={{ color: "var(--text-muted)", fontSize: "14px", margin: 0, fontWeight: 400 }}>
-                            Owned by anyone · {total} template{total !== 1 ? "s" : ""}
-                        </p>
-                    </div>
-                </div>
-
-                {/* Search */}
+            <SectionCard
+                title="Saved Templates"
+                description="Recent templates across the workspace. Search by name or subject and jump directly into the builder."
+            >
                 {total > 0 && (
-                    <div style={{ marginBottom: "24px", position: "relative", maxWidth: "420px" }}>
-                        <Search style={{ position: "absolute", left: "14px", top: "12px", color: "#9CA3AF", width: "16px", height: "16px" }} />
-                        <input
-                            type="text"
-                            placeholder="Search"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            style={{
-                                padding: "10px 14px 10px 40px",
-                                width: "100%",
-                                borderRadius: "8px",
-                                border: "1px solid var(--border)",
-                                fontSize: "14px",
-                                outline: "none",
-                                backgroundColor: "var(--bg-input)",
-                                color: "var(--text-primary)",
-                                transition: "background-color 0.2s, border-color 0.2s"
-                            }}
-                            onFocus={(e) => {
-                                e.currentTarget.style.backgroundColor = "var(--bg-hover)";
-                                e.currentTarget.style.borderColor = "#3B82F6";
-                            }}
-                            onBlur={(e) => {
-                                e.currentTarget.style.backgroundColor = "var(--bg-input)";
-                                e.currentTarget.style.borderColor = "var(--border)";
-                            }}
-                        />
-                    </div>
+                    <FilterBar className="mb-5">
+                        <div className="relative w-full max-w-sm">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+                            <input
+                                type="text"
+                                placeholder="Search templates..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="h-10 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-input)] pl-10 pr-4 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--accent)]"
+                            />
+                        </div>
+                    </FilterBar>
                 )}
 
-                {/* Template Grid */}
                 {loading ? (
-                    <div style={{ padding: "60px", textAlign: "center", color: "var(--text-muted)", fontSize: "14px" }}>Loading templates...</div>
+                    <div className="py-16 text-center text-sm text-[var(--text-muted)]">Loading templates...</div>
                 ) : filtered.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: "80px 24px", backgroundColor: "var(--bg-card)", borderRadius: "12px", border: "1px dashed var(--border)" }}>
-                        <FileText style={{ width: "48px", height: "48px", color: "var(--text-muted)", marginBottom: "16px", strokeWidth: 1.5, marginLeft: "auto", marginRight: "auto" }} />
-                        <h3 style={{ fontSize: "16px", fontWeight: 500, margin: "0 0 8px 0", color: "var(--text-primary)" }}>No templates yet</h3>
-                        <p style={{ color: "var(--text-muted)", fontSize: "14px", margin: 0, maxWidth: "400px", marginLeft: "auto", marginRight: "auto" }}>
-                            Choose a template above to get started, or create one from scratch.
-                        </p>
-                    </div>
+                    <EmptyState
+                        icon={<FileText className="h-10 w-10" />}
+                        title={total === 0 ? "No templates yet" : "No matching templates"}
+                        description={total === 0 ? "Choose a preset above or start from scratch to create your first reusable template." : "Try adjusting your search or create a new template."}
+                        action={<Button onClick={() => router.push("/templates/new")}>Create Template</Button>}
+                    />
                 ) : (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "16px" }}>
-                        {filtered.map(template => {
-                            // Check if compiled_html is real content (not just placeholder)
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        {filtered.map((template) => {
                             const hasRealHtml = template.compiled_html && template.compiled_html.length > 50;
 
                             return (
                                 <div
                                     key={template.id}
-                                    onClick={() => handleEdit(template.id, template.design_json?.editor)}
-                                    style={{
-                                        border: "1px solid var(--border)",
-                                        borderRadius: "8px",
-                                        overflow: "hidden",
-                                        cursor: "pointer",
-                                        transition: "all 0.15s cubic-bezier(0.4,0.0,0.2,1)",
-                                        backgroundColor: "var(--bg-card)",
-                                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)"
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.boxShadow = "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)";
-                                        e.currentTarget.style.borderColor = "#3B82F6";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.boxShadow = "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)";
-                                        e.currentTarget.style.borderColor = "var(--border)";
-                                    }}
+                                    onClick={() => handleEdit(template.id)}
+                                    className="group cursor-pointer overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-primary)] transition hover:border-[var(--accent-border)] hover:bg-[var(--bg-hover)]"
                                 >
-                                    {/* Preview */}
-                                    <div style={{ height: "140px", backgroundColor: "var(--bg-hover)", borderBottom: "1px solid var(--border)", position: "relative", overflow: "hidden" }}>
+                                    <div className="relative h-40 overflow-hidden border-b border-[var(--border)] bg-[var(--bg-hover)]">
                                         {hasRealHtml ? (
                                             <iframe
                                                 srcDoc={template.compiled_html}
                                                 title={template.name}
-                                                style={{ width: "200%", height: "200%", transform: "scale(0.5)", transformOrigin: "0 0", border: "none", pointerEvents: "none" }}
+                                                className="h-[200%] w-[200%] origin-top-left scale-50 border-0 pointer-events-none"
                                             />
                                         ) : (
-                                            <div style={{
-                                                width: "100%",
-                                                height: "100%",
-                                                display: "flex",
-                                                flexDirection: "column",
-                                                alignItems: "center",
-                                                justifyContent: "center",
-                                                gap: "6px",
-                                                color: "var(--text-muted)"
-                                            }}>
-                                                <FileText size={24} strokeWidth={1.5} />
-                                                <span style={{ fontSize: "11px" }}>No preview</span>
+                                            <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-[var(--text-muted)]">
+                                                <FileText className="h-7 w-7" strokeWidth={1.5} />
+                                                <span className="text-xs">No preview</span>
                                             </div>
                                         )}
                                     </div>
 
-                                    {/* Info */}
-                                    <div style={{ padding: "16px" }}>
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "4px" }}>
-                                            <h3 style={{
-                                                fontSize: "15px",
-                                                fontWeight: 500,
-                                                margin: 0,
-                                                whiteSpace: "nowrap",
-                                                overflow: "hidden",
-                                                textOverflow: "ellipsis",
-                                                maxWidth: "160px",
-                                                color: "var(--text-primary)"
-                                            }}>
-                                                {template.name}
-                                            </h3>
-                                            <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
+                                    <div className="p-4">
+                                        <div className="mb-2 flex items-start justify-between gap-3">
+                                            <h3 className="truncate text-sm font-semibold text-[var(--text-primary)]">{template.name}</h3>
+                                            <div className="flex gap-1">
                                                 <button
                                                     onClick={(e) => handleDuplicate(e, template.id)}
-                                                    style={{ background: "none", border: "none", cursor: "pointer", color: "#9CA3AF", padding: "4px", borderRadius: "4px", display: "flex", transition: "background-color 0.2s" }}
+                                                    className="rounded-[var(--radius)] p-1 text-[var(--text-muted)] transition hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)]"
                                                     title="Duplicate"
-                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "var(--bg-hover)"}
-                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                                                 >
-                                                    <Copy size={14} />
+                                                    <Copy className="h-3.5 w-3.5" />
                                                 </button>
                                                 <button
                                                     onClick={(e) => handleDelete(e, template.id)}
-                                                    style={{ background: "none", border: "none", cursor: "pointer", color: "#F87171", padding: "4px", borderRadius: "4px", display: "flex", transition: "background-color 0.2s" }}
+                                                    className="rounded-[var(--radius)] p-1 text-[var(--danger)] transition hover:bg-[var(--danger-bg)]"
                                                     title="Delete"
-                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(248, 113, 113, 0.1)"}
-                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                                                 >
-                                                    <Trash2 size={14} />
+                                                    <Trash2 className="h-3.5 w-3.5" />
                                                 </button>
                                             </div>
                                         </div>
-                                        <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: "0 0 12px 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                            {template.subject}
-                                        </p>
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", color: "#9CA3AF" }}>
-                                            <span>{new Date(template.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                                            <span style={{ backgroundColor: "var(--bg-hover)", padding: "4px 10px", borderRadius: "12px", fontSize: "11px", fontWeight: 500, textTransform: "capitalize", color: "var(--text-secondary)" }}>
+
+                                        <p className="truncate text-sm text-[var(--text-muted)]">{template.subject}</p>
+
+                                        <div className="mt-4 flex items-center justify-between gap-3 text-xs text-[var(--text-muted)]">
+                                            <span>{new Date(template.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                                            <span className="rounded-full border border-[var(--border)] bg-[var(--bg-card)] px-2 py-1 capitalize text-[var(--text-secondary)]">
                                                 {template.category}
                                             </span>
                                         </div>
@@ -432,7 +330,26 @@ export default function TemplatesPage() {
                         })}
                     </div>
                 )}
-            </div>
+            </SectionCard>
+
+            <ConfirmModal
+                isOpen={!!pendingAction}
+                onClose={() => setPendingAction(null)}
+                onConfirm={() => {
+                    if (!pendingAction) return;
+                    const current = pendingAction;
+                    setPendingAction(null);
+                    if (current.type === "duplicate") {
+                        void confirmDuplicate(current.id);
+                    } else {
+                        void confirmDelete(current.id);
+                    }
+                }}
+                title={pendingAction?.type === "duplicate" ? "Duplicate Template?" : "Delete Template?"}
+                message={pendingAction?.type === "duplicate" ? "Create a copy of this template so you can adapt it without changing the original." : "This template will be permanently removed from the workspace."}
+                confirmLabel={pendingAction?.type === "duplicate" ? "Duplicate" : "Delete"}
+                variant={pendingAction?.type === "duplicate" ? "primary" : "danger"}
+            />
         </div>
     );
 }

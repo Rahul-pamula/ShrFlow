@@ -12,7 +12,7 @@ function CampaignPageContent() {
     const draftId = searchParams.get("draft_id");
 
     return (
-        <div className="max-w-5xl mx-auto px-4 py-8">
+        <div className="max-w-5xl mx-auto px-4 pt-0 pb-8">
             {/* Header */}
             <div className="mb-6 flex items-center gap-4">
                 <Link
@@ -22,7 +22,7 @@ function CampaignPageContent() {
                     <ArrowLeft className="w-5 h-5" />
                 </Link>
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800">
+                    <h1 className="text-2xl font-bold text-slate-800 leading-none mt-0">
                         {editId ? "Edit Campaign" : "Create New Campaign"}
                     </h1>
                     <p className="text-slate-500 text-sm">

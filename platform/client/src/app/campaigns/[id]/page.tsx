@@ -5,340 +5,396 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import {
-    ArrowLeft, Copy, Settings, MoreHorizontal,
-    Mail, Users, MousePointer, AlertTriangle, RotateCcw,
-    Send, Eye, Loader2, TrendingUp, Pause, Play, XOctagon, X
+    AlertTriangle,
+    Copy,
+    Eye,
+    Loader2,
+    Mail,
+    Pause,
+    Play,
+    RotateCcw,
+    Send,
+    Settings,
+    TrendingUp,
+    X,
+    XOctagon,
 } from "lucide-react";
+
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { Button, InlineAlert, ModalShell, SectionCard, StatCard } from "@/components/ui";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-const STATUS_STYLES: Record<string, { bg: string; color: string; border: string }> = {
-    draft: { bg: "rgba(113,113,122,0.15)", color: "var(--text-secondary)", border: "rgba(113,113,122,0.3)" },
-    sending: { bg: "rgba(59,130,246,0.12)", color: "#60A5FA", border: "rgba(59,130,246,0.3)" },
-    sent: { bg: "rgba(34,197,94,0.12)", color: "#4ADE80", border: "rgba(34,197,94,0.3)" },
-    paused: { bg: "rgba(234,179,8,0.12)", color: "#FDE047", border: "rgba(234,179,8,0.3)" },
-    scheduled: { bg: "rgba(139,92,246,0.12)", color: "#A78BFA", border: "rgba(139,92,246,0.3)" },
-    cancelled: { bg: "rgba(239,68,68,0.12)", color: "#F87171", border: "rgba(239,68,68,0.3)" },
+const STATUS_STYLES: Record<string, string> = {
+    draft: "border-[var(--border)] bg-[var(--bg-hover)] text-[var(--text-muted)]",
+    sending: "border-[var(--info-border)] bg-[var(--info-bg)]/50 text-[var(--info)]",
+    sent: "border-[var(--success-border)] bg-[var(--success-bg)]/50 text-[var(--success)]",
+    paused: "border-[var(--warning-border)] bg-[var(--warning-bg)]/50 text-[var(--warning)]",
+    scheduled: "border-[var(--accent)]/20 bg-[var(--accent)]/10 text-[var(--accent)]",
+    cancelled: "border-[var(--danger-border)] bg-[var(--danger-bg)]/50 text-[var(--danger)]",
 };
 
 export default function CampaignDetailsPage() {
     const { id } = useParams();
     const { token } = useAuth();
+    const router = useRouter();
+
     const [campaign, setCampaign] = useState<any>(null);
     const [dispatch, setDispatch] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [showPreview, setShowPreview] = useState(false);
-    const router = useRouter();
 
     const loadCampaign = async () => {
         if (!token || !id) return;
         const headers = { Authorization: `Bearer ${token}` };
+
         const [camp, disp] = await Promise.all([
-            fetch(`${API_BASE}/campaigns/${id}`, { headers }).then(r => r.json()),
-            fetch(`${API_BASE}/campaigns/${id}/dispatch`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+            fetch(`${API_BASE}/campaigns/${id}`, { headers }).then((r) => r.json()),
+            fetch(`${API_BASE}/campaigns/${id}/dispatch`, { headers })
+                .then((r) => (r.ok ? r.json() : { data: [] }))
+                .catch(() => ({ data: [] })),
         ]);
+
         setCampaign(camp);
         setDispatch(disp.data || []);
         setLoading(false);
     };
 
-    const handleAction = async (action: 'pause' | 'resume' | 'cancel') => {
+    const handleAction = async (action: "pause" | "resume" | "cancel") => {
         if (!token) return;
+
         setActionLoading(action);
         try {
             await fetch(`${API_BASE}/campaigns/${id}/${action}`, {
-                method: 'POST', headers: { Authorization: `Bearer ${token}` }
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
             });
-            await loadCampaign(); // refresh
-        } catch (e) { console.error(e); }
-        finally { setActionLoading(null); }
+            await loadCampaign();
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setActionLoading(null);
+        }
     };
 
     const handleDuplicate = async () => {
         if (!token || !campaign) return;
-        setActionLoading('duplicate');
+        setActionLoading("duplicate");
+
         try {
             const res = await fetch(`${API_BASE}/campaigns/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
                     name: `${campaign.name} (Copy)`,
                     subject: campaign.subject,
                     body_html: campaign.body_html,
-                    status: 'draft',
+                    status: "draft",
                     from_name: campaign.from_name,
                     from_prefix: campaign.from_prefix,
                     domain_id: campaign.domain_id,
-                })
+                }),
             });
+
             if (res.ok) {
-                const newCamp = await res.json();
-                router.push(`/campaigns/new?edit=${newCamp.id}`);
+                const newCampaign = await res.json();
+                router.push(`/campaigns/new?edit=${newCampaign.id}`);
             }
-        } catch (e) { console.error(e); }
-        finally { setActionLoading(null); }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setActionLoading(null);
+        }
     };
 
     useEffect(() => {
         loadCampaign();
-
-        // Auto-refresh the campaign details every 5 seconds
-        // so dispatch stats and statuses update in real time
-        const interval = setInterval(() => {
-            loadCampaign();
-        }, 5000);
-
+        const interval = setInterval(loadCampaign, 5000);
         return () => clearInterval(interval);
     }, [token, id]);
 
-    if (loading) return (
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "60vh" }}>
-            <Loader2 size={32} color="#3B82F6" style={{ animation: "spin 1s linear infinite" }} />
-        </div>
-    );
+    if (loading) {
+        return (
+            <div className="flex h-[60vh] items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-[var(--accent)]" />
+            </div>
+        );
+    }
 
-    if (!campaign || campaign.detail) return (
-        <div style={{ textAlign: "center", padding: "60px" }}>
-            <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>Campaign not found.</p>
-            <Link href="/campaigns" style={{ color: "#3B82F6", fontSize: "13px" }}>← Back to Campaigns</Link>
-        </div>
-    );
+    if (!campaign || campaign.detail) {
+        return (
+            <div className="mx-auto max-w-3xl px-4 py-16 text-center">
+                <p className="text-sm text-[var(--text-muted)]">Campaign not found.</p>
+                <Link href="/campaigns" className="mt-4 inline-flex text-sm font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]">
+                    Back to campaigns
+                </Link>
+            </div>
+        );
+    }
 
-    const statusStyle = STATUS_STYLES[campaign.status] || STATUS_STYLES.draft;
-
-    // Compute real metrics from dispatch table
+    const statusClass = STATUS_STYLES[campaign.status] || STATUS_STYLES.draft;
     const total = dispatch.length;
-    const dispatched = dispatch.filter((d: any) => d.status === "DISPATCHED").length;
-    const failed = dispatch.filter((d: any) => d.status === "FAILED").length;
-    const pending = dispatch.filter((d: any) => ["PENDING", "PROCESSING"].includes(d.status)).length;
+    const delivered = dispatch.filter((item: any) => item.status === "DISPATCHED").length;
+    const failed = dispatch.filter((item: any) => item.status === "FAILED").length;
+    const pending = dispatch.filter((item: any) => ["PENDING", "PROCESSING"].includes(item.status)).length;
+    const failedDispatch = dispatch.filter((item: any) => item.status === "FAILED");
 
     const metrics = [
-        { label: "Total Sent", value: total, icon: Send, color: "#3B82F6", sub: "" },
-        { label: "Delivered", value: dispatched, icon: Mail, color: "#4ADE80", sub: total ? `${((dispatched / total) * 100).toFixed(1)}%` : "—" },
-        { label: "Pending", value: pending, icon: Loader2, color: "#FDE047", sub: "" },
-        { label: "Failed", value: failed, icon: AlertTriangle, color: "#F87171", sub: total ? `${((failed / total) * 100).toFixed(1)}%` : "—" },
+        {
+            title: "Total recipients",
+            value: total.toLocaleString(),
+            change: total === 0 ? "No dispatches yet" : "Current dispatch volume",
+            changeType: "neutral" as const,
+        },
+        {
+            title: "Delivered",
+            value: delivered.toLocaleString(),
+            change: total ? `${((delivered / total) * 100).toFixed(1)}% success` : "Waiting to send",
+            changeType: delivered > 0 ? "positive" as const : "neutral" as const,
+        },
+        {
+            title: "Pending",
+            value: pending.toLocaleString(),
+            change: pending > 0 ? "Still processing" : "No pending jobs",
+            changeType: pending > 0 ? "neutral" as const : "positive" as const,
+        },
+        {
+            title: "Failed",
+            value: failed.toLocaleString(),
+            change: total ? `${((failed / total) * 100).toFixed(1)}% failure rate` : "No failures",
+            changeType: failed > 0 ? "negative" as const : "positive" as const,
+        },
     ];
 
-    const failedDispatch = dispatch.filter((d: any) => d.status === "FAILED");
+    const activityBars = [
+        { label: "Delivered", pct: total ? (delivered / total) * 100 : 0, color: "bg-[var(--success)]", text: "text-[var(--success)]", value: delivered },
+        { label: "Failed", pct: total ? (failed / total) * 100 : 0, color: "bg-[var(--danger)]", text: "text-[var(--danger)]", value: failed },
+        { label: "Pending", pct: total ? (pending / total) * 100 : 0, color: "bg-[var(--warning)]", text: "text-[var(--warning)]", value: pending },
+    ];
 
     return (
-        <div style={{ padding: "24px 32px", maxWidth: "1100px" }}>
-            {/* Back */}
-            <Link href="/campaigns" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "var(--text-muted)", textDecoration: "none", marginBottom: "20px" }}>
-                <ArrowLeft size={14} /> Back to Campaigns
-            </Link>
+        <div className="mx-auto max-w-7xl space-y-8 px-4 pt-0 pb-8 sm:px-6">
+            <Breadcrumb
+                items={[
+                    { label: "Campaigns", href: "/campaigns" },
+                    { label: campaign.name },
+                ]}
+            />
 
-            {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "28px" }}>
-                <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "6px" }}>
-                        <h1 style={{ fontSize: "22px", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{campaign.name}</h1>
-                        <span style={{ padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", background: statusStyle.bg, color: statusStyle.color, border: `1px solid ${statusStyle.border}` }}>
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-3 mt-0">
+                        <h1 className="text-3xl font-semibold tracking-tight text-[var(--text-primary)] leading-none mt-0">{campaign.name}</h1>
+                        <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${statusClass}`}>
                             {campaign.status}
                         </span>
                     </div>
-                    <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: 0 }}>
-                        {campaign.scheduled_at ? `Sent on ${new Date(campaign.scheduled_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}` : `Created ${new Date(campaign.created_at).toLocaleDateString()}`}
+                    <p className="mt-3 text-sm leading-6 text-[var(--text-muted)]">
+                        {campaign.scheduled_at
+                            ? `Scheduled or sent on ${new Date(campaign.scheduled_at).toLocaleString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                            })}`
+                            : `Created ${new Date(campaign.created_at).toLocaleDateString()}`}
                     </p>
                 </div>
-                <div style={{ display: "flex", gap: "8px" }}>
-                    {/* Analytics link — shown for sent/sending campaigns */}
+
+                <div className="flex flex-wrap gap-3">
                     {["sent", "sending", "paused", "cancelled"].includes(campaign.status) && (
-                        <Link
-                            href={`/campaigns/${id}/analytics`}
-                            style={{
-                                display: "flex", alignItems: "center", gap: "6px",
-                                padding: "8px 16px", borderRadius: "8px", fontSize: "13px",
-                                fontWeight: 500, textDecoration: "none", cursor: "pointer",
-                                background: "rgba(99,102,241,0.12)",
-                                border: "1px solid rgba(99,102,241,0.3)",
-                                color: "#818CF8"
-                            }}
-                        >
-                            <TrendingUp size={14} /> Analytics
+                        <Link href={`/campaigns/${id}/analytics`}>
+                            <Button variant="secondary">
+                                <TrendingUp className="h-4 w-4" />
+                                Analytics
+                            </Button>
                         </Link>
                     )}
-                    {/* Pause/Resume/Cancel — only shown during active sends */}
+
                     {campaign.status === "sending" && (
                         <>
-                            <button onClick={() => handleAction('pause')} disabled={!!actionLoading}
-                                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: '8px', color: '#FDE047', fontSize: '13px', cursor: 'pointer' }}>
-                                {actionLoading === 'pause' ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Pause size={13} />}
+                            <Button variant="secondary" onClick={() => handleAction("pause")} isLoading={actionLoading === "pause"}>
+                                <Pause className="h-4 w-4" />
                                 Pause
-                            </button>
-                            <button onClick={() => handleAction('cancel')} disabled={!!actionLoading}
-                                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', color: '#F87171', fontSize: '13px', cursor: 'pointer' }}>
-                                {actionLoading === 'cancel' ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <XOctagon size={13} />}
+                            </Button>
+                            <Button variant="danger" onClick={() => handleAction("cancel")} isLoading={actionLoading === "cancel"}>
+                                <XOctagon className="h-4 w-4" />
                                 Cancel
-                            </button>
+                            </Button>
                         </>
                     )}
+
                     {campaign.status === "paused" && (
                         <>
-                            <button onClick={() => handleAction('resume')} disabled={!!actionLoading}
-                                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '8px', color: '#4ADE80', fontSize: '13px', cursor: 'pointer' }}>
-                                {actionLoading === 'resume' ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Play size={13} />}
+                            <Button variant="success" onClick={() => handleAction("resume")} isLoading={actionLoading === "resume"}>
+                                <Play className="h-4 w-4" />
                                 Resume
-                            </button>
-                            <button onClick={() => handleAction('cancel')} disabled={!!actionLoading}
-                                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', color: '#F87171', fontSize: '13px', cursor: 'pointer' }}>
-                                {actionLoading === 'cancel' ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <XOctagon size={13} />}
+                            </Button>
+                            <Button variant="danger" onClick={() => handleAction("cancel")} isLoading={actionLoading === "cancel"}>
+                                <XOctagon className="h-4 w-4" />
                                 Cancel
-                            </button>
+                            </Button>
                         </>
                     )}
-                    <button
-                        onClick={handleDuplicate}
-                        disabled={!!actionLoading}
-                        style={{ padding: "8px 14px", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-secondary)", fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                        {actionLoading === 'duplicate' ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Copy size={13} />}
+
+                    <Button variant="secondary" onClick={handleDuplicate} isLoading={actionLoading === "duplicate"}>
+                        <Copy className="h-4 w-4" />
                         Duplicate
-                    </button>
-                    <button onClick={() => setShowPreview(true)} className="btn-premium" style={{ fontSize: "13px" }}>
-                        <Eye size={13} style={{ display: "inline", marginRight: "6px" }} />View Preview
-                    </button>
+                    </Button>
+
+                    <Button onClick={() => setShowPreview(true)}>
+                        <Eye className="h-4 w-4" />
+                        View preview
+                    </Button>
                 </div>
             </div>
 
-            {/* Metrics Row */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "28px" }}>
-                {metrics.map((m) => {
-                    const Icon = m.icon;
-                    return (
-                        <div key={m.label} style={{ padding: "18px 20px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", backdropFilter: "blur(8px)" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-                                <span style={{ fontSize: "11px", fontWeight: 500, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{m.label}</span>
-                                <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: `${m.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                    <Icon size={13} color={m.color} />
-                                </div>
-                            </div>
-                            <div style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)", lineHeight: 1 }}>{m.value.toLocaleString()}</div>
-                            {m.sub && <div style={{ fontSize: "12px", color: m.color, marginTop: "4px", fontWeight: 500 }}>{m.sub}</div>}
-                        </div>
-                    );
-                })}
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {metrics.map((metric) => (
+                    <StatCard
+                        key={metric.title}
+                        label={metric.title}
+                        value={metric.value}
+                        trend={metric.changeType === "positive" ? 1 : metric.changeType === "negative" ? -1 : 0}
+                        trendLabel={metric.change}
+                    />
+                ))}
             </div>
 
-            {/* Two-column layout */}
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "20px" }}>
+            {total === 0 && (
+                <InlineAlert
+                    variant="info"
+                    title="No dispatch activity yet"
+                    description="This campaign has not produced recipient-level dispatch records yet. Once sending begins, delivery activity will appear here automatically."
+                />
+            )}
 
-                {/* Left: Activity + Failed */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-
-                    {/* Activity Timeline placeholder */}
-                    <div style={{ padding: "20px 22px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px" }}>
-                        <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", margin: "0 0 16px" }}>Activity Timeline</h3>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-                            {[
-                                { label: "Delivered", pct: total ? (dispatched / total) * 100 : 0, color: "#4ADE80", val: dispatched },
-                                { label: "Failed", pct: total ? (failed / total) * 100 : 0, color: "#F87171", val: failed },
-                                { label: "Pending", pct: total ? (pending / total) * 100 : 0, color: "#FDE047", val: pending },
-                            ].map(bar => (
+            <div className="grid gap-6 xl:grid-cols-[1.7fr_1fr]">
+                <div className="space-y-6">
+                    <SectionCard
+                        title="Activity timeline"
+                        description="A quick operational view of delivery progress across the current dispatch set."
+                    >
+                        <div className="space-y-5">
+                            {activityBars.map((bar) => (
                                 <div key={bar.label}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
-                                        <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{bar.label}</span>
-                                        <span style={{ fontSize: "12px", color: bar.color, fontWeight: 600 }}>{bar.val.toLocaleString()} <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>({bar.pct.toFixed(1)}%)</span></span>
+                                    <div className="mb-2 flex items-center justify-between text-sm">
+                                        <span className="text-[var(--text-secondary)]">{bar.label}</span>
+                                        <span className={`${bar.text} font-medium`}>
+                                            {bar.value.toLocaleString()} <span className="text-[var(--text-muted)]">({bar.pct.toFixed(1)}%)</span>
+                                        </span>
                                     </div>
-                                    <div style={{ height: "6px", background: "var(--border)", borderRadius: "3px", overflow: "hidden" }}>
-                                        <div style={{ height: "100%", width: `${bar.pct}%`, background: bar.color, borderRadius: "3px", transition: "width 0.6s ease" }} />
+                                    <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-hover)]">
+                                        <div className={`h-full ${bar.color} transition-all duration-500`} style={{ width: `${bar.pct}%` }} />
                                     </div>
                                 </div>
                             ))}
                         </div>
-                        {total === 0 && (
-                            <p style={{ color: "var(--text-muted)", fontSize: "13px", textAlign: "center", padding: "16px 0 0", margin: 0 }}>No dispatch data yet — launch the campaign first</p>
-                        )}
-                    </div>
+                    </SectionCard>
 
-                    {/* Failed Deliveries */}
-                    <div style={{ padding: "20px 22px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px" }}>
-                        <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", margin: "0 0 14px" }}>
-                            Failed Deliveries
-                            {failedDispatch.length > 0 && <span style={{ marginLeft: "8px", padding: "2px 7px", borderRadius: "10px", fontSize: "11px", background: "rgba(239,68,68,0.12)", color: "#F87171", border: "1px solid rgba(239,68,68,0.2)" }}>{failedDispatch.length}</span>}
-                        </h3>
+                    <SectionCard
+                        title="Failed deliveries"
+                        description="Recent failed recipient dispatches. This helps with quick triage before you drill into deeper analytics."
+                    >
                         {failedDispatch.length === 0 ? (
-                            <div style={{ textAlign: "center", padding: "24px 0", color: "var(--text-muted)", fontSize: "13px" }}>
-                                <div style={{ fontSize: "20px", marginBottom: "6px" }}>✅</div>
-                                No failed deliveries
+                            <div className="rounded-[var(--radius-lg)] border border-dashed border-[var(--success-border)] bg-[var(--success-bg)]/35 px-6 py-10 text-center">
+                                <p className="text-sm font-medium text-[var(--success)]">No failed deliveries</p>
+                                <p className="mt-2 text-sm text-[var(--text-muted)]">Everything processed so far has cleared this surface.</p>
                             </div>
                         ) : (
-                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                                <thead>
-                                    <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                                        <th style={{ padding: "8px 0", textAlign: "left", fontWeight: 500, color: "var(--text-muted)" }}>Email</th>
-                                        <th style={{ padding: "8px 0", textAlign: "left", fontWeight: 500, color: "var(--text-muted)" }}>Reason</th>
-                                        <th style={{ padding: "8px 0", width: "40px" }} />
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {failedDispatch.slice(0, 10).map((d: any) => (
-                                        <tr key={d.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                                            <td style={{ padding: "9px 0", color: "var(--text-primary)" }}>{d.subscriber_email || d.subscriber_id}</td>
-                                            <td style={{ padding: "9px 0", color: "#F87171", fontSize: "12px" }}>{d.error_log || "Unknown"}</td>
-                                            <td style={{ padding: "9px 0", textAlign: "right" }}>
-                                                <button title="Retry" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px" }}>
-                                                    <RotateCcw size={13} />
-                                                </button>
-                                            </td>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full border-separate border-spacing-0 text-sm">
+                                    <thead>
+                                        <tr className="text-left text-[var(--text-muted)]">
+                                            <th className="border-b border-[var(--border)] py-3 pr-4 font-medium">Email</th>
+                                            <th className="border-b border-[var(--border)] py-3 pr-4 font-medium">Reason</th>
+                                            <th className="border-b border-[var(--border)] py-3 text-right font-medium">Action</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {failedDispatch.slice(0, 10).map((item: any) => (
+                                            <tr key={item.id}>
+                                                <td className="border-b border-[var(--border)] py-3 pr-4 text-[var(--text-primary)]">
+                                                    {item.subscriber_email || item.subscriber_id}
+                                                </td>
+                                                <td className="border-b border-[var(--border)] py-3 pr-4 text-[var(--danger)]">
+                                                    {item.error_log || "Unknown"}
+                                                </td>
+                                                <td className="border-b border-[var(--border)] py-3 text-right">
+                                                    <button
+                                                        type="button"
+                                                        className="inline-flex items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                                                        title="Retry"
+                                                    >
+                                                        <RotateCcw className="h-4 w-4" />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
-                    </div>
+                    </SectionCard>
                 </div>
 
-                {/* Right: Details Panel */}
-                <div style={{ padding: "20px 22px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", height: "fit-content" }}>
-                    <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", margin: "0 0 18px" }}>Campaign Details</h3>
-
-                    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <SectionCard
+                    title="Campaign details"
+                    description="Core metadata and quick access to follow-up actions."
+                    action={(
+                        <Button variant="secondary">
+                            <Settings className="h-4 w-4" />
+                            Configure
+                        </Button>
+                    )}
+                >
+                    <div className="space-y-4">
                         {[
-                            { label: "Subject Line", value: campaign.subject },
+                            { label: "Subject line", value: campaign.subject || "—" },
                             { label: "Status", value: campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1) },
-                            { label: "Created", value: new Date(campaign.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) },
-                        ].map(item => (
-                            <div key={item.label}>
-                                <label style={{ fontSize: "11px", fontWeight: 500, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: "4px" }}>{item.label}</label>
-                                <div style={{ fontSize: "13px", color: "var(--text-primary)", lineHeight: 1.5 }}>{item.value}</div>
+                            {
+                                label: "Created",
+                                value: new Date(campaign.created_at).toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                }),
+                            },
+                            { label: "From name", value: campaign.from_name || "—" },
+                        ].map((item) => (
+                            <div key={item.label} className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-primary)] px-4 py-3">
+                                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">{item.label}</p>
+                                <p className="mt-2 text-sm text-[var(--text-primary)]">{item.value}</p>
                             </div>
                         ))}
                     </div>
-
-                    <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px solid var(--border)" }}>
-                        <button style={{ width: "100%", padding: "9px", background: "transparent", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-secondary)", fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px" }}>
-                            <Settings size={13} /> Configure
-                        </button>
-                    </div>
-                </div>
+                </SectionCard>
             </div>
 
-            {/* View Preview Modal */}
             {showPreview && (
-                <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(4px)" }}>
-                    <div style={{ background: "var(--bg-primary)", width: "90%", maxWidth: "800px", height: "85vh", borderRadius: "12px", border: "1px solid var(--border)", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px", borderBottom: "1px solid var(--border)", background: "var(--bg-hover)" }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Eye size={18} color="#8B5CF6" />
-                                <h3 style={{ margin: 0, color: "var(--text-primary)", fontSize: "15px", fontWeight: 600 }}>Email Preview</h3>
-                                <span style={{ color: "var(--text-muted)", fontSize: "13px", marginLeft: "12px", borderLeft: "1px solid var(--border)", paddingLeft: "12px" }}>
-                                    Subject: <span style={{ color: "var(--text-primary)" }}>{campaign.subject}</span>
-                                </span>
-                            </div>
-                            <button onClick={() => setShowPreview(false)} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", padding: "4px" }}>
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div style={{ flex: 1, background: "#FFFFFF", overflow: "hidden" }}>
-                            <iframe
-                                srcDoc={campaign.body_html || "<p>No content</p>"}
-                                style={{ width: "100%", height: "100%", border: "none" }}
-                                title="Email Preview"
-                            />
-                        </div>
+                <ModalShell
+                    isOpen={showPreview}
+                    onClose={() => setShowPreview(false)}
+                    title="Email preview"
+                    description={`Subject: ${campaign.subject || "No subject"}`}
+                    maxWidthClass="max-w-5xl"
+                >
+                    <div className="h-[70vh] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-white">
+                        <iframe
+                            srcDoc={campaign.body_html || "<p>No content</p>"}
+                            className="h-full w-full border-none"
+                            title="Email Preview"
+                        />
                     </div>
-                </div>
+                    <div className="mt-4 flex justify-end">
+                        <Button variant="secondary" onClick={() => setShowPreview(false)}>
+                            <X className="h-4 w-4" />
+                            Close preview
+                        </Button>
+                    </div>
+                </ModalShell>
             )}
         </div>
     );

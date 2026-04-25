@@ -17,6 +17,7 @@ import Step2Audience from "./Steps/Step2Audience";
 import Step3Content from "./Steps/Step3Content";
 import Step4Review from "./Steps/Step4Review";
 import { useAuth } from "@/context/AuthContext";
+import { Button, PageHeader, SectionCard } from "@/components/ui";
 
 const steps = [
     { id: 1, title: "Details", icon: FileText },
@@ -223,8 +224,8 @@ export default function CampaignWizard({ editCampaignId, draftCampaignId }: Prop
 
     if (loadingDraft) {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px', color: 'var(--text-muted)' }}>
-                <Loader2 size={32} className="animate-spin text-blue-500 mb-4" />
+            <div className="flex min-h-[400px] flex-col items-center justify-center text-[var(--text-muted)]">
+                <Loader2 className="mb-4 h-8 w-8 animate-spin text-[var(--accent)]" />
                 <p>Loading draft from database...</p>
             </div>
         );
@@ -241,49 +242,32 @@ export default function CampaignWizard({ editCampaignId, draftCampaignId }: Prop
     };
 
     return (
-        <div style={{ maxWidth: '860px', margin: '0 auto', padding: '32px 16px' }}>
-
-            {/* Header / Actions */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-                <div>
-                    <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px' }}>{editId ? 'Edit Campaign Draft' : 'Create New Campaign'}</h1>
-                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Follow the steps to design and launch your email.</p>
-                </div>
-                <button
-                    onClick={handleSaveDraftToDB}
-                    disabled={savingDraft || (!campaignData.name && !campaignData.subject)}
-                    style={{
-                        display: 'flex', alignItems: 'center', gap: '8px',
-                        padding: '8px 16px', background: 'var(--bg-card)', border: '1px solid var(--border)',
-                        borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500,
-                        cursor: (savingDraft || (!campaignData.name && !campaignData.subject)) ? 'not-allowed' : 'pointer',
-                        opacity: (savingDraft || (!campaignData.name && !campaignData.subject)) ? 0.5 : 1,
-                        transition: 'all 0.2s'
-                    }}
-                    onMouseOver={e => { if (!savingDraft && (campaignData.name || campaignData.subject)) e.currentTarget.style.color = 'var(--text-primary)'; }}
-                    onMouseOut={e => e.currentTarget.style.color = 'var(--text-secondary)'}
-                >
-                    {savingDraft ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                    Save Draft & Exit
-                </button>
-            </div>
+        <div className="mx-auto max-w-[860px] space-y-8 px-4 py-8">
+            <PageHeader
+                title={editId ? 'Edit Campaign Draft' : 'Create New Campaign'}
+                subtitle="Follow the steps to design, review, and launch your email."
+                action={
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSaveDraftToDB}
+                        disabled={savingDraft || (!campaignData.name && !campaignData.subject)}
+                        isLoading={savingDraft}
+                    >
+                        {!savingDraft && <Save className="h-4 w-4" />}
+                        Save Draft & Exit
+                    </Button>
+                }
+            />
 
             {/* Step Progress Header */}
-            <div style={{ marginBottom: '40px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
-                    {/* Progress Bar Track */}
-                    <div style={{
-                        position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
-                        width: '100%', height: '2px', background: 'var(--border)', zIndex: 0
-                    }} />
-                    {/* Active Progress Bar */}
-                    <div style={{
-                        position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
-                        height: '2px', zIndex: 1, borderRadius: '2px',
-                        background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
-                        width: `${((currentStep - 1) / 3) * 100}%`,
-                        transition: 'width 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
-                    }} />
+            <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] px-4 py-6 sm:px-6">
+                <div className="relative flex items-center justify-between">
+                    <div className="absolute left-0 top-1/2 h-0.5 w-full -translate-y-1/2 bg-[var(--border)]" />
+                    <div
+                        className="absolute left-0 top-1/2 z-[1] h-0.5 -translate-y-1/2 rounded-full bg-[var(--accent)] transition-all duration-300"
+                        style={{ width: `${((currentStep - 1) / 3) * 100}%` }}
+                    />
 
                     {steps.map((step) => {
                         const isActive = step.id === currentStep;
@@ -291,27 +275,21 @@ export default function CampaignWizard({ editCampaignId, draftCampaignId }: Prop
                         const Icon = step.icon;
 
                         return (
-                            <div key={step.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', zIndex: 2, background: 'var(--bg-primary)', padding: '0 12px' }}>
-                                <div style={{
-                                    width: '44px', height: '44px', borderRadius: '50%',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    border: isCompleted ? 'none' : `2px solid ${isActive ? '#3B82F6' : 'var(--border)'}`,
-                                    background: isCompleted
-                                        ? 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)'
-                                        : isActive
-                                            ? 'rgba(59, 130, 246, 0.1)'
-                                            : 'var(--bg-card)',
-                                    color: isCompleted ? 'white' : isActive ? '#3B82F6' : 'var(--text-muted)',
-                                    transition: 'all 0.3s ease',
-                                    boxShadow: isActive ? '0 0 20px rgba(59, 130, 246, 0.4)' : 'none'
-                                }}>
-                                    {isCompleted ? <Check size={18} /> : <Icon size={18} />}
+                            <div key={step.id} className="relative z-[2] flex flex-col items-center bg-[var(--bg-card)] px-2 sm:px-3">
+                                <div
+                                    className={`flex h-11 w-11 items-center justify-center rounded-full border-2 transition-all ${
+                                        isCompleted
+                                            ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
+                                            : isActive
+                                                ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] shadow-[0_0_20px_rgba(37,99,235,0.18)]'
+                                                : 'border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-muted)]'
+                                    }`}
+                                >
+                                    {isCompleted ? <Check className="h-4.5 w-4.5" /> : <Icon className="h-4.5 w-4.5" />}
                                 </div>
-                                <span style={{
-                                    marginTop: '8px', fontSize: '12px', fontWeight: 500,
-                                    color: isActive ? '#3B82F6' : isCompleted ? 'var(--text-muted)' : 'var(--text-secondary)',
-                                    transition: 'color 0.3s ease'
-                                }}>
+                                <span className={`mt-2 text-xs font-medium transition-colors ${
+                                    isActive ? 'text-[var(--accent)]' : isCompleted ? 'text-[var(--text-muted)]' : 'text-[var(--text-secondary)]'
+                                }`}>
                                     {step.title}
                                 </span>
                             </div>
@@ -321,9 +299,9 @@ export default function CampaignWizard({ editCampaignId, draftCampaignId }: Prop
             </div>
 
             {/* Step Content Card */}
-            <div className="glass-panel" style={{ minHeight: '420px' }}>
+            <SectionCard noPadding className="overflow-hidden">
                 {renderStep()}
-            </div>
+            </SectionCard>
         </div>
     );
 }

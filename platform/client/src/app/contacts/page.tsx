@@ -10,7 +10,6 @@ import {
     Trash2,
     ChevronLeft,
     ChevronRight,
-    X,
     AlertTriangle,
     Check,
     FileText,
@@ -19,9 +18,12 @@ import {
     Globe2,
     Loader2,
     CheckCircle2,
-    XCircle
+    XCircle,
+    Tag,
+    ShieldOff
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { Badge, Button, ConfirmModal, EmptyState, FilterBar, InlineAlert, Input, ModalShell, PageHeader, SectionCard, StatCard, TableToolbar, useToast } from "@/components/ui";
 
 // ===== API Helper =====
 const API_BASE = "http://localhost:8000";
@@ -56,6 +58,16 @@ interface Stats {
     available: number;
 }
 
+interface SuppressedContact {
+    id: string;
+    email: string;
+    first_name: string | null;
+    last_name: string | null;
+    status: string;
+    bounce_reason?: string;
+    created_at: string;
+}
+
 interface Batch {
     id: string;
     file_name: string;
@@ -68,45 +80,85 @@ interface Batch {
     created_at: string;
 }
 
+function deriveImportCounts(job: any, fallbackTotal: number) {
+    const total = Number(job?.total_rows ?? job?.total_items ?? fallbackTotal ?? 0);
+
+    if (job?.processed_rows !== undefined || job?.failed_rows !== undefined) {
+        const success = Number(job?.processed_rows ?? 0);
+        const failed = Number(job?.failed_rows ?? 0);
+        return {
+            total,
+            success: Math.max(0, Math.min(success, total)),
+            failed: Math.max(0, Math.min(failed, total)),
+        };
+    }
+
+    const processed = Number(job?.processed_items ?? 0);
+    const failed = Number(job?.failed_items ?? 0);
+    const safeFailed = Math.max(0, Math.min(failed, total));
+    const safeSuccess = Math.max(0, Math.min(total - safeFailed, total));
+
+    if ((job?.status === "processing" || job?.status === "pending") && total > 0) {
+        return {
+            total,
+            success: Math.max(0, Math.min(processed - safeFailed, safeSuccess)),
+            failed: safeFailed,
+        };
+    }
+
+    return {
+        total,
+        success: safeSuccess,
+        failed: safeFailed,
+    };
+}
+
 // ===== ErrorRow Component =====
 function ErrorRow({ err, idx, batchId, token, colors, onResolved }: {
     err: any; idx: number; batchId: string; token: string;
     colors: any; onResolved: () => void;
 }) {
+    const { success, error } = useToast();
     const [email, setEmail] = useState(err.email || "");
+    const [firstName, setFirstName] = useState(err.first_name || "");
+    const [lastName, setLastName] = useState(err.last_name || "");
     const [saving, setSaving] = useState(false);
     const [resolved, setResolved] = useState(false);
 
-    const inputStyle = {
-        padding: "4px 8px", fontSize: "12px", border: `1px solid ${colors.border}`,
-        borderRadius: "4px", width: "100%", boxSizing: "border-box" as const,
-        backgroundColor: "var(--bg-primary)", color: "var(--text-primary)"
-    };
-
     const handleResolve = async () => {
-        if (!email.trim()) return;
+        if (!email.trim() || !firstName.trim() || !lastName.trim()) {
+            error("Email, first name, and last name are all required.");
+            return;
+        }
         setSaving(true);
         try {
             const res = await fetch(`${API_BASE}/contacts/resolve-error`, {
                 method: "POST",
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ batch_id: batchId, error_index: idx, email })
+                body: JSON.stringify({ 
+                    batch_id: batchId, 
+                    error_index: idx, 
+                    email,
+                    first_name: firstName,
+                    last_name: lastName
+                })
             });
             if (res.ok) {
                 setResolved(true);
+                success(`${email} added successfully.`);
                 setTimeout(onResolved, 500);
             } else {
                 const data = await res.json();
-                alert(data.detail || "Failed to add contact");
+                error(data.detail || "Failed to add contact");
             }
-        } catch { alert("Error resolving contact"); }
+        } catch { error("Error resolving contact"); }
         setSaving(false);
     };
 
     if (resolved) {
         return (
-            <tr style={{ backgroundColor: "var(--success-bg)" }}>
-                <td colSpan={6} style={{ padding: "8px 12px", color: colors.success, fontSize: "12px", fontWeight: 500 }}>
+            <tr className="bg-[var(--success-bg)]">
+                <td colSpan={6} className="px-3 py-2 text-xs font-medium text-[var(--success)]">
                     ✓ {email} added successfully
                 </td>
             </tr>
@@ -114,38 +166,86 @@ function ErrorRow({ err, idx, batchId, token, colors, onResolved }: {
     }
 
     return (
-        <tr style={{ borderTop: `1px solid ${colors.dangerBorder}` }}>
-            <td style={{ padding: "6px 12px", color: colors.textSecondary, fontSize: "12px" }}>{err.row || "—"}</td>
-            <td style={{ padding: "6px 8px" }}>
-                <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com" style={inputStyle} />
+        <tr className="border-t border-[var(--danger-border)]">
+            <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{err.row || "—"}</td>
+            <td className="px-2 py-2">
+                <div className="flex flex-col gap-1">
+                    <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (Required)" className="h-8 text-xs" />
+                    <div className="flex gap-1">
+                        <div className="flex-1">
+                            <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First Name *" className="h-8 text-xs" />
+                        </div>
+                        <div className="flex-1">
+                            <Input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last Name *" className="h-8 text-xs" />
+                        </div>
+                    </div>
+                </div>
             </td>
 
-            <td style={{ padding: "6px 12px", color: colors.danger, fontSize: "11px" }}>{err.reason}</td>
-            <td style={{ padding: "6px 8px" }}>
-                <button
+            <td className="px-3 py-2 text-[11px] text-[var(--danger)]">{err.reason}</td>
+            <td className="px-2 py-2">
+                <Button
                     onClick={handleResolve}
-                    disabled={saving || !email.trim()}
-                    style={{
-                        padding: "4px 10px", fontSize: "11px", fontWeight: 500,
-                        color: "white", backgroundColor: saving ? "var(--text-muted)" : colors.success,
-                        border: "none", borderRadius: "4px", cursor: saving ? "wait" : "pointer",
-                        display: "flex", alignItems: "center", gap: "3px"
-                    }}
+                    disabled={saving || !email.trim() || !firstName.trim() || !lastName.trim()}
+                    size="sm"
+                    variant="success"
+                    isLoading={saving}
+                    className="h-8 text-[11px]"
                 >
-                    <Plus style={{ width: "12px", height: "12px" }} /> Add
-                </button>
+                    <Plus className="h-3 w-3" /> Add
+                </Button>
             </td>
         </tr>
     );
 }
 
+function getBatchMeta(batch: Batch) {
+    if (!batch.meta) return {};
+    if (typeof batch.meta === 'string') {
+        try {
+            return JSON.parse(batch.meta);
+        } catch {
+            return {};
+        }
+    }
+    return batch.meta;
+}
+
+function BatchStatusBadge({ status }: { status: string }) {
+    if (status === "completed") {
+        return <Badge variant="success" className="gap-1"><CheckCircle2 className="h-3.5 w-3.5" />Done</Badge>;
+    }
+    if (status === "failed") {
+        return <Badge variant="danger" className="gap-1"><XCircle className="h-3.5 w-3.5" />Failed</Badge>;
+    }
+    return <Badge variant="info" className="gap-1"><Loader2 className="h-3.5 w-3.5 animate-spin" />Importing</Badge>;
+}
+
+function UploadMetric({ label, value, tone = "default" }: { label: string; value: React.ReactNode; tone?: "default" | "success" | "accent" | "danger" }) {
+    const toneClass = tone === "success" ? "text-[var(--success)]" : tone === "accent" ? "text-[var(--accent)]" : tone === "danger" ? "text-[var(--danger)]" : "text-[var(--text-primary)]";
+    return (
+        <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)] p-4">
+            <div className="text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">{label}</div>
+            <div className={`mt-2 text-xl font-semibold ${toneClass}`}>{value}</div>
+        </div>
+    );
+}
+
 export default function ContactsPage() {
     const { token, user } = useAuth();
+    const { success, error, info, warning } = useToast();
     const router = useRouter();
-    const [activeTab, setActiveTab] = useState<"contacts" | "history">("contacts");
+    const [activeTab, setActiveTab] = useState<"contacts" | "history" | "suppression">("contacts");
 
     // Stats
     const [stats, setStats] = useState<Stats | null>(null);
+
+    // Suppression List
+    const [suppressedContacts, setSuppressedContacts] = useState<SuppressedContact[]>([]);
+    const [suppressionPage, setSuppressionPage] = useState(1);
+    const [suppressionTotalPages, setSuppressionTotalPages] = useState(1);
+    const [suppressionTotal, setSuppressionTotal] = useState(0);
+    const [suppressionLoading, setSuppressionLoading] = useState(false);
 
     // Contacts
     const [contacts, setContacts] = useState<Contact[]>([]);
@@ -159,6 +259,8 @@ export default function ContactsPage() {
     const [loading, setLoading] = useState(true);
     const [domainStats, setDomainStats] = useState<DomainStat[]>([]);
     const [domainsLoading, setDomainsLoading] = useState(false);
+    const [availableTags, setAvailableTags] = useState<string[]>([]);
+    const [tagFilter, setTagFilter] = useState("");
 
     // Dynamic columns
     const customFieldKeys = React.useMemo(() => {
@@ -190,7 +292,10 @@ export default function ContactsPage() {
     const [showUpload, setShowUpload] = useState(false);
     const [showDeleteAll, setShowDeleteAll] = useState(false);
     const [showBulkDelete, setShowBulkDelete] = useState(false);
+    const [showBulkTag, setShowBulkTag] = useState(false);
+    const [bulkTagInput, setBulkTagInput] = useState("");
     const [showBatchDelete, setShowBatchDelete] = useState<Batch | null>(null);
+    const [showSingleDelete, setShowSingleDelete] = useState<string | null>(null);
     const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
     // Upload state
@@ -225,6 +330,14 @@ export default function ContactsPage() {
             if (res.ok) setStats(await res.json());
         } catch (e) { console.error("Stats error:", e); }
     };
+    
+    const fetchTags = async () => {
+        if (!token) return;
+        try {
+            const res = await fetch(`${API_BASE}/contacts/tags`, { headers: apiHeaders(token) });
+            if (res.ok) setAvailableTags(await res.json());
+        } catch (e) { console.error("Tags error:", e); }
+    };
 
     const fetchContacts = async () => {
         if (!token) return;
@@ -239,6 +352,7 @@ export default function ContactsPage() {
             if (deferredSearch) params.set("search", deferredSearch);
             if (batchFilter) params.set("batch_id", batchFilter);
             if (domainFilter) params.set("domain", domainFilter);
+            if (tagFilter) params.set("tag", tagFilter);
             const res = await fetch(`${API_BASE}/contacts/?${params}`, { headers: apiHeaders(token), signal: controller.signal });
             if (res.ok) {
                 const data = await res.json();
@@ -301,8 +415,28 @@ export default function ContactsPage() {
         setBatchesLoading(false);
     };
 
-    useEffect(() => { fetchStats(); }, [token]);
-    useEffect(() => { fetchContacts(); }, [token, page, deferredSearch, batchFilter, domainFilter]);
+    const fetchSuppressionList = async () => {
+        if (!token) return;
+        setSuppressionLoading(true);
+        try {
+            const res = await fetch(`${API_BASE}/contacts/suppression?page=${suppressionPage}&limit=20`, {
+                headers: apiHeaders(token),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setSuppressedContacts(data.data || []);
+                setSuppressionTotalPages(data.meta?.total_pages || 1);
+                setSuppressionTotal(data.meta?.total || 0);
+            }
+        } catch (e) {
+            console.error("Suppression list error:", e);
+        } finally {
+            setSuppressionLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchStats(); fetchTags(); }, [token]);
+    useEffect(() => { fetchContacts(); }, [token, page, deferredSearch, batchFilter, domainFilter, tagFilter]);
     useEffect(() => { fetchDomains(); }, [token, batchFilter]);
     
     // Optimized Polling: Only poll history if specifically on that tab
@@ -312,7 +446,10 @@ export default function ContactsPage() {
             const interval = setInterval(fetchBatches, 8000); // Poll every 8 seconds to prevent "looping" logs
             return () => clearInterval(interval);
         }
-    }, [token, activeTab]);
+        if (token && activeTab === "suppression") {
+            fetchSuppressionList();
+        }
+    }, [token, activeTab, suppressionPage]);
 
     // ===== Selection =====
     const toggleSelect = (id: string) => {
@@ -364,11 +501,11 @@ export default function ContactsPage() {
                 setUploadStep(2);
             } else {
                 const err = await res.json();
-                alert(err.detail || "Preview failed");
+                error(err.detail || "Preview failed");
             }
         } catch (e: any) {
             console.error("Upload error caught:", e);
-            alert(`Upload failed: ${e.message || e}`);
+            error(`Upload failed: ${e.message || e}`);
         }
         setUploading(false);
     };
@@ -446,27 +583,28 @@ export default function ContactsPage() {
                     const jr = await fetch(`${API_BASE}/contacts/jobs/${initData.job_id}?t=${Date.now()}`, { headers: apiHeaders(token!) });
                     if (jr.ok) {
                         const job = await jr.json();
-                        // For the new table, we expect: status, processed_rows, failed_rows, total_rows
-                        const processed = job.processed_rows || 0;
-                        const failed = job.failed_rows || 0;
-                        const total = job.total_rows || rowCount;
-                        const progressPct = total > 0 ? Math.round(((processed + failed) / total) * 100) : 0;
+                        const counts = deriveImportCounts(job, rowCount);
+                        const progressProcessed = Number(job?.processed_rows ?? job?.processed_items ?? 0);
+                        const progressFailed = Number(job?.failed_rows ?? job?.failed_items ?? 0);
+                        const progressPct = counts.total > 0
+                            ? Math.min(100, Math.round(((progressProcessed + progressFailed) / counts.total) * 100))
+                            : 0;
                         
                         setJobProgress({ 
                             id: job.id, 
                             progress: progressPct, 
                             status: job.status, 
-                            processed_items: processed, 
-                            total_items: total, 
-                            failed_items: failed 
+                            processed_items: counts.success, 
+                            total_items: counts.total, 
+                            failed_items: counts.failed 
                         });
                         
                         if (job.status === 'completed' || job.status === 'failed') {
                             if (pollRef.current) clearInterval(pollRef.current);
                             setImportResult({
-                                total: total,
-                                success: processed,
-                                failed: failed,
+                                total: counts.total,
+                                success: counts.success,
+                                failed: counts.failed,
                                 batch_id: null,
                                 skipped_blank: 0,
                                 skipped_duplicates: 0,
@@ -490,7 +628,7 @@ export default function ContactsPage() {
 
         } catch (e: any) { 
             console.error(e);
-            alert(`Import failed: ${e.message}`); 
+            error(`Import failed: ${e.message}`); 
         } finally {
             setUploading(false);
         }
@@ -510,16 +648,17 @@ export default function ContactsPage() {
 
     // ===== Delete Operations =====
     const handleSingleDelete = async (id: string) => {
-        if (!confirm("Delete this contact?")) return;
         try {
             await fetch(`${API_BASE}/contacts/${id}`, {
                 method: "DELETE",
                 headers: apiHeaders(token!)
             });
+            success("Contact deleted.");
+            setShowSingleDelete(null);
             fetchContacts();
             fetchStats();
             fetchDomains();
-        } catch (e) { alert("Delete failed"); }
+        } catch (e) { error("Delete failed"); }
     };
 
     const handleBulkDelete = async () => {
@@ -531,10 +670,33 @@ export default function ContactsPage() {
             });
             setSelected(new Set());
             setShowBulkDelete(false);
+            success("Selected contacts deleted.");
             fetchContacts();
             fetchStats();
             fetchDomains();
-        } catch (e) { alert("Bulk delete failed"); }
+        } catch (e) { error("Bulk delete failed"); }
+    };
+
+    const handleBulkTag = async () => {
+        if (selected.size === 0 || !token || !bulkTagInput.trim()) return;
+        try {
+            const tags = bulkTagInput.split(",").map(t => t.trim()).filter(t => t);
+            await fetch(`${API_BASE}/contacts/bulk-tag`, {
+                method: "POST",
+                headers: { ...apiHeaders(token!), "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    contact_ids: Array.from(selected),
+                    tags: tags,
+                    action: "add"
+                })
+            });
+            setSelected(new Set());
+            setBulkTagInput("");
+            setShowBulkTag(false);
+            success("Tags added to selected contacts.");
+            fetchContacts();
+            fetchTags();
+        } catch (e) { error("Bulk tag failed"); }
     };
 
     const handleDeleteAll = async () => {
@@ -545,11 +707,12 @@ export default function ContactsPage() {
             });
             setShowDeleteAll(false);
             setDeleteConfirmText("");
+            success("All contacts deleted.");
             fetchContacts();
             fetchStats();
             fetchBatches();
             fetchDomains();
-        } catch (e) { alert("Delete all failed"); }
+        } catch (e) { error("Delete all failed"); }
     };
 
     const handleDeleteBatch = async (batch: Batch) => {
@@ -559,11 +722,12 @@ export default function ContactsPage() {
                 headers: apiHeaders(token!)
             });
             setShowBatchDelete(null);
+            success(`Deleted batch ${batch.file_name}.`);
             fetchContacts();
             fetchStats();
             fetchBatches();
             fetchDomains();
-        } catch (e) { alert("Batch delete failed"); }
+        } catch (e) { error("Batch delete failed"); }
     };
 
     // ===== Styles =====
@@ -677,7 +841,7 @@ export default function ContactsPage() {
             a.click();
             a.remove();
         } catch (e) {
-            alert("Failed to export batch.");
+            error("Failed to export batch.");
         }
     };
 
@@ -717,28 +881,28 @@ export default function ContactsPage() {
                                         a.click();
                                         document.body.removeChild(a);
                                     } else {
-                                        alert("Export completed but no download URL found.");
+                                        warning("Export completed but no download URL was returned.");
                                     }
                                 } else if (job.status === 'failed') {
                                     clearInterval(poll);
                                     setIsExporting(false);
-                                    alert("Export failed.");
+                                    error("Export failed.");
                                 }
                             }
                         } catch (e) {}
                     }, 2000);
                 } else {
                     setIsExporting(false);
-                    alert("No export job ID returned.");
+                    error("No export job ID returned.");
                 }
             } else {
                 setIsExporting(false);
-                alert("Failed to start export.");
+                error("Failed to start export.");
             }
         } catch (e) {
             setIsExporting(false);
             console.error("Export error:", e);
-            alert("An error occurred starting export.");
+            error("An error occurred starting export.");
         }
     };
 
@@ -762,14 +926,15 @@ export default function ContactsPage() {
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
+                success(`Exported batch ${batchFileName}.`);
             } else if (res.status === 429) {
-                alert("An export is already running for this workspace.");
+                info("An export is already running for this workspace.");
             } else {
-                alert("Failed to export batch.");
+                error("Failed to export batch.");
             }
         } catch (e) {
             console.error("Batch Export error:", e);
-            alert("An error occurred during batch export.");
+            error("An error occurred during batch export.");
         } finally {
             setDownloadingBatch(null);
         }
@@ -801,130 +966,98 @@ export default function ContactsPage() {
         border: `1px solid ${colors.border}`
     };
 
+    const statsSummary = stats ? [
+        { label: "Total Contacts", value: stats.total_contacts.toLocaleString() },
+        { label: "Plan Limit", value: stats.limit.toLocaleString() },
+        { label: "Remaining", value: stats.available.toLocaleString() },
+        { label: "Active Filters", value: [batchFilter, domainFilter, tagFilter].filter(Boolean).length.toString() },
+    ] : [];
+
     return (
-        <div style={{ padding: "24px 32px", maxWidth: "1200px" }}>
-            {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                <h1 style={{ fontSize: "24px", fontWeight: 600, color: colors.text, margin: 0 }}>Contacts</h1>
-                <div style={{ display: "flex", gap: "12px" }}>
-                    <button onClick={handleExport} disabled={isExporting} style={{...btnOutline, opacity: isExporting ? 0.7 : 1}}>
-                        {isExporting ? <Loader2 style={{ width: "16px", height: "16px", animation: "spin 2s linear infinite" }} /> : <Download style={{ width: "16px", height: "16px" }} />}
-                        {isExporting ? "Preparing Export..." : "Export CSV"}
-                    </button>
-                    <style dangerouslySetInnerHTML={{__html: `
-                        @keyframes spin { 100% { transform: rotate(360deg); } }
-                    `}} />
-                    <button
-                        onClick={() => stats && stats.usage_percent < 100 ? setShowUpload(true) : null}
-                        disabled={stats?.usage_percent === 100}
-                        title={stats?.usage_percent === 100 ? "Contact limit reached — upgrade your plan to add more" : "Upload Contacts"}
-                        style={{
-                            ...btnPrimary,
-                            ...(stats?.usage_percent === 100
-                                ? { opacity: 0.5, cursor: 'not-allowed', border: '1px solid rgba(239,68,68,0.4)', backgroundColor: 'rgba(239,68,68,0.12)', color: '#F87171' }
-                                : {})
-                        }}
-                    >
-                        <Upload style={{ width: "16px", height: "16px" }} /> Upload Contacts
-                    </button>
-                </div>
-            </div>
+        <div className="space-y-6 pb-8">
+            <PageHeader
+                title="Contacts"
+                subtitle="Import, filter, tag, and maintain audience health without leaving the operational workspace."
+                action={
+                    <div className="flex flex-wrap gap-3">
+                        <Button onClick={handleExport} disabled={isExporting} variant="outline">
+                            {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                            {isExporting ? "Preparing Export..." : "Export CSV"}
+                        </Button>
+                        <Button
+                            onClick={() => stats && stats.usage_percent < 100 ? setShowUpload(true) : null}
+                            disabled={stats?.usage_percent === 100}
+                            title={stats?.usage_percent === 100 ? "Contact limit reached — upgrade your plan to add more" : "Upload Contacts"}
+                        >
+                            <Upload className="h-4 w-4" />
+                            Upload Contacts
+                        </Button>
+                    </div>
+                }
+            />
 
             {/* Stats Bar */}
             {stats && (
-                <div style={{
-                    padding: "16px 20px",
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: "8px",
-                    marginBottom: "20px"
-                }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "8px" }}>
-                        <div>
-                            <span style={{ fontSize: "24px", fontWeight: 600, color: colors.text }}>
-                                {stats.total_contacts.toLocaleString()}
-                            </span>
-                            <span style={{ fontSize: "14px", color: colors.textSecondary, marginLeft: "6px" }}>
-                                of {stats.limit.toLocaleString()} contacts
-                            </span>
-                        </div>
-                        <span style={{ fontSize: "13px", color: colors.textSecondary }}>
-                            {stats.usage_percent}% used
-                        </span>
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        {statsSummary.map((item) => (
+                            <StatCard key={item.label} label={item.label} value={item.value} />
+                        ))}
                     </div>
-                    <div style={{ height: "4px", backgroundColor: "var(--bg-hover)", borderRadius: "2px" }}>
-                        <div style={{
-                            height: "100%",
-                            width: `${Math.min(stats.usage_percent, 100)}%`,
-                            backgroundColor: stats.usage_percent > 90 ? colors.danger : colors.accent,
-                            borderRadius: "2px",
-                            transition: "width 300ms ease"
-                        }} />
-                    </div>
+
                 </div>
             )}
 
             {/* Contact limit warning banners */}
             {stats && stats.usage_percent >= 100 && (
-                <div style={{
-                    marginBottom: "16px", padding: "12px 16px",
-                    borderRadius: "8px", border: "1px solid rgba(239,68,68,0.3)",
-                    backgroundColor: "rgba(239,68,68,0.08)",
-                    display: "flex", alignItems: "center", justifyContent: "space-between"
-                }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <AlertTriangle style={{ width: "16px", height: "16px", color: "#F87171", flexShrink: 0 }} />
+                <div className="flex items-center justify-between gap-4 rounded-[var(--radius-lg)] border border-[var(--danger-border)] bg-[var(--danger-bg)]/70 p-4">
+                    <div className="flex items-center gap-3">
+                        <AlertTriangle className="h-4 w-4 flex-shrink-0 text-[var(--danger)]" />
                         <div>
-                            <p style={{ fontSize: "13px", fontWeight: 600, color: "#F87171", margin: "0 0 2px" }}>Contact limit reached</p>
-                            <p style={{ fontSize: "12px", color: colors.textSecondary, margin: 0 }}>
+                            <p className="text-sm font-semibold text-[var(--danger)]">Contact limit reached</p>
+                            <p className="text-sm text-[var(--text-muted)]">
                                 You've used all {stats.limit.toLocaleString()} contacts on your plan. Upgrade to continue adding contacts.
                             </p>
                         </div>
                     </div>
-                    <Link href="/settings/billing" style={{
-                        padding: "7px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: 600,
-                        backgroundColor: "rgba(239,68,68,0.15)", color: "#F87171",
-                        border: "1px solid rgba(239,68,68,0.3)", textDecoration: "none", whiteSpace: "nowrap"
-                    }}>
-                        Upgrade Plan →
+                    <Link href="/settings/billing" className="whitespace-nowrap">
+                        <Button variant="outline" size="sm">Upgrade Plan</Button>
                     </Link>
                 </div>
             )}
             {stats && stats.usage_percent >= 80 && stats.usage_percent < 100 && (
-                <div style={{
-                    marginBottom: "16px", padding: "12px 16px",
-                    borderRadius: "8px", border: "1px solid rgba(234,179,8,0.3)",
-                    backgroundColor: "rgba(234,179,8,0.07)",
-                    display: "flex", alignItems: "center", justifyContent: "space-between"
-                }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <AlertTriangle style={{ width: "16px", height: "16px", color: "#FDE047", flexShrink: 0 }} />
-                        <p style={{ fontSize: "13px", color: "#FDE047", margin: 0 }}>
+                <div className="flex items-center justify-between gap-4 rounded-[var(--radius-lg)] border border-[var(--warning-border)] bg-[var(--warning-bg)]/70 p-4">
+                    <div className="flex items-center gap-3">
+                        <AlertTriangle className="h-4 w-4 flex-shrink-0 text-[var(--warning)]" />
+                        <p className="text-sm text-[var(--text-primary)]">
                             You've used <strong>{stats.usage_percent}%</strong> of your {stats.limit.toLocaleString()} contact limit.
                             Consider upgrading before you hit the cap.
                         </p>
                     </div>
-                    <Link href="/settings/billing" style={{
-                        padding: "7px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: 600,
-                        backgroundColor: "rgba(234,179,8,0.12)", color: "#FDE047",
-                        border: "1px solid rgba(234,179,8,0.3)", textDecoration: "none", whiteSpace: "nowrap"
-                    }}>
-                        View Plans →
+                    <Link href="/settings/billing" className="whitespace-nowrap">
+                        <Button variant="outline" size="sm">View Plans</Button>
                     </Link>
                 </div>
             )}
 
             {/* Tabs */}
-            <div style={{ display: "flex", gap: "0", borderBottom: `1px solid ${colors.border}`, marginBottom: "20px" }}>
-                <button onClick={() => setActiveTab("contacts")} style={tabStyle(activeTab === "contacts")}>
+            <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-2">
+                <button
+                    onClick={() => setActiveTab("contacts")}
+                    className={`rounded-[var(--radius)] px-4 py-2 text-sm font-medium transition ${activeTab === "contacts" ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'}`}
+                >
                     Contacts
                 </button>
-                <button onClick={() => setActiveTab("history")} style={tabStyle(activeTab === "history")}>
+                <button
+                    onClick={() => setActiveTab("history")}
+                    className={`rounded-[var(--radius)] px-4 py-2 text-sm font-medium transition ${activeTab === "history" ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'}`}
+                >
                     Import History
                 </button>
-                <div style={{ padding: "0 10px", display: "flex", alignItems: "center" }}>
-                    <div style={{ width: "1px", height: "20px", backgroundColor: colors.border }}></div>
-                </div>
-                <button onClick={() => router.push("/contacts/suppression")} style={tabStyle(false)}>
+                <button
+                    onClick={() => setActiveTab("suppression")}
+                    className={`rounded-[var(--radius)] px-4 py-2 text-sm font-medium transition ${activeTab === "suppression" ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'}`}
+                >
                     Suppression List
                 </button>
             </div>
@@ -932,42 +1065,19 @@ export default function ContactsPage() {
             {/* ===== TAB: Contacts ===== */}
             {activeTab === "contacts" && (
                 <>
-                    <div style={{
-                        marginBottom: "18px",
-                        padding: "14px",
-                        borderRadius: "12px",
-                        border: `1px solid ${colors.border}`,
-                        backgroundColor: colors.bgMuted
-                    }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                            <Globe2 style={{ width: "15px", height: "15px", color: "#93C5FD" }} />
-                            <span style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.12em", color: "#93C5FD", fontWeight: 700 }}>
-                                Contact Filters
-                            </span>
-                            {highlightedBatch && (
-                                <span style={{ fontSize: "12px", color: colors.textSecondary }}>
-                                    {highlightedBatch.file_name}
-                                </span>
-                            )}
-                        </div>
-                        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                            <div style={{ position: "relative", flex: "1 1 280px" }}>
-                                <Search style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", width: "16px", height: "16px", color: colors.textSecondary }} />
+                    <TableToolbar
+                        title="Contact Filters"
+                        description={highlightedBatch ? `Currently scoped to ${highlightedBatch.file_name}` : 'Filter by search, import batch, domain, or tag to narrow a large audience quickly.'}
+                        trailing={<span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]"><Globe2 className="h-4 w-4" />Audience Query</span>}
+                    >
+                        <FilterBar className="rounded-[var(--radius)] border-0 bg-transparent p-0">
+                            <div className="relative min-w-[280px] flex-[1_1_280px]">
+                                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
                                 <input
                                     placeholder="Search by email..."
                                     value={search}
                                     onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                                    style={{
-                                        width: "100%",
-                                        padding: "10px 12px 10px 36px",
-                                        fontSize: "14px",
-                                        border: `1px solid ${colors.border}`,
-                                        borderRadius: "10px",
-                                        outline: "none",
-                                        boxSizing: "border-box",
-                                        backgroundColor: "var(--bg-primary)",
-                                        color: "var(--text-primary)"
-                                    }}
+                                    className="h-10 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)] pl-10 pr-4 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--accent)]"
                                 />
                             </div>
                             <select
@@ -977,15 +1087,7 @@ export default function ContactsPage() {
                                     setDomainFilter("");
                                     setPage(1);
                                 }}
-                                style={{
-                                    flex: "1 1 220px",
-                                    padding: "10px 12px",
-                                    fontSize: "14px",
-                                    border: `1px solid ${colors.border}`,
-                                    borderRadius: "10px",
-                                    backgroundColor: "var(--bg-primary)",
-                                    color: colors.text
-                                }}
+                                className="h-10 min-w-[220px] flex-[1_1_220px] rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
                             >
                                 <option value="">All contacts</option>
                                 {batches.filter((entry) => entry.imported_count > 0).map((entry) => (
@@ -997,15 +1099,7 @@ export default function ContactsPage() {
                             <select
                                 value={domainFilter}
                                 onChange={(e) => { setDomainFilter(e.target.value); setPage(1); }}
-                                style={{
-                                    flex: "1 1 220px",
-                                    padding: "10px 12px",
-                                    fontSize: "14px",
-                                    border: `1px solid ${colors.border}`,
-                                    borderRadius: "10px",
-                                    backgroundColor: "var(--bg-primary)",
-                                    color: colors.text
-                                }}
+                                className="h-10 min-w-[180px] flex-[1_1_180px] rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
                             >
                                 <option value="">All domains</option>
                                 {domainStats.map((entry) => (
@@ -1015,49 +1109,55 @@ export default function ContactsPage() {
                                     </option>
                                 ))}
                             </select>
-                            {(domainFilter || batchFilter) && (
-                                <button onClick={() => { setBatchFilter(""); setDomainFilter(""); setPage(1); }} style={{ ...btnOutline, padding: "10px 14px", borderRadius: "10px", whiteSpace: "nowrap" }}>
+                            <select
+                                value={tagFilter}
+                                onChange={(e) => { setTagFilter(e.target.value); setPage(1); }}
+                                className="h-10 min-w-[180px] flex-[1_1_180px] rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
+                            >
+                                <option value="">All Tags</option>
+                                {availableTags.map((tag) => (
+                                    <option key={tag} value={tag}>{tag}</option>
+                                ))}
+                            </select>
+                            {(domainFilter || batchFilter || tagFilter) && (
+                                <Button onClick={() => { setBatchFilter(""); setDomainFilter(""); setTagFilter(""); setPage(1); }} variant="outline">
                                     Clear
-                                </button>
+                                </Button>
                             )}
-                        </div>
+                        </FilterBar>
                         {domainsLoading && domainStats.length === 0 && (
-                            <p style={{ fontSize: "12px", color: colors.textSecondary, margin: "10px 0 0" }}>Loading domains...</p>
+                            <p className="mt-3 text-xs text-[var(--text-muted)]">Loading domains...</p>
                         )}
-                    </div>
+                    </TableToolbar>
 
                     {selected.size > 0 && (
-                        <div
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "12px",
-                                padding: "10px 16px",
-                                backgroundColor: "rgba(59,130,246,0.1)",
-                                border: `1px solid rgba(59,130,246,0.35)`,
-                                borderRadius: "12px",
-                                marginBottom: "16px",
-                                boxShadow: "0 10px 28px rgba(59,130,246,0.12)"
-                            }}
-                        >
-                            <span style={{ fontSize: "14px", fontWeight: 500, color: colors.text }}>
-                                {selected.size} contact{selected.size > 1 ? "s" : ""} selected
-                            </span>
-                            <button onClick={() => setShowBulkDelete(true)} style={{ ...btnDanger, fontSize: "13px", padding: "6px 12px" }}>
-                                <Trash2 style={{ width: "14px", height: "14px" }} /> Delete Selected
-                            </button>
-                            <button onClick={() => setSelected(new Set())} style={{ ...btnOutline, fontSize: "13px", padding: "6px 12px" }}>
-                                Clear
-                            </button>
-                        </div>
+                        <InlineAlert
+                            variant="info"
+                            title={`${selected.size} contact${selected.size > 1 ? "s" : ""} selected`}
+                            description="Apply tags, remove records, or clear the current selection without losing your filter context."
+                            action={
+                                <>
+                                    <Button onClick={() => setShowBulkTag(true)} variant="outline" size="sm">
+                                        <Tag className="h-3.5 w-3.5" /> Bulk Tag
+                                    </Button>
+                                    <Button onClick={() => setShowBulkDelete(true)} variant="danger" size="sm">
+                                        <Trash2 className="h-3.5 w-3.5" /> Delete Selected
+                                    </Button>
+                                    <Button onClick={() => setSelected(new Set())} variant="ghost" size="sm">
+                                        Clear
+                                    </Button>
+                                </>
+                            }
+                        />
                     )}
 
                     {/* Contacts Table */}
-                    <div style={{ border: `1px solid ${colors.border}`, borderRadius: "8px", overflow: "hidden", overflowX: "auto" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", minWidth: "800px" }}>
+                    <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)]">
+                        <div className="overflow-x-auto">
+                        <table className="w-full min-w-[960px] border-collapse text-sm">
                             <thead>
-                                <tr style={{ backgroundColor: colors.bgMuted, borderBottom: `1px solid ${colors.border}` }}>
-                                    <th style={{ padding: "10px 12px", width: "40px", textAlign: "left" }}>
+                                <tr className="border-b border-[var(--border)] bg-[var(--bg-hover)]">
+                                    <th className="w-10 px-3 py-3 text-left">
                                         <input
                                             type="checkbox"
                                             checked={contacts.length > 0 && selected.size === contacts.length}
@@ -1065,38 +1165,33 @@ export default function ContactsPage() {
                                             style={{ cursor: "pointer" }}
                                         />
                                     </th>
-                                    <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 500, color: colors.textSecondary }}>Email</th>
-                                    <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 500, color: colors.textSecondary }}>Tags</th>
+                                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Email</th>
+                                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Tags</th>
                                     {customFieldKeys.map(key => (
-                                        <th key={key} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 500, color: colors.textSecondary, textTransform: "capitalize" }}>
+                                        <th key={key} className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
                                             {key.replace(/_/g, " ")}
                                         </th>
                                     ))}
-                                    <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 500, color: colors.textSecondary }}>Created</th>
-                                    <th style={{ padding: "10px 12px", width: "60px" }}></th>
+                                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Created</th>
+                                    <th className="w-[60px] px-3 py-3"></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {loading ? (
-                                    <tr><td colSpan={4 + customFieldKeys.length} style={{ padding: "32px", textAlign: "center", color: colors.textSecondary }}>Loading...</td></tr>
+                                    <tr><td colSpan={4 + customFieldKeys.length} className="px-3 py-10 text-center text-[var(--text-muted)]">Loading...</td></tr>
                                 ) : contacts.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4 + customFieldKeys.length} style={{ padding: "48px", textAlign: "center" }}>
-                                            <p style={{ color: colors.textSecondary, marginBottom: "12px" }}>
-                                                {domainFilter
-                                                    ? `No contacts found for ${domainFilter}. Clear the filter or import more data.`
-                                                    : "No contacts yet. Upload a CSV or Excel file to get started."}
-                                            </p>
-                                            {domainFilter ? (
-                                                <button onClick={() => { setDomainFilter(""); setPage(1); }} style={btnOutline}>Clear Domain Filter</button>
-                                            ) : (
-                                                <button onClick={() => setShowUpload(true)} style={btnPrimary}>Upload Contacts</button>
-                                            )}
+                                        <td colSpan={4 + customFieldKeys.length} className="p-0">
+                                            <EmptyState
+                                                title={domainFilter ? `No contacts found for ${domainFilter}` : "No contacts yet"}
+                                                description={domainFilter ? "Clear the filter or import more data." : "Upload a CSV or Excel file to start building your audience."}
+                                                action={domainFilter ? <Button variant="outline" onClick={() => { setDomainFilter(""); setPage(1); }}>Clear Domain Filter</Button> : <Button onClick={() => setShowUpload(true)}>Upload Contacts</Button>}
+                                            />
                                         </td>
                                     </tr>
                                 ) : contacts.map((c) => (
-                                    <tr key={c.id} style={{ borderBottom: `1px solid ${colors.border}` }}>
-                                        <td style={{ padding: "10px 12px" }}>
+                                    <tr key={c.id} className="border-b border-[var(--border)] transition hover:bg-[var(--bg-hover)]">
+                                        <td className="px-3 py-3">
                                             <input
                                                 type="checkbox"
                                                 checked={selected.has(c.id)}
@@ -1104,36 +1199,29 @@ export default function ContactsPage() {
                                                 style={{ cursor: "pointer" }}
                                             />
                                         </td>
-                                        <td style={{ padding: "10px 12px", color: colors.accent, fontWeight: 500 }}>
-                                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                                <Link href={`/contacts/${c.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+                                        <td className="px-3 py-3">
+                                            <div className="flex flex-col gap-1">
+                                                <Link href={`/contacts/${c.id}`} className="font-semibold text-[var(--accent)] no-underline">
                                                     {c.email}
                                                 </Link>
-                                                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                                                    <span style={{ fontSize: "11px", color: colors.textSecondary }}>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <span className="text-xs text-[var(--text-muted)]">
                                                         {(c.first_name || c.last_name)
                                                             ? [c.first_name, c.last_name].filter(Boolean).join(" ")
                                                             : "Unnamed contact"}
                                                     </span>
                                                     {c.email_domain && (
-                                                        <span style={{
-                                                            padding: "2px 8px",
-                                                            fontSize: "11px",
-                                                            borderRadius: "999px",
-                                                            backgroundColor: "rgba(59,130,246,0.12)",
-                                                            color: "#93C5FD",
-                                                            border: "1px solid rgba(59,130,246,0.22)"
-                                                        }}>
+                                                        <span className="rounded-full border border-[var(--accent-border)] bg-[var(--accent)]/10 px-2 py-0.5 text-[11px] text-[var(--accent)]">
                                                             {c.email_domain}
                                                         </span>
                                                     )}
                                                 </div>
                                             </div>
                                         </td>
-                                        <td style={{ padding: "10px 12px", color: colors.textSecondary }}>
-                                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                                        <td className="px-3 py-3 text-[var(--text-muted)]">
+                                            <div className="flex flex-wrap gap-1">
                                                 {c.tags?.map((t: string) => (
-                                                    <span key={t} style={{ padding: "2px 6px", fontSize: "11px", backgroundColor: "var(--bg-hover)", border: `1px solid ${colors.border}`, borderRadius: "4px" }}>
+                                                    <span key={t} className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-hover)] px-1.5 py-0.5 text-[11px]">
                                                         {t}
                                                     </span>
                                                 ))}
@@ -1141,64 +1229,59 @@ export default function ContactsPage() {
                                             </div>
                                         </td>
                                         {customFieldKeys.map(key => (
-                                            <td key={key} style={{ padding: "10px 12px", color: colors.textSecondary }}>
+                                            <td key={key} className="px-3 py-3 text-[var(--text-muted)]">
                                                 {c.custom_fields?.[key] || "—"}
                                             </td>
                                         ))}
-                                        <td style={{ padding: "10px 12px", color: colors.textSecondary, fontSize: "13px" }}>
+                                        <td className="px-3 py-3 text-sm text-[var(--text-muted)]">
                                             {new Date(c.created_at).toLocaleDateString()}
                                         </td>
-                                        <td style={{ padding: "10px 12px" }}>
+                                        <td className="px-3 py-3">
                                             <button
-                                                onClick={() => handleSingleDelete(c.id)}
-                                                style={{ background: "none", border: "none", cursor: "pointer", color: colors.textSecondary, padding: "4px" }}
+                                                onClick={() => setShowSingleDelete(c.id)}
+                                                className="rounded-[var(--radius)] p-1 text-[var(--text-muted)] transition hover:bg-[var(--danger-bg)] hover:text-[var(--danger)]"
                                                 title="Delete"
                                             >
-                                                <Trash2 style={{ width: "14px", height: "14px" }} />
+                                                <Trash2 className="h-3.5 w-3.5" />
                                             </button>
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
+                        </div>
                     </div>
 
                     {/* Pagination */}
                     {totalPages > 1 && (
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "16px" }}>
-                            <span style={{ fontSize: "13px", color: colors.textSecondary }}>
+                        <div className="flex items-center justify-between gap-4">
+                            <span className="text-sm text-[var(--text-muted)]">
                                 Showing {(page - 1) * 20 + 1}–{Math.min(page * 20, total)} of {total}
                             </span>
-                            <div style={{ display: "flex", gap: "8px" }}>
-                                <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} style={{ ...btnOutline, opacity: page <= 1 ? 0.4 : 1 }}>
-                                    <ChevronLeft style={{ width: "16px", height: "16px" }} /> Prev
-                                </button>
-                                <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} style={{ ...btnOutline, opacity: page >= totalPages ? 0.4 : 1 }}>
-                                    Next <ChevronRight style={{ width: "16px", height: "16px" }} />
-                                </button>
+                            <div className="flex gap-2">
+                                <Button disabled={page <= 1} onClick={() => setPage(p => p - 1)} variant="outline" size="sm">
+                                    <ChevronLeft className="h-4 w-4" /> Prev
+                                </Button>
+                                <Button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} variant="outline" size="sm">
+                                    Next <ChevronRight className="h-4 w-4" />
+                                </Button>
                             </div>
                         </div>
                     )}
 
                     {/* Danger Zone */}
                     {stats && stats.total_contacts > 0 && (
-                        <div style={{
-                            marginTop: "32px",
-                            padding: "16px 20px",
-                            border: `1px solid ${colors.dangerBorder}`,
-                            borderRadius: "8px",
-                            backgroundColor: colors.dangerBg
-                        }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div className="rounded-[var(--radius-lg)] border border-[var(--danger-border)] bg-[var(--danger-bg)]/70 p-5">
+                            <div className="flex items-center justify-between gap-4">
                                 <div>
-                                    <h3 style={{ fontSize: "14px", fontWeight: 600, color: colors.danger, margin: "0 0 4px 0" }}>Danger Zone</h3>
-                                    <p style={{ fontSize: "13px", color: colors.textSecondary, margin: 0 }}>
+                                    <h3 className="text-sm font-semibold text-[var(--danger)]">Danger Zone</h3>
+                                    <p className="mt-1 text-sm text-[var(--text-muted)]">
                                         Permanently delete all {stats.total_contacts.toLocaleString()} contacts. This action cannot be undone.
                                     </p>
                                 </div>
-                                <button onClick={() => setShowDeleteAll(true)} style={btnDanger}>
-                                    <AlertTriangle style={{ width: "14px", height: "14px" }} /> Delete All Contacts
-                                </button>
+                                <Button onClick={() => setShowDeleteAll(true)} variant="danger">
+                                    <AlertTriangle className="h-4 w-4" /> Delete All Contacts
+                                </Button>
                             </div>
                         </div>
                     )}
@@ -1207,179 +1290,103 @@ export default function ContactsPage() {
 
             {/* ===== TAB: Import History ===== */}
             {activeTab === "history" && (
-                <div className="glass-panel shadow-card" style={{ 
-                    border: `1px solid ${colors.border}`, borderRadius: "12px", 
-                    overflow: "hidden", marginTop: "16px"
-                }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
+                <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)]">
+                    <TableToolbar
+                        title="Import History"
+                        description="Review previous uploads, investigate failed contacts, and export or remove specific batches."
+                        trailing={batches.length > 0 ? <Badge variant="outline">{batches.length} batch{batches.length !== 1 ? 'es' : ''}</Badge> : null}
+                        className="rounded-none border-0 border-b border-[var(--border)]"
+                    />
+                    <table className="w-full border-collapse text-sm">
                         <thead>
-                            <tr style={{ backgroundColor: "var(--bg-hover)", borderBottom: `1px solid ${colors.border}` }}>
-                                <th style={{ padding: "16px 20px", textAlign: "left", fontWeight: 500, color: "var(--text-muted)" }}>File Name</th>
-                                <th style={{ padding: "16px 20px", textAlign: "left", fontWeight: 500, color: "var(--text-muted)" }}>Status</th>
-                                <th style={{ padding: "16px 20px", textAlign: "right", fontWeight: 500, color: "var(--text-muted)" }}>New</th>
-                                <th style={{ padding: "16px 20px", textAlign: "right", fontWeight: 500, color: "var(--text-muted)" }}>Failed</th>
-                                <th style={{ padding: "16px 20px", textAlign: "right", fontWeight: 500, color: "var(--text-muted)" }}>Total</th>
-                                <th style={{ padding: "16px 20px", textAlign: "right", fontWeight: 500, color: "var(--text-muted)" }}>Date</th>
-                                <th style={{ padding: "16px 20px", width: "100px" }}></th>
+                            <tr className="border-b border-[var(--border)] bg-[var(--bg-hover)]">
+                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">File Name</th>
+                                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Status</th>
+                                <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">New</th>
+                                <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Failed</th>
+                                <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Total</th>
+                                <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Date</th>
+                                <th className="w-[100px] px-5 py-4"></th>
                             </tr>
                         </thead>
                         <tbody>
                             {batchesLoading && batches.length === 0 ? (
-                                <tr><td colSpan={7} style={{ padding: "64px", textAlign: "center" }}><Loader2 className="spinner" /></td></tr>
+                                <tr><td colSpan={7} className="px-5 py-16 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-[var(--accent)]" /></td></tr>
                             ) : batches.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} style={{ padding: "80px 40px", textAlign: "center" }}>
-                                        <FileText style={{ width: "48px", height: "48px", margin: "0 auto 16px", opacity: 0.2, color: "var(--text-muted)" }} />
-                                        <p style={{ color: "var(--text-muted)" }}>No import history found.</p>
+                                    <td colSpan={7} className="px-10 py-20 text-center">
+                                        <FileText className="mx-auto mb-4 h-12 w-12 text-[var(--text-muted)]/30" />
+                                        <p className="text-[var(--text-muted)]">No import history found.</p>
                                     </td>
                                 </tr>
                             ) : batches.map((b) => (
                                 <React.Fragment key={b.id}>
                                     <tr 
                                         onClick={() => handleSelectBatch(b)}
-                                        style={{ 
-                                            borderBottom: `1px solid ${colors.border}`, 
-                                            cursor: "pointer", transition: "background 150ms",
-                                            backgroundColor: expandedBatch === b.id ? "rgba(59, 130, 246, 0.03)" : "transparent"
-                                        }}
-                                        onMouseEnter={(e) => { if (expandedBatch !== b.id) e.currentTarget.style.backgroundColor = "var(--bg-hover)"; }}
-                                        onMouseLeave={(e) => { if (expandedBatch !== b.id) e.currentTarget.style.backgroundColor = "transparent"; }}
+                                        className={`cursor-pointer border-b border-[var(--border)] transition hover:bg-[var(--bg-hover)] ${expandedBatch === b.id ? 'bg-[var(--accent)]/5' : ''}`}
                                     >
-                                        <td style={{ padding: "16px 20px" }}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                                                <div style={{ 
-                                                    width: "32px", height: "32px", borderRadius: "8px", 
-                                                    backgroundColor: "rgba(59, 130, 246, 0.1)", 
-                                                    display: "flex", alignItems: "center", justifyContent: "center" 
-                                                }}>
-                                                    <FileSpreadsheet style={{ width: "16px", height: "16px", color: "var(--accent)" }} />
+                                        <td className="px-5 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)]/10">
+                                                    <FileSpreadsheet className="h-4 w-4 text-[var(--accent)]" />
                                                 </div>
                                                 <button 
                                                     onClick={(e) => { e.stopPropagation(); handleSelectBatch(b); }}
-                                                    style={{ 
-                                                        background: "none", border: "none", padding: 0,
-                                                        color: "var(--accent)", fontWeight: 700, fontSize: "14px",
-                                                        cursor: "pointer", textAlign: "left",
-                                                        textDecoration: "underline", textDecorationColor: "transparent",
-                                                        transition: "all 0.2s"
-                                                    }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.textDecorationColor = "var(--accent)"}
-                                                    onMouseLeave={(e) => e.currentTarget.style.textDecorationColor = "transparent"}
+                                                    className="text-left text-sm font-semibold text-[var(--accent)] transition hover:underline"
                                                 >
                                                     {b.file_name}
                                                 </button>
                                             </div>
                                         </td>
-                                        <td style={{ padding: "16px 20px" }}>
-                                            {b.status === "completed" ? (
-                                                <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--success)", fontSize: "13px", fontWeight: 500 }}>
-                                                    <CheckCircle2 style={{ width: "14px", height: "14px" }} /> Done
-                                                </div>
-                                            ) : b.status === "failed" ? (
-                                                <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--danger)", fontSize: "13px", fontWeight: 500 }}>
-                                                    <XCircle style={{ width: "14px", height: "14px" }} /> Failed
-                                                </div>
-                                            ) : (
-                                                <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--accent)", fontSize: "13px", fontWeight: 500 }}>
-                                                    <Loader2 className="spinner" style={{ width: "14px", height: "14px" }} /> Importing...
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td style={{ padding: "16px 20px", textAlign: "right", color: "var(--success)", fontWeight: 700 }}>{b.imported_count}</td>
-                                        <td style={{ padding: "16px 20px", textAlign: "right", color: b.failed_count > 0 ? "var(--danger)" : "var(--text-muted)" }}>{b.failed_count}</td>
-                                        <td style={{ padding: "16px 20px", textAlign: "right", fontWeight: 500 }}>{b.total_rows}</td>
-                                        <td style={{ padding: "16px 20px", textAlign: "right", color: "var(--text-muted)", fontSize: "13px" }}>
+                                        <td className="px-5 py-4"><BatchStatusBadge status={b.status} /></td>
+                                        <td className="px-5 py-4 text-right font-semibold text-[var(--success)]">{b.imported_count}</td>
+                                        <td className={`px-5 py-4 text-right ${b.failed_count > 0 ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}`}>{b.failed_count}</td>
+                                        <td className="px-5 py-4 text-right font-medium text-[var(--text-primary)]">{b.total_rows}</td>
+                                        <td className="px-5 py-4 text-right text-sm text-[var(--text-muted)]">
                                             {new Date(b.created_at).toLocaleDateString()}
                                         </td>
-                                        <td style={{ padding: "16px 20px", textAlign: "right" }}>
-                                            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "12px" }}>
+                                        <td className="px-5 py-4 text-right">
+                                            <div className="flex items-center justify-end gap-2">
                                                 <button 
                                                     onClick={(e) => { e.stopPropagation(); handleExportBatch(b.id, b.file_name); }}
-                                                    style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "4px", transition: "color 0.2s" }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.color = "var(--accent)"}
-                                                    onMouseLeave={(e) => e.currentTarget.style.color = "var(--text-muted)"}
+                                                    className="rounded-[var(--radius)] p-1 text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--accent)]"
                                                     title="Export this batch"
                                                 >
-                                                    <Download style={{ width: "18px", height: "18px" }} />
+                                                    <Download className="h-4 w-4" />
                                                 </button>
                                                 <button 
                                                     onClick={(e) => { e.stopPropagation(); setShowBatchDelete(b); }} 
-                                                    style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "4px", transition: "color 0.2s" }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.color = "var(--danger)"}
-                                                    onMouseLeave={(e) => e.currentTarget.style.color = "var(--text-muted)"}
+                                                    className="rounded-[var(--radius)] p-1 text-[var(--text-muted)] transition hover:bg-[var(--danger-bg)] hover:text-[var(--danger)]"
                                                     title="Delete this batch"
                                                 >
-                                                    <Trash2 style={{ width: "18px", height: "18px" }} />
+                                                    <Trash2 className="h-4 w-4" />
                                                 </button>
                                             </div>
                                         </td>
                                     </tr>
 
                                     {expandedBatch === b.id && (
-                                        <tr style={{ backgroundColor: "rgba(255,255,255,0.01)" }}>
-                                            <td colSpan={7} style={{ padding: "24px 40px", borderBottom: `1px solid ${colors.border}` }}>
-                                                <div className="fade-in">
-                                                    {/* Row 1: Summary Statistics Bar */}
-                                                    <div style={{ 
-                                                        display: "flex", gap: "24px", marginBottom: "20px", 
-                                                        padding: "16px", backgroundColor: "rgba(255,255,255,0.02)", 
-                                                        borderRadius: "10px", border: `1px solid ${colors.border}` 
-                                                    }}>
-                                                        <div>
-                                                            <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>New Contacts</div>
-                                                            <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--success)" }}>{b.imported_count || 0}</div>
-                                                        </div>
-                                                        <div style={{ width: "1px", backgroundColor: colors.border }} />
-                                                        <div>
-                                                            <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Updated</div>
-                                                            <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--accent)" }}>
-                                                                {(() => {
-                                                                    const meta = b.meta ? (typeof b.meta === "string" ? JSON.parse(b.meta) : b.meta) : {};
-                                                                    return meta.updated || 0;
-                                                                })()}
-                                                            </div>
-                                                        </div>
-                                                        <div style={{ width: "1px", backgroundColor: colors.border }} />
-                                                        <div>
-                                                            <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Duplicates</div>
-                                                            <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-muted)" }}>
-                                                                {(() => {
-                                                                    const meta = b.meta ? (typeof b.meta === "string" ? JSON.parse(b.meta) : b.meta) : {};
-                                                                    return meta.skipped_duplicates || 0;
-                                                                })()}
-                                                            </div>
-                                                        </div>
-                                                        <div style={{ width: "1px", backgroundColor: colors.border }} />
-                                                        <div>
-                                                            <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Failed</div>
-                                                            <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--danger)" }}>{b.failed_count || 0}</div>
-                                                        </div>
+                                        <tr className="bg-[var(--bg-primary)]/70">
+                                            <td colSpan={7} className="border-b border-[var(--border)] px-8 py-6">
+                                                <div className="fade-in space-y-5">
+                                                    <div className="grid gap-4 md:grid-cols-4">
+                                                        <UploadMetric label="New Contacts" value={b.imported_count || 0} tone="success" />
+                                                        <UploadMetric label="Updated" value={getBatchMeta(b).updated || 0} tone="accent" />
+                                                        <UploadMetric label="Duplicates" value={getBatchMeta(b).skipped_duplicates || 0} />
+                                                        <UploadMetric label="Failed" value={b.failed_count || 0} tone="danger" />
                                                     </div>
 
-                                                    {/* Row 2: Typo Warnings & Domain Filters */}
                                                     {batchDomains.some(d => d.suggested_domain) && (
-                                                        <div style={{ 
-                                                            padding: "12px 16px", borderRadius: "10px", backgroundColor: "rgba(245,158,11,0.08)",
-                                                            border: "1px solid rgba(245,158,11,0.2)", color: "#FDE68A", fontSize: "12px",
-                                                            display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px"
-                                                        }}>
-                                                            <AlertTriangle style={{ width: "16px", height: "16px" }} />
-                                                            <span>
-                                                                Potential typos detected: {batchDomains.filter(d => d.suggested_domain).slice(0, 2).map(d => `${d.domain} → ${d.suggested_domain}`).join(", ")}
-                                                            </span>
-                                                        </div>
+                                                        <InlineAlert
+                                                            variant="warning"
+                                                            description={`Potential typos detected: ${batchDomains.filter(d => d.suggested_domain).slice(0, 2).map(d => `${d.domain} -> ${d.suggested_domain}`).join(", ")}`}
+                                                        />
                                                     )}
 
-                                                    <div className="domain-filters-container" style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "20px" }}>
+                                                    <div className="flex flex-wrap gap-2">
                                                         <button 
                                                             onClick={() => setBatchDomainFilter(null)}
-                                                            className={`domain-chip ${!batchDomainFilter ? 'active' : ''}`}
-                                                            style={{ 
-                                                                padding: "6px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 600,
-                                                                backgroundColor: !batchDomainFilter ? "var(--accent)" : "rgba(255,255,255,0.06)",
-                                                                color: !batchDomainFilter ? "white" : "var(--text-muted)", border: "1px solid rgba(255,255,255,0.05)", cursor: "pointer",
-                                                                transition: "all 0.2s"
-                                                            }}
+                                                            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${!batchDomainFilter ? 'bg-[var(--accent)] text-white' : 'border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]'}`}
                                                         >
                                                             All Domains
                                                         </button>
@@ -1387,15 +1394,9 @@ export default function ContactsPage() {
                                                             <button 
                                                                 key={`${d.domain}-${idx}`}
                                                                 onClick={() => setBatchDomainFilter(d.domain)}
-                                                                style={{ 
-                                                                    padding: "6px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 500,
-                                                                    backgroundColor: batchDomainFilter === d.domain ? "var(--accent)" : "rgba(255,255,255,0.06)",
-                                                                    color: batchDomainFilter === d.domain ? "white" : "var(--text-muted)", 
-                                                                    border: "1px solid rgba(255,255,255,0.05)", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px",
-                                                                    transition: "all 0.2s"
-                                                                }}
+                                                                className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs transition ${batchDomainFilter === d.domain ? 'bg-[var(--accent)] text-white' : 'border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]'}`}
                                                             >
-                                                                {d.domain} <span style={{ opacity: 0.5, fontSize: "10px" }}>{d.count}</span>
+                                                                {d.domain} <span className="opacity-60">{d.count}</span>
                                                             </button>
                                                         ))}
                                                     </div>
@@ -1432,18 +1433,28 @@ export default function ContactsPage() {
                                                                                 <th style={{ padding: "10px 16px" }}>Email</th>
                                                                                 <th style={{ padding: "10px 16px" }}>Name</th>
                                                                                 <th style={{ padding: "10px 16px" }}>Status</th>
+                                                                                <th style={{ padding: "10px 16px", textAlign: "right" }}>Actions</th>
                                                                             </tr>
                                                                         </thead>
                                                                         <tbody>
                                                                             {batchContacts.map((c) => (
                                                                                 <tr key={c.id} style={{ borderBottom: `1px solid rgba(255,255,255,0.03)` }}>
-                                                                                    <td style={{ padding: "10px 16px", color: "var(--accent)", fontWeight: 500 }}>{c.email}</td>
+                                                                                    <td style={{ padding: "10px 16px", color: "var(--accent)", fontWeight: 500 }}>
+                                                                                        <Link href={`/contacts/${c.id}`} style={{ color: "var(--accent)", textDecoration: "none" }}>
+                                                                                            {c.email}
+                                                                                        </Link>
+                                                                                    </td>
                                                                                     <td style={{ padding: "10px 16px" }}>{c.first_name || ""} {c.last_name || ""}</td>
                                                                                     <td style={{ padding: "10px 16px" }}>
                                                                                         <span style={{ 
                                                                                             padding: "2px 8px", borderRadius: "100px", fontSize: "10px", fontWeight: 700,
                                                                                             backgroundColor: "rgba(34, 197, 94, 0.1)", color: "var(--success)"
                                                                                         }}>SUBSCRIBED</span>
+                                                                                    </td>
+                                                                                    <td style={{ padding: "10px 16px", textAlign: "right" }}>
+                                                                                        <Link href={`/contacts/${c.id}`} style={{ color: "var(--accent)", textDecoration: "none", fontSize: "12px", fontWeight: 600 }}>
+                                                                                            Edit
+                                                                                        </Link>
                                                                                     </td>
                                                                                 </tr>
                                                                             ))}
@@ -1497,35 +1508,96 @@ export default function ContactsPage() {
                 </div>
             )}
 
-            {/* ===== MODAL: Upload Flow ===== */}
-            {showUpload && (
-                <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-                    <div className="glass-panel" style={{ padding: "24px", width: "480px", maxHeight: "80vh", overflowY: "auto" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                            <h2 style={{ fontSize: "18px", fontWeight: 600, margin: 0, color: colors.text }}>
-                                Import Contacts (Step {uploadStep}/4)
-                            </h2>
-                            <button onClick={resetUpload} style={{ background: "none", border: "none", cursor: "pointer", color: colors.textSecondary }}>
-                                <X style={{ width: "20px", height: "20px" }} />
-                            </button>
+            {/* ===== TAB: Suppression List ===== */}
+            {activeTab === "suppression" && (
+                <div className="space-y-6">
+                    <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)]">
+                        <TableToolbar
+                            title="Suppression List"
+                            description="Review bounced, complained, and unsubscribed contacts before they affect future deliverability."
+                            trailing={<Badge variant="outline">{suppressionTotal} suppressed</Badge>}
+                            className="rounded-none border-0 border-b border-[var(--border)]"
+                        />
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse text-sm">
+                                <thead>
+                                    <tr className="border-b border-[var(--border)] bg-[var(--bg-hover)]">
+                                        <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Email</th>
+                                        <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Name</th>
+                                        <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Reason</th>
+                                        <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Date Added</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {suppressionLoading && suppressedContacts.length === 0 ? (
+                                        <tr><td colSpan={4} className="px-5 py-16 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-[var(--accent)]" /></td></tr>
+                                    ) : suppressedContacts.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={4} className="px-10 py-20 text-center">
+                                                <ShieldOff className="mx-auto mb-4 h-12 w-12 text-[var(--text-muted)]/30" />
+                                                <p className="text-[var(--text-muted)]">Your suppression list is currently clear.</p>
+                                            </td>
+                                        </tr>
+                                    ) : suppressedContacts.map((c) => (
+                                        <tr key={c.id} className="border-b border-[var(--border)] transition hover:bg-[var(--bg-hover)]">
+                                            <td className="px-5 py-4 font-medium text-[var(--text-primary)]">{c.email}</td>
+                                            <td className="px-5 py-4 text-[var(--text-muted)]">{[c.first_name, c.last_name].filter(Boolean).join(' ') || '—'}</td>
+                                            <td className="px-5 py-4">
+                                                <span
+                                                    title={c.bounce_reason || 'No bounce reason recorded'}
+                                                    className="inline-flex items-center gap-1 rounded-full border border-[var(--danger-border)] bg-[var(--danger-bg)]/20 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-[var(--danger)]"
+                                                >
+                                                    <AlertTriangle className="h-3 w-3" />
+                                                    {c.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-5 py-4 text-right text-[var(--text-muted)]">{new Date(c.created_at).toLocaleDateString()}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
+                    </div>
+
+                    {suppressionTotalPages > 1 && (
+                        <div className="flex items-center justify-between gap-4">
+                            <span className="text-sm text-[var(--text-muted)]">
+                                Page {suppressionPage} of {suppressionTotalPages}
+                            </span>
+                            <div className="flex gap-2">
+                                <Button disabled={suppressionPage <= 1} onClick={() => setSuppressionPage(p => p - 1)} variant="outline" size="sm">
+                                    <ChevronLeft className="h-4 w-4" /> Prev
+                                </Button>
+                                <Button disabled={suppressionPage >= suppressionTotalPages} onClick={() => setSuppressionPage(p => p + 1)} variant="outline" size="sm">
+                                    Next <ChevronRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ===== MODAL: Upload Flow ===== */}
+            <ModalShell
+                isOpen={showUpload}
+                onClose={resetUpload}
+                title={`Import Contacts (Step ${uploadStep}/4)`}
+                description="Upload a file, map fields, validate the import, and review results before returning to your audience workspace."
+                maxWidthClass="max-w-2xl"
+            >
 
                         {/* Step 1: File Upload */}
                         {uploadStep === 1 && (
                             <div>
-                                <label htmlFor="file-upload" style={{
-                                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                                    padding: "40px", border: `2px dashed ${colors.border}`, borderRadius: "8px", cursor: "pointer",
-                                    backgroundColor: colors.bgMuted, transition: "border-color 150ms"
-                                }}
+                                <label htmlFor="file-upload" className="flex cursor-pointer flex-col items-center justify-center rounded-[var(--radius-lg)] border-2 border-dashed border-[var(--border)] bg-[var(--bg-primary)] p-10 text-center transition hover:border-[var(--accent-border)]"
                                     onDragOver={(e) => e.preventDefault()}
                                     onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files[0]) handleFileSelect(e.dataTransfer.files[0]); }}
                                 >
-                                    <Upload style={{ width: "24px", height: "24px", color: colors.textSecondary, marginBottom: "8px" }} />
-                                    <p style={{ fontSize: "14px", fontWeight: 500, marginBottom: "4px", color: colors.text }}>
+                                    <Upload className="mb-2 h-6 w-6 text-[var(--text-muted)]" />
+                                    <p className="mb-1 text-sm font-medium text-[var(--text-primary)]">
                                         {uploading ? "Parsing..." : "Click to upload or drag and drop"}
                                     </p>
-                                    <p style={{ fontSize: "12px", color: colors.textSecondary }}>CSV or Excel files (up to 2MB)</p>
+                                    <p className="text-xs text-[var(--text-muted)]">CSV or Excel files (up to 2MB)</p>
                                     <input id="file-upload" type="file" accept=".csv,.xlsx" onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])} style={{ display: "none" }} />
                                 </label>
                             </div>
@@ -1534,23 +1606,20 @@ export default function ContactsPage() {
                         {/* Step 2: Dynamic Column Mapping */}
                         {uploadStep === 2 && (
                             <div>
-                                <p style={{ fontSize: "14px", color: colors.textSecondary, marginBottom: "12px" }}>
-                                    Map each file column to a contact field. Email is required.
+                                <p className="mb-3 text-sm text-[var(--text-muted)]">
+                                    Map each file column to a contact field. <strong>Email, First Name, and Last Name are required.</strong>
                                 </p>
-                                <div style={{ maxHeight: "360px", overflowY: "auto", paddingRight: "4px" }}>
+                                <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
                                     {headers.map((col) => {
                                         const mapping = columnMappings[col] || "skip";
                                         const isCustom = mapping.startsWith("custom:");
                                         const customName = isCustom ? mapping.replace("custom:", "") : "";
 
                                         return (
-                                            <div key={col} style={{ marginBottom: "10px", padding: "8px 10px", borderRadius: "6px", backgroundColor: mapping !== "skip" ? "var(--bg-hover)" : "transparent", border: `1px solid ${mapping !== "skip" ? colors.border : "transparent"}` }}>
-                                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                                    <span style={{
-                                                        fontSize: "13px", fontWeight: 500, color: colors.text,
-                                                        minWidth: "110px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
-                                                    }} title={col}>{col}</span>
-                                                    <span style={{ fontSize: "13px", color: colors.textSecondary }}>→</span>
+                                            <div key={col} className={`rounded-[var(--radius)] border px-3 py-2 ${mapping !== "skip" ? 'border-[var(--border)] bg-[var(--bg-hover)]' : 'border-transparent bg-transparent'}`}>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="min-w-[110px] truncate text-sm font-medium text-[var(--text-primary)]" title={col}>{col}</span>
+                                                    <span className="text-sm text-[var(--text-muted)]">→</span>
                                                     <select
                                                         value={isCustom ? "custom" : mapping}
                                                         onChange={(e) => {
@@ -1572,19 +1641,18 @@ export default function ContactsPage() {
                                                             }
                                                             setColumnMappings(newMappings);
                                                         }}
-                                                        style={{
-                                                            flex: 1, padding: "6px 8px", fontSize: "13px",
-                                                            border: `1px solid ${colors.border}`, borderRadius: "6px", backgroundColor: "var(--bg-card)"
-                                                        }}
+                                                        className="h-9 flex-1 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-card)] px-2 text-sm text-[var(--text-primary)]"
                                                     >
                                                         <option value="skip">⊘ Skip</option>
                                                         <option value="email" disabled={!!getMappedCol("email") && getMappedCol("email") !== col}>📧 Email (required)</option>
+                                                        <option value="first_name" disabled={!!getMappedCol("first_name") && getMappedCol("first_name") !== col}>👤 First Name (required)</option>
+                                                        <option value="last_name" disabled={!!getMappedCol("last_name") && getMappedCol("last_name") !== col}>👤 Last Name (required)</option>
                                                         <option value="custom">📋 Custom Field</option>
                                                     </select>
                                                 </div>
                                                 {isCustom && (
-                                                    <div style={{ marginTop: "6px", paddingLeft: "118px" }}>
-                                                        <input
+                                                    <div className="mt-2 pl-[118px]">
+                                                        <Input
                                                             type="text"
                                                             value={customName}
                                                             placeholder="Enter field name (e.g. phone, company)"
@@ -1594,14 +1662,10 @@ export default function ContactsPage() {
                                                                 newMappings[col] = `custom:${fieldName}`;
                                                                 setColumnMappings(newMappings);
                                                             }}
-                                                            style={{
-                                                                width: "100%", padding: "5px 8px", fontSize: "12px",
-                                                                border: `1px solid ${colors.border}`, borderRadius: "4px",
-                                                                backgroundColor: "var(--bg-card)", color: "var(--text-primary)"
-                                                            }}
+                                                            className="h-8 text-xs"
                                                         />
-                                                        <p style={{ margin: "2px 0 0", fontSize: "11px", color: colors.textSecondary }}>
-                                                            Stored as: <code style={{ fontSize: "11px", backgroundColor: "var(--bg-hover)", padding: "1px 4px", borderRadius: "2px" }}>{customName || "..."}</code>
+                                                        <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                                                            Stored as: <code className="rounded bg-[var(--bg-hover)] px-1 py-0.5 text-[11px]">{customName || "..."}</code>
                                                         </p>
                                                     </div>
                                                 )}
@@ -1609,80 +1673,71 @@ export default function ContactsPage() {
                                         );
                                     })}
                                 </div>
-                                {!emailCol && (
-                                    <p style={{ fontSize: "12px", color: colors.danger, marginTop: "8px" }}>⚠ You must map one column as Email</p>
+                                {(!emailCol || !getMappedCol("first_name") || !getMappedCol("last_name")) && (
+                                    <p className="mt-2 text-xs text-[var(--danger)]">
+                                        ⚠ You must map Email, First Name, and Last Name columns.
+                                    </p>
                                 )}
-                                <button disabled={!emailCol} onClick={() => setUploadStep(3)}
-                                    style={{ ...btnPrimary, width: "100%", justifyContent: "center", marginTop: "12px", opacity: emailCol ? 1 : 0.5 }}>
+                                <Button 
+                                    disabled={!emailCol || !getMappedCol("first_name") || !getMappedCol("last_name")} 
+                                    onClick={() => setUploadStep(3)}
+                                    fullWidth
+                                    className="mt-3"
+                                >
                                     Continue
-                                </button>
+                                </Button>
                             </div>
                         )}
 
                         {/* Step 3: Validation (Only show if not polling) */}
                         {uploadStep === 3 && !jobProgress && (
                             <div>
-                                <div style={{ padding: "16px", backgroundColor: colors.bgMuted, borderRadius: "8px", marginBottom: "16px" }}>
-                                    <p style={{ margin: "0 0 10px", fontSize: "14px", fontWeight: 500, color: colors.text }}>Ready to import</p>
-                                    <p style={{ margin: "0 0 4px", fontSize: "13px", color: colors.textSecondary }}>📁 File: {file?.name}</p>
-                                    <p style={{ margin: "0 0 4px", fontSize: "13px", color: colors.textSecondary }}>📊 Total rows: {rowCount}</p>
-                                    <div style={{ marginTop: "10px", borderTop: `1px solid ${colors.border}`, paddingTop: "10px" }}>
-                                        <p style={{ margin: "0 0 6px", fontSize: "12px", fontWeight: 600, color: colors.text }}>Field Mappings:</p>
+                                <SectionCard title="Ready to import" description="Review the file details and field mappings before processing begins.">
+                                    <div className="space-y-1 text-sm text-[var(--text-muted)]">
+                                        <p>📁 File: {file?.name}</p>
+                                        <p>📊 Total rows: {rowCount}</p>
+                                    </div>
+                                    <div className="mt-4 border-t border-[var(--border)] pt-4">
+                                        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-primary)]">Field Mappings</p>
                                         {Object.entries(columnMappings).map(([csvCol, target]) => (
-                                            <p key={csvCol} style={{ margin: "0 0 3px", fontSize: "12px", color: colors.textSecondary }}>
-                                                {csvCol} → <span style={{ fontWeight: 500, color: colors.text }}>
+                                            <p key={csvCol} className="mb-1 text-xs text-[var(--text-muted)]">
+                                                {csvCol} → <span className="font-medium text-[var(--text-primary)]">
                                                     {target === "email" ? "📧 Email" : `📋 ${target.replace("custom:", "")}`}
                                                 </span>
                                             </p>
                                         ))}
                                     </div>
-                                </div>
-                                <div style={{ display: "flex", gap: "8px" }}>
-                                    <button onClick={() => setUploadStep(2)} style={{ ...btnOutline, flex: 1, justifyContent: "center" }}>Back</button>
-                                    <button onClick={handleImport} disabled={uploading}
-                                        style={{ ...btnPrimary, flex: 1, justifyContent: "center", opacity: uploading ? 0.6 : 1 }}>
+                                </SectionCard>
+                                <div className="mt-4 flex gap-2">
+                                    <Button onClick={() => setUploadStep(2)} variant="outline" className="flex-1 justify-center">Back</Button>
+                                    <Button onClick={handleImport} disabled={uploading} className="flex-1 justify-center">
                                         {uploading ? "Importing..." : "Import Contacts"}
-                                    </button>
+                                    </Button>
                                 </div>
                             </div>
                         )}
 
                         {/* Step 3: Progress Polling (Phase 7.5) */}
                         {uploadStep === 3 && jobProgress && (
-                            <div style={{ textAlign: "center", padding: "20px 0" }}>
-                                <div style={{
-                                    width: "48px", height: "48px", borderRadius: "50%",
-                                    background: `conic-gradient(${colors.accent} ${jobProgress.progress * 3.6}deg, var(--bg-hover) 0deg)`,
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    margin: "0 auto 16px", position: "relative" as const
-                                }}>
-                                    <div style={{
-                                        width: "38px", height: "38px", borderRadius: "50%",
-                                        backgroundColor: "var(--bg-card)",
-                                        display: "flex", alignItems: "center", justifyContent: "center",
-                                        fontSize: "12px", fontWeight: 700, color: colors.accent
-                                    }}>
+                            <div className="py-5 text-center">
+                                <div
+                                    className="relative mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
+                                    style={{ background: `conic-gradient(var(--accent) ${jobProgress.progress * 3.6}deg, var(--bg-hover) 0deg)` }}
+                                >
+                                    <div className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-[var(--bg-card)] text-xs font-bold text-[var(--accent)]">
                                         {jobProgress.progress}%
                                     </div>
                                 </div>
-                                <h3 style={{ fontSize: "16px", fontWeight: 600, color: colors.text, margin: "0 0 8px" }}>
+                                <h3 className="mb-2 text-base font-semibold text-[var(--text-primary)]">
                                     Processing Import...
                                 </h3>
-                                <p style={{ fontSize: "13px", color: colors.textSecondary, margin: "0 0 16px" }}>
+                                <p className="mb-4 text-sm text-[var(--text-muted)]">
                                     {jobProgress.processed_items.toLocaleString()} / {jobProgress.total_items.toLocaleString()} contacts processed
                                 </p>
-                                {/* Progress bar */}
-                                <div style={{
-                                    height: "6px", backgroundColor: "var(--bg-hover)", borderRadius: "3px",
-                                    overflow: "hidden", marginBottom: "12px"
-                                }}>
-                                    <div style={{
-                                        height: "100%", width: `${jobProgress.progress}%`,
-                                        backgroundColor: colors.accent, borderRadius: "3px",
-                                        transition: "width 500ms ease"
-                                    }} />
+                                <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-[var(--bg-hover)]">
+                                    <div className="h-full rounded-full bg-[var(--accent)] transition-all duration-500" style={{ width: `${jobProgress.progress}%` }} />
                                 </div>
-                                <p style={{ fontSize: "11px", color: colors.textSecondary, fontStyle: "italic" }}>
+                                <p className="text-xs italic text-[var(--text-muted)]">
                                     Do not close this window. Your contacts are being processed in the background.
                                 </p>
                             </div>
@@ -1690,149 +1745,145 @@ export default function ContactsPage() {
 
                         {/* Step 4: Success */}
                         {uploadStep === 4 && importResult && (
-                            <div style={{ textAlign: "center" }}>
-                                <div style={{
-                                    width: "48px", height: "48px", borderRadius: "50%", backgroundColor: "var(--success-bg)",
-                                    display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px"
-                                }}>
-                                    <Check style={{ width: "24px", height: "24px", color: colors.success }} />
+                            <div className="text-center">
+                                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--success-bg)]">
+                                    <Check className="h-6 w-6 text-[var(--success)]" />
                                 </div>
-                                <h3 style={{ fontSize: "16px", fontWeight: 600, margin: "0 0 16px", color: colors.text }}>Import Complete</h3>
-                                <div style={{ padding: "12px 16px", backgroundColor: colors.bgMuted, borderRadius: "8px", textAlign: "left", marginBottom: "16px" }}>
-                                    <p style={{ margin: "0 0 4px", fontSize: "13px", color: colors.textSecondary }}>Total processed: {importResult.total}</p>
-                                    <p style={{ margin: "0 0 4px", fontSize: "13px", color: colors.success, fontWeight: 500 }}>✓ Imported: {importResult.success}</p>
-                                    {importResult.new !== undefined && <p style={{ margin: "0 0 4px", fontSize: "13px", color: colors.textSecondary }}>New: {importResult.new} | Updated: {importResult.updated}</p>}
-                                    {importResult.skipped_blank > 0 && <p style={{ margin: "0 0 4px", fontSize: "13px", color: colors.textSecondary }}>Skipped blank rows: {importResult.skipped_blank}</p>}
-                                    {importResult.skipped_duplicates > 0 && <p style={{ margin: "0 0 4px", fontSize: "13px", color: colors.textSecondary }}>Skipped duplicates: {importResult.skipped_duplicates}</p>}
-                                    {importResult.failed > 0 && <p style={{ margin: 0, fontSize: "13px", color: colors.danger }}>✗ Failed: {importResult.failed}</p>}
-                                </div>
+                                <h3 className="mb-4 text-base font-semibold text-[var(--text-primary)]">Import Complete</h3>
+                                <SectionCard>
+                                    <div className="space-y-1 text-left text-sm text-[var(--text-muted)]">
+                                        <p>Total processed: {importResult.total}</p>
+                                        <p className="font-medium text-[var(--success)]">✓ Imported: {importResult.success}</p>
+                                        {importResult.new !== undefined && <p>New: {importResult.new} | Updated: {importResult.updated}</p>}
+                                        {importResult.skipped_blank > 0 && <p>Skipped blank rows: {importResult.skipped_blank}</p>}
+                                        {importResult.skipped_duplicates > 0 && <p>Skipped duplicates: {importResult.skipped_duplicates}</p>}
+                                        {importResult.failed > 0 && <p className="text-[var(--danger)]">✗ Failed: {importResult.failed}</p>}
+                                        {importResult.success + importResult.failed !== importResult.total && (
+                                            <p className="text-[var(--warning)]">
+                                                Import counts are inconsistent. Check batch history for the final backend totals.
+                                            </p>
+                                        )}
+                                    </div>
+                                </SectionCard>
 
                                 {/* Failed contacts detail */}
                                 {importResult.errors && importResult.errors.length > 0 && (
-                                    <div style={{ textAlign: "left", marginBottom: "16px" }}>
-                                        <p style={{ fontSize: "13px", fontWeight: 600, color: colors.danger, margin: "0 0 8px" }}>
+                                    <div className="mb-4 mt-4 text-left">
+                                        <p className="mb-2 text-sm font-semibold text-[var(--danger)]">
                                             Failed Contacts — Fix these and re-upload:
                                         </p>
-                                        <div style={{
-                                            border: `1px solid ${colors.dangerBorder}`,
-                                            borderRadius: "8px",
-                                            overflow: "hidden",
-                                            maxHeight: "200px",
-                                            overflowY: "auto"
-                                        }}>
-                                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                                        <div className="max-h-[200px] overflow-y-auto rounded-[var(--radius)] border border-[var(--danger-border)]">
+                                            <table className="w-full border-collapse text-xs">
                                                 <thead>
-                                                    <tr style={{ backgroundColor: colors.dangerBg }}>
-                                                        <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 500, color: colors.danger }}>Row</th>
-                                                        <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 500, color: colors.danger }}>Email</th>
-                                                        <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 500, color: colors.danger }}>Reason</th>
+                                                    <tr className="bg-[var(--danger-bg)]">
+                                                        <th className="px-2.5 py-1.5 text-left font-medium text-[var(--danger)]">Row</th>
+                                                        <th className="px-2.5 py-1.5 text-left font-medium text-[var(--danger)]">Email</th>
+                                                        <th className="px-2.5 py-1.5 text-left font-medium text-[var(--danger)]">Reason</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {importResult.errors.map((err: any, i: number) => (
-                                                        <tr key={i} style={{ borderTop: `1px solid ${colors.dangerBorder}` }}>
-                                                            <td style={{ padding: "6px 10px", color: colors.textSecondary }}>{err.row || "—"}</td>
-                                                            <td style={{ padding: "6px 10px", color: colors.text, fontFamily: "monospace", fontSize: "11px" }}>{err.email || "—"}</td>
-                                                            <td style={{ padding: "6px 10px", color: colors.danger }}>{err.reason}</td>
+                                                        <tr key={i} className="border-t border-[var(--danger-border)]">
+                                                            <td className="px-2.5 py-1.5 text-[var(--text-muted)]">{err.row || "—"}</td>
+                                                            <td className="px-2.5 py-1.5 font-mono text-[11px] text-[var(--text-primary)]">{err.email || "—"}</td>
+                                                            <td className="px-2.5 py-1.5 text-[var(--danger)]">{err.reason}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
                                             </table>
                                         </div>
                                         {importResult.failed > importResult.errors.length && (
-                                            <p style={{ fontSize: "11px", color: colors.textSecondary, marginTop: "4px" }}>
+                                            <p className="mt-1 text-[11px] text-[var(--text-muted)]">
                                                 Showing first {importResult.errors.length} of {importResult.failed} errors
                                             </p>
                                         )}
                                     </div>
                                 )}
 
-                                <button onClick={resetUpload} style={{ ...btnPrimary, width: "100%", justifyContent: "center" }}>Done</button>
+                                <Button onClick={resetUpload} fullWidth>Done</Button>
                             </div>
                         )}
-                    </div>
-                </div>
-            )}
+            </ModalShell>
 
             {/* ===== MODAL: Bulk Delete Confirm ===== */}
-            {showBulkDelete && (
-                <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-                    <div className="glass-panel" style={{ padding: "24px", width: "400px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                            <AlertTriangle style={{ width: "20px", height: "20px", color: colors.danger }} />
-                            <h3 style={{ fontSize: "16px", fontWeight: 600, margin: 0, color: colors.text }}>Delete {selected.size} Contact{selected.size > 1 ? "s" : ""}?</h3>
-                        </div>
-                        <p style={{ fontSize: "14px", color: colors.textSecondary, marginBottom: "20px" }}>
-                            This action cannot be undone. The selected contacts will be permanently removed.
-                        </p>
-                        <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                            <button onClick={() => setShowBulkDelete(false)} style={btnOutline}>Cancel</button>
-                            <button onClick={handleBulkDelete} style={btnDanger}>Delete</button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <ConfirmModal
+                isOpen={!!showSingleDelete}
+                onClose={() => setShowSingleDelete(null)}
+                onConfirm={() => showSingleDelete && handleSingleDelete(showSingleDelete)}
+                title="Delete Contact?"
+                message="This contact will be permanently removed from the audience."
+                confirmLabel="Delete Contact"
+                variant="danger"
+            />
+
+            <ConfirmModal
+                isOpen={showBulkDelete}
+                onClose={() => setShowBulkDelete(false)}
+                onConfirm={handleBulkDelete}
+                title={`Delete ${selected.size} Contact${selected.size > 1 ? "s" : ""}?`}
+                message="This action cannot be undone. The selected contacts will be permanently removed."
+                confirmLabel="Delete"
+                variant="danger"
+            />
 
             {/* ===== MODAL: Delete All (Type to Confirm) ===== */}
-            {showDeleteAll && (
-                <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-                    <div className="glass-panel" style={{ padding: "24px", width: "440px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                            <AlertTriangle style={{ width: "20px", height: "20px", color: colors.danger }} />
-                            <h3 style={{ fontSize: "16px", fontWeight: 600, margin: 0, color: colors.danger }}>Delete All Contacts</h3>
-                        </div>
-                        <p style={{ fontSize: "14px", color: colors.textSecondary, marginBottom: "16px" }}>
-                            This will permanently delete <strong>{stats?.total_contacts.toLocaleString()}</strong> contacts and all import history. This action cannot be undone.
-                        </p>
-                        <p style={{ fontSize: "13px", color: colors.text, marginBottom: "8px", fontWeight: 500 }}>
+            <ConfirmModal
+                isOpen={showDeleteAll}
+                onClose={() => { setShowDeleteAll(false); setDeleteConfirmText(""); }}
+                onConfirm={handleDeleteAll}
+                title="Delete All Contacts"
+                message={`This will permanently delete ${stats?.total_contacts.toLocaleString() || 0} contacts and all import history. This action cannot be undone.`}
+                confirmLabel="Delete All Contacts"
+                variant="danger"
+                confirmDisabled={deleteConfirmText !== "DELETE"}
+                children={
+                    <div className="space-y-3">
+                        <p className="text-sm font-medium text-[var(--text-primary)]">
                             Type <strong>DELETE</strong> to confirm:
                         </p>
-                        <input
+                        <Input
                             value={deleteConfirmText}
                             onChange={(e) => setDeleteConfirmText(e.target.value)}
                             placeholder="Type DELETE"
-                            style={{
-                                width: "100%", padding: "8px 12px", fontSize: "14px",
-                                border: `1px solid ${colors.dangerBorder}`, borderRadius: "6px",
-                                marginBottom: "16px", boxSizing: "border-box",
-                                backgroundColor: "var(--bg-card)", color: "var(--text-primary)"
-                            }}
                         />
-                        <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                            <button onClick={() => { setShowDeleteAll(false); setDeleteConfirmText(""); }} style={btnOutline}>Cancel</button>
-                            <button onClick={handleDeleteAll} disabled={deleteConfirmText !== "DELETE"}
-                                style={{ ...btnDanger, opacity: deleteConfirmText === "DELETE" ? 1 : 0.4 }}>
-                                Delete All Contacts
-                            </button>
-                        </div>
                     </div>
-                </div>
-            )}
+                }
+            />
 
             {/* ===== MODAL: Delete Batch Confirm ===== */}
-            {showBatchDelete && (
-                <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-                    <div className="glass-panel" style={{ padding: "24px", width: "420px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                            <AlertTriangle style={{ width: "20px", height: "20px", color: colors.danger }} />
-                            <h3 style={{ fontSize: "16px", fontWeight: 600, margin: 0, color: colors.text }}>Delete Import Batch?</h3>
-                        </div>
-                        <p style={{ fontSize: "14px", color: colors.textSecondary, marginBottom: "4px" }}>
-                            This will delete all contacts imported from:
-                        </p>
-                        <p style={{ fontSize: "14px", fontWeight: 500, color: colors.text, marginBottom: "4px" }}>
-                            📄 {showBatchDelete.file_name}
-                        </p>
-                        <p style={{ fontSize: "13px", color: colors.textSecondary, marginBottom: "20px" }}>
-                            {showBatchDelete.imported_count} contact{showBatchDelete.imported_count !== 1 ? "s" : ""} will be deleted.
-                        </p>
-                        <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                            <button onClick={() => setShowBatchDelete(null)} style={btnOutline}>Cancel</button>
-                            <button onClick={() => handleDeleteBatch(showBatchDelete)} style={btnDanger}>Delete Batch</button>
-                        </div>
+            <ConfirmModal
+                isOpen={!!showBatchDelete}
+                onClose={() => setShowBatchDelete(null)}
+                onConfirm={() => showBatchDelete && handleDeleteBatch(showBatchDelete)}
+                title="Delete Import Batch?"
+                message={`This will delete all contacts imported from ${showBatchDelete?.file_name || 'this batch'}. ${showBatchDelete?.imported_count || 0} contact${showBatchDelete?.imported_count === 1 ? '' : 's'} will be removed.`}
+                confirmLabel="Delete Batch"
+                variant="danger"
+            />
+
+            {/* ===== MODAL: Bulk Tag ===== */}
+            <ModalShell
+                isOpen={showBulkTag}
+                onClose={() => setShowBulkTag(false)}
+                title={`Add Tags to ${selected.size} Contact${selected.size === 1 ? '' : 's'}`}
+                description="Enter one or more tags separated by commas. They will be added to every selected contact."
+                maxWidthClass="max-w-md"
+            >
+                <div className="space-y-5">
+                    <Input
+                        value={bulkTagInput}
+                        onChange={(e) => setBulkTagInput(e.target.value)}
+                        placeholder="e.g. VIP, Newsletter, Q2-Lead"
+                        autoFocus
+                    />
+                    <div className="flex justify-end gap-3">
+                        <Button onClick={() => setShowBulkTag(false)} variant="outline">Cancel</Button>
+                        <Button onClick={handleBulkTag} disabled={!bulkTagInput.trim()}>
+                            Add Tags
+                        </Button>
                     </div>
                 </div>
-            )}
+            </ModalShell>
         </div>
     );
 }

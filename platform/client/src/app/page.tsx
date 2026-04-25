@@ -1,505 +1,433 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Mail, ArrowRight, Zap, Code2, MoveRight, Layers, Workflow, ExternalLink, Shield } from 'lucide-react';
+import {
+  ArrowRight,
+  Code2,
+  ExternalLink,
+  Layers,
+  Mail,
+  MoveRight,
+  Shield,
+  Sparkles,
+  Workflow,
+  Zap,
+} from 'lucide-react';
+
+const integrations = ['Node.js', 'Python', 'React', 'Shopify', 'Stripe', 'Segment', 'Next.js', 'Webhook'];
+
+const featureCards = [
+  {
+    title: 'Campaign orchestration that feels operational, not chaotic',
+    description:
+      'Schedule sends, manage approvals, and spot deliverability risk before it becomes a support incident.',
+    icon: Workflow,
+    accent: 'text-[var(--accent)]',
+    tint: 'bg-[var(--accent)]/10 border-[var(--accent)]/20',
+    className: 'md:col-span-7',
+  },
+  {
+    title: 'API-first infrastructure',
+    description:
+      'Build on predictable primitives with scoped keys, logs, webhooks, and sending controls your engineering team can trust.',
+    icon: Code2,
+    accent: 'text-[var(--ai-accent)]',
+    tint: 'bg-[var(--ai-accent)]/10 border-[var(--ai-accent)]/20',
+    className: 'md:col-span-5',
+  },
+  {
+    title: 'Compliance and domain health built in',
+    description:
+      'Keep sending safe with workspace controls, suppression handling, and DNS visibility that stays readable.',
+    icon: Shield,
+    accent: 'text-[var(--success)]',
+    tint: 'bg-[var(--success)]/10 border-[var(--success)]/20',
+    className: 'md:col-span-5',
+  },
+  {
+    title: 'One surface for contacts, templates, campaigns, and analytics',
+    description:
+      'Sh_R_Mail is designed as a connected system, so the next action is always close to the signal that triggered it.',
+    icon: Zap,
+    accent: 'text-[var(--warning)]',
+    tint: 'bg-[var(--warning)]/10 border-[var(--warning)]/20',
+    className: 'md:col-span-7',
+  },
+];
+
+const pricingTiers = [
+  {
+    name: 'Starter',
+    price: '$49',
+    description: 'For small product teams launching their first reliable sending setup.',
+    bullets: ['Up to 25k monthly sends', 'Contacts and suppression controls', 'Domain verification and API keys'],
+  },
+  {
+    name: 'Growth',
+    price: '$199',
+    description: 'For B2B teams running campaigns, analytics, and tenant-level infrastructure.',
+    bullets: ['Advanced campaign orchestration', 'Deliverability monitoring', 'Team roles and operational controls'],
+    featured: true,
+  },
+  {
+    name: 'Enterprise',
+    price: 'Custom',
+    description: 'For high-volume organizations needing tighter governance and scale planning.',
+    bullets: ['Custom limits and support', 'Governance and compliance workflows', 'Shared rollout planning'],
+  },
+];
 
 export default function LandingPage() {
-    const [scrolled, setScrolled] = useState(false);
-    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [scrolled, setScrolled] = useState(false);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-    useEffect(() => {
-        const handleScroll = () => {
-            setScrolled(window.scrollY > 20);
-        };
-        const handleMouseMove = (e: MouseEvent) => {
-            setMousePos({ x: e.clientX, y: e.clientY });
-        };
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    const handleMouseMove = (event: MouseEvent) => setMousePos({ x: event.clientX, y: event.clientY });
 
-        window.addEventListener('scroll', handleScroll);
-        window.addEventListener('mousemove', handleMouseMove);
-        return () => {
-            window.removeEventListener('scroll', handleScroll);
-            window.removeEventListener('mousemove', handleMouseMove);
-        };
-    }, []);
+    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('mousemove', handleMouseMove);
 
-    const scrollToSection = (id: string) => {
-        const element = document.getElementById(id);
-        if (element) {
-            element.scrollIntoView({ behavior: 'smooth' });
-        }
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('mousemove', handleMouseMove);
     };
+  }, []);
 
-    return (
-        <div style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', minHeight: '100vh', position: 'relative', overflowX: 'hidden', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-            <style jsx global>{`
-                ::selection {
-                    background: rgba(59, 130, 246, 0.3);
-                }
-                @keyframes float {
-                    0% { transform: translateY(0px); }
-                    50% { transform: translateY(-15px); }
-                    100% { transform: translateY(0px); }
-                }
-                @keyframes float-delayed {
-                    0% { transform: translateY(0px); }
-                    50% { transform: translateY(-10px); }
-                    100% { transform: translateY(0px); }
-                }
-                @keyframes slide-up {
-                    from { opacity: 0; transform: translateY(30px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                @keyframes gradient-text {
-                    0% { background-position: 0% 50%; }
-                    50% { background-position: 100% 50%; }
-                    100% { background-position: 0% 50%; }
-                }
-                @keyframes marquee {
-                    0% { transform: translateX(0); }
-                    100% { transform: translateX(-50%); }
-                }
-                .hero-text {
-                    background: linear-gradient(to right, var(--text-primary), var(--text-muted), var(--text-primary));
-                    background-size: 200% auto;
-                    color: transparent;
-                    -webkit-background-clip: text;
-                    background-clip: text;
-                    animation: gradient-text 8s linear infinite;
-                }
-                .hero-highlight {
-                    background: linear-gradient(to right, #60a5fa, #c084fc, #60a5fa);
-                    background-size: 200% auto;
-                    color: transparent;
-                    -webkit-background-clip: text;
-                    background-clip: text;
-                    animation: gradient-text 4s linear infinite;
-                }
-                .glass-card {
-                    background: var(--bg-card);
-                    backdrop-filter: blur(20px);
-                    -webkit-backdrop-filter: blur(20px);
-                    border: 1px solid var(--border);
-                    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-                }
-                .glass-card:hover {
-                    background: var(--bg-hover);
-                    border: 1px solid var(--accent);
-                    transform: translateY(-4px);
-                    box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
-                }
-                .glass-nav {
-                    background: var(--bg-primary);
-                    backdrop-filter: blur(20px);
-                    -webkit-backdrop-filter: blur(20px);
-                    border-bottom: 1px solid var(--border);
-                }
-                
-                
-                
-                
-                .marquee-container {
-                    overflow: hidden;
-                    white-space: nowrap;
-                    position: relative;
-                    width: 100%;
-                    -webkit-mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
-                    mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
-                }
-                .marquee-content {
-                    display: inline-flex;
-                    gap: 3rem;
-                    animation: marquee 30s linear infinite;
-                    padding-right: 3rem;
-                }
-                .marquee-content:hover {
-                    animation-play-state: paused;
-                }
-                
-                /* Custom scrollbar */
-                ::-webkit-scrollbar { width: 8px; }
-                ::-webkit-scrollbar-track { background: var(--bg-primary); }
-                ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-                ::-webkit-scrollbar-thumb:hover { background: #475569; }
-            `}</style>
+  const scrollToSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+  };
 
-            {/* Ambient Background Glows */}
-            <div style={{
-                position: 'fixed',
-                top: '-20%',
-                left: '-10%',
-                width: '600px',
-                height: '600px',
-                background: 'radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%)',
-                filter: 'blur(80px)',
-                zIndex: 0,
-                pointerEvents: 'none'
-            }} />
-            <div style={{
-                position: 'fixed',
-                bottom: '-20%',
-                right: '-10%',
-                width: '600px',
-                height: '600px',
-                background: 'radial-gradient(circle, rgba(168, 85, 247, 0.1) 0%, transparent 70%)',
-                filter: 'blur(80px)',
-                zIndex: 0,
-                pointerEvents: 'none'
-            }} />
+  return (
+    <div className="relative min-h-screen overflow-x-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]">
+      <style jsx global>{`
+        @keyframes marketing-float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-12px); }
+        }
+        @keyframes marketing-marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .marketing-float {
+          animation: marketing-float 8s ease-in-out infinite;
+        }
+        .marketing-marquee {
+          animation: marketing-marquee 26s linear infinite;
+        }
+        .marketing-marquee:hover {
+          animation-play-state: paused;
+        }
+      `}</style>
 
-            {/* Dynamic Mouse Spotlight */}
-            <div style={{
-                position: 'fixed',
-                top: mousePos.y - 300,
-                left: mousePos.x - 300,
-                width: '600px',
-                height: '600px',
-                background: 'radial-gradient(circle, rgba(59, 130, 246, 0.05) 0%, transparent 50%)',
-                pointerEvents: 'none',
-                zIndex: 1,
-            }} />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute left-[-12rem] top-[-8rem] h-[28rem] w-[28rem] rounded-full bg-[var(--accent)]/12 blur-3xl" />
+        <div className="absolute bottom-[-12rem] right-[-8rem] h-[30rem] w-[30rem] rounded-full bg-[var(--ai-accent)]/12 blur-3xl" />
+        <div
+          className="absolute h-[28rem] w-[28rem] rounded-full bg-[radial-gradient(circle,rgba(37,88,217,0.10)_0%,rgba(37,88,217,0)_68%)] blur-2xl transition-transform duration-200"
+          style={{ transform: `translate(${mousePos.x - 220}px, ${mousePos.y - 220}px)` }}
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0)_0%,rgba(15,23,42,0.03)_100%)] dark:bg-[linear-gradient(to_bottom,rgba(255,255,255,0)_0%,rgba(255,255,255,0.02)_100%)]" />
+      </div>
 
-            {/* Z-Index Wrapper for content */}
-            <div style={{ position: 'relative', zIndex: 10 }}>
+      <header
+        className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
+          scrolled
+            ? 'border-b border-[var(--border)] bg-[var(--bg-card)]/95 backdrop-blur-xl'
+            : 'bg-transparent'
+        }`}
+      >
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+          <Link href="/" className="flex items-center gap-3">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--accent-gradient)] text-white shadow-[var(--shadow-lg)]">
+              <Mail className="h-5 w-5" />
+            </span>
+            <span className="text-base font-semibold tracking-tight text-[var(--text-primary)]">Sh_R_Mail</span>
+          </Link>
 
-                {/* Header */}
-                <header style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    transition: 'all 0.3s ease',
-                    zIndex: 50,
-                    backgroundColor: scrolled ? 'var(--bg-card)' : 'transparent',
-                    backdropFilter: scrolled ? 'blur(20px)' : 'none',
-                    borderBottom: scrolled ? '1px solid var(--border)' : '1px solid transparent'
-                }}>
-                    <div style={{
-                        maxWidth: '1280px',
-                        margin: '0 auto',
-                        padding: '16px 24px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <div style={{
-                                width: '36px',
-                                height: '36px',
-                                background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-                                borderRadius: '10px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                boxShadow: '0 4px 20px rgba(59, 130, 246, 0.3)'
-                            }}>
-                                <Mail style={{ width: '18px', height: '18px', color: 'var(--text-primary)' }} />
-                            </div>
-                            <span style={{ fontSize: '18px', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
-                                Email Engine
-                            </span>
-                        </div>
+          <nav className="hidden items-center gap-8 md:flex">
+            <button onClick={() => scrollToSection('features')} className="text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">Features</button>
+            <button onClick={() => scrollToSection('integrations')} className="text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">Integrations</button>
+            <button onClick={() => scrollToSection('pricing')} className="text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">Pricing</button>
+          </nav>
 
-                        <nav className="hidden md:flex gap-10">
-                            <button onClick={() => scrollToSection('features')} className="bg-transparent border-none text-[14px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer">Features</button>
-                            <button onClick={() => scrollToSection('integrations')} className="bg-transparent border-none text-[14px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer">Integrations</button>
-                            <button onClick={() => scrollToSection('pricing')} className="bg-transparent border-none text-[14px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer">Pricing</button>
-                        </nav>
-
-                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                            <Link href="/login" className="hidden sm:inline-block text-[14px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Sign In</Link>
-                            <Link href="/signup" className="btn-premium py-2 px-5 text-sm">
-                                Get Started
-                            </Link>
-                        </div>
-                    </div>
-                </header>
-
-                {/* Hero Section */}
-                <section style={{
-                    minHeight: '100vh',
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '160px 24px 80px',
-                    position: 'relative',
-                }}>
-                    {/* Grid Background Overlay */}
-                    <div style={{
-                        position: 'absolute',
-                        top: 0, left: 0, right: 0, bottom: 0,
-                        backgroundImage: `linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)`,
-                        backgroundSize: '40px 40px',
-                        maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%)',
-                        WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%)',
-                        zIndex: -1,
-                        pointerEvents: 'none'
-                    }} />
-
-                    <div style={{ maxWidth: '1280px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-
-                        <div style={{ animation: 'slide-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards' }}>
-                            <div style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                padding: '6px 16px',
-                                borderRadius: '99px',
-                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                border: '1px solid rgba(59, 130, 246, 0.2)',
-                                marginBottom: '32px',
-                            }}>
-                                <Zap style={{ width: '14px', height: '14px', color: '#60a5fa' }} />
-                                <span style={{ fontSize: '13px', fontWeight: 500, color: '#93c5fd' }}>v2.0 Early Access is now live</span>
-                            </div>
-
-                            <h1 style={{
-                                fontSize: 'clamp(48px, 6vw, 84px)',
-                                fontWeight: 700,
-                                letterSpacing: '-0.03em',
-                                lineHeight: '1.05',
-                                marginBottom: '24px',
-                                color: 'var(--text-primary)'
-                            }}>
-                                Automate emails like <br />
-                                <span className="hero-highlight">absolute magic.</span>
-                            </h1>
-
-                            <p style={{
-                                fontSize: 'clamp(18px, 2vw, 22px)',
-                                color: 'var(--text-muted)',
-                                maxWidth: '700px',
-                                margin: '0 auto 48px auto',
-                                lineHeight: '1.6',
-                                fontWeight: 400
-                            }}>
-                                The developer-first infrastructure for event-driven communications. Build complex workflows, personalize templates, and deliver at scale in minutes.
-                            </p>
-
-                            <div className="flex flex-col sm:flex-row gap-5 items-center justify-center mb-20 w-full px-6 sm:px-0">
-                                <Link href="/signup" className="btn-premium w-full sm:w-auto h-12 text-base font-semibold px-8 rounded-xl shadow-[0_4px_14px_rgba(37,99,235,0.39)]">
-                                    Get Started Free
-                                    <MoveRight className="w-[18px] h-[18px]" />
-                                </Link>
-                                <Link href="/docs" className="glass-card w-full sm:w-auto text-center" style={{
-                                    fontSize: '16px',
-                                    fontWeight: 500,
-                                    color: 'var(--text-primary)',
-                                    padding: '16px 32px',
-                                    borderRadius: '12px',
-                                    textDecoration: 'none',
-                                }}>
-                                    Read Documentation
-                                </Link>
-                            </div>
-                        </div>
-
-                        {/* Hero Visual - Floating Terminal */}
-                        <div className="w-full max-w-[900px] mx-auto px-4 sm:px-6 md:px-8 opacity-0 animate-[slide-up_1s_cubic-bezier(0.16,1,0.3,1)_0.2s_forwards]" style={{ perspective: '1000px' }}>
-                            <div className="glass-card" style={{
-                                padding: '0',
-                                borderRadius: '20px',
-                                animation: 'float 8s ease-in-out infinite',
-                                overflow: 'hidden',
-                                boxShadow: '0 30px 60px -15px rgba(0,0,0,0.8), 0 0 40px rgba(59, 130, 246, 0.1)',
-                                border: '1px solid var(--border)'
-                            }}>
-                                {/* Mac Window Header */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '16px 20px', backgroundColor: 'rgba(0,0,0,0.4)', borderBottom: '1px solid var(--border)' }}>
-                                    <div style={{ width: 12, height: 12, borderRadius: 6, background: '#ef4444' }} />
-                                    <div style={{ width: 12, height: 12, borderRadius: 6, background: '#f59e0b' }} />
-                                    <div style={{ width: 12, height: 12, borderRadius: 6, background: '#10b981' }} />
-                                    <div style={{ marginLeft: '12px', fontSize: '13px', color: '#64748b', fontFamily: 'monospace' }}>api/trigger-campaign.ts</div>
-                                </div>
-                                {/* Terminal Body */}
-                                <div className="p-4 sm:p-8 overflow-x-auto" style={{ fontFamily: '"JetBrains Mono", "Fira Code", monospace', fontSize: '14px', lineHeight: '1.7', color: '#cbd5e1', textAlign: 'left', backgroundColor: '#0f172a' }}>
-                                    <div className="whitespace-pre"><span style={{ color: '#c084fc' }}>import</span> {'{ Engine }'} <span style={{ color: '#c084fc' }}>from</span> <span style={{ color: '#34d399' }}>'@email-engine/sdk'</span>;</div>
-                                    <br />
-                                    <div className="whitespace-pre"><span style={{ color: '#60a5fa' }}>const</span> app = <span style={{ color: '#fbbf24' }}>new</span> <span style={{ color: '#60a5fa' }}>Engine</span>(process.env.API_KEY);</div>
-                                    <br />
-                                    <div className="whitespace-pre">app.<span style={{ color: '#60a5fa' }}>on</span>(<span style={{ color: '#34d399' }}>'user.signup'</span>, <span style={{ color: '#c084fc' }}>async</span> (event) {'=>'} {'{'}</div>
-                                    <div className="whitespace-pre" style={{ paddingLeft: '24px' }}>
-                                        <span style={{ color: '#c084fc' }}>await</span> app.<span style={{ color: '#60a5fa' }}>campaigns</span>.<span style={{ color: '#60a5fa' }}>trigger</span>({'{'}
-                                    </div>
-                                    <div className="whitespace-pre" style={{ paddingLeft: '48px', color: '#cbd5e1' }}>workflowId: <span style={{ color: '#34d399' }}>'wfl_welcome_series'</span>,</div>
-                                    <div className="whitespace-pre" style={{ paddingLeft: '48px', color: '#cbd5e1' }}>contact: event.user.email,</div>
-                                    <div className="whitespace-pre" style={{ paddingLeft: '48px', color: '#cbd5e1' }}>data: {'{'}</div>
-                                    <div className="whitespace-pre" style={{ paddingLeft: '72px', color: '#93c5fd' }}>name: event.user.firstName,</div>
-                                    <div className="whitespace-pre" style={{ paddingLeft: '72px', color: '#93c5fd' }}>trialEnds: event.user.trialEndDate</div>
-                                    <div className="whitespace-pre" style={{ paddingLeft: '48px' }}>{'}'}</div>
-                                    <div className="whitespace-pre" style={{ paddingLeft: '24px' }}>{'}'});</div>
-                                    <br />
-                                    <div className="whitespace-pre" style={{ paddingLeft: '24px', color: '#64748b' }}>// ✨ Email delivered instantly</div>
-                                    <div className="whitespace-pre">{'}'});</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                {/* Marquee Integrations Section */}
-                <section id="integrations" style={{ padding: '40px 0', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--bg-hover)' }}>
-                    <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-                        <p style={{ fontSize: '14px', fontWeight: 600, color: '#64748b', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Integrates with your modern stack</p>
-                    </div>
-                    <div className="marquee-container">
-                        <div className="marquee-content">
-                            {/* Duplicated for infinite scroll effect */}
-                            {[...Array(4)].map((_, i) => (
-                                <div key={i} style={{ display: 'flex', gap: '4rem', alignItems: 'center' }}>
-                                    {['Node.js', 'Python', 'React', 'Shopify', 'Webhook', 'Stripe', 'Segment', 'Next.js'].map((logo, j) => (
-                                        <div key={`${i}-${j}`} style={{ fontSize: '24px', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                            <Layers style={{ color: '#475569', width: '28px', height: '28px' }} />
-                                            {logo}
-                                        </div>
-                                    ))}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </section>
-
-                {/* Bento Grid Features Section */}
-                <section id="features" style={{ padding: '160px 24px', maxWidth: '1280px', margin: '0 auto' }}>
-                    <div style={{ textAlign: 'center', marginBottom: '80px' }}>
-                        <h2 style={{ fontSize: '48px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '24px', letterSpacing: '-0.02em' }}>
-                            Everything you <span style={{ color: '#60a5fa' }}>need</span>, <br />nothing you don't.
-                        </h2>
-                        <p style={{ fontSize: '18px', color: 'var(--text-muted)', maxWidth: '600px', margin: '0 auto' }}>
-                            We striped away the bloated marketing tools to give developers a powerful, headless email engine.
-                        </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-6">
-
-                        {/* Box 1 */}
-                        <div className="glass-card sm:col-span-12 md:col-span-8 p-8 md:p-12 rounded-[32px] flex flex-col justify-between hover:scale-[1.02] transition-transform animate-[float-delayed_7s_ease-in-out_infinite]">
-                            <div>
-                                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(96, 165, 250, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px', border: '1px solid rgba(96, 165, 250, 0.2)' }}>
-                                    <Workflow style={{ width: '24px', height: '24px', color: '#60a5fa' }} />
-                                </div>
-                                <h3 className="text-2xl md:text-3xl font-semibold text-[var(--text-primary)] mb-4">Visual Automation Builder</h3>
-                                <p style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: '1.6', maxWidth: '400px' }}>
-                                    Design complex journeys with a drag-and-drop workflow canvas. Set delays, rules, and conditions without touching the code.
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Box 2 */}
-                        <div className="glass-card sm:col-span-6 md:col-span-4 p-8 md:p-12 rounded-[32px] flex flex-col justify-between hover:scale-[1.02] transition-transform">
-                            <div>
-                                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(168, 85, 247, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px', border: '1px solid rgba(168, 85, 247, 0.2)' }}>
-                                    <Code2 style={{ width: '24px', height: '24px', color: '#c084fc' }} />
-                                </div>
-                                <h3 className="text-xl md:text-2xl font-semibold text-[var(--text-primary)] mb-4">Developer API</h3>
-                                <p style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
-                                    RESTful endpoints with predictable payloads and comprehensive webhooks.
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Box 3 */}
-                        <div className="glass-card sm:col-span-6 md:col-span-4 p-8 md:p-12 rounded-[32px] flex flex-col justify-between hover:scale-[1.02] transition-transform">
-                            <div>
-                                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                                    <Shield style={{ width: '24px', height: '24px', color: '#34d399' }} />
-                                </div>
-                                <h3 className="text-xl md:text-2xl font-semibold text-[var(--text-primary)] mb-4">Multi-Tenant Security</h3>
-                                <p style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
-                                    Isolated workspaces out of the box. Safe for B2B SaaS applications.
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Box 4 */}
-                        <div className="glass-card sm:col-span-12 md:col-span-8 p-8 md:p-12 rounded-[32px] flex flex-col justify-between hover:scale-[1.02] transition-transform animate-[float_9s_ease-in-out_infinite]">
-                            <div>
-                                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(251, 191, 36, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px', border: '1px solid rgba(251, 191, 36, 0.2)' }}>
-                                    <Zap style={{ width: '24px', height: '24px', color: '#fbbf24' }} />
-                                </div>
-                                <h3 className="text-2xl md:text-3xl font-semibold text-[var(--text-primary)] mb-4">Real-time Delivery Pipeline</h3>
-                                <p style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: '1.6', maxWidth: '400px' }}>
-                                    Our Rust-based ingest servers and Redis queues ensure sub-millisecond event processing and reliable email dispatch even during massive spikes.
-                                </p>
-                            </div>
-                        </div>
-
-                    </div>
-                </section>
-
-                {/* Final CTA */}
-                <section style={{ padding: '160px 24px', textAlign: 'center', position: 'relative' }}>
-                    <div style={{ maxWidth: '800px', margin: '0 auto', position: 'relative', zIndex: 2 }}>
-                        <h2 style={{ fontSize: '56px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '32px', letterSpacing: '-0.02em' }}>
-                            Ready to upgrade your stack?
-                        </h2>
-                        <p style={{ fontSize: '20px', color: 'var(--text-muted)', marginBottom: '48px' }}>
-                            Join hundreds of developers building the future of automated communications.
-                        </p>
-
-                        <div className="flex flex-col sm:flex-row gap-5 justify-center w-full px-6 sm:px-0">
-                            <Link href="/signup" className="btn-premium w-full sm:w-auto h-12 text-base font-semibold px-8 rounded-xl shadow-[0_4px_14px_rgba(37,99,235,0.39)]">
-                                Get Started for Free
-                                <MoveRight className="w-[18px] h-[18px]" />
-                            </Link>
-                        </div>
-                    </div>
-                </section>
-
-                {/* Footer */}
-                <footer className="border-t border-[var(--border)] py-16 px-6 bg-[var(--bg-card)]">
-                    <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-12">
-                        <div>
-                            <div className="flex items-center gap-2 mb-6">
-                                <Mail className="w-4 h-4 text-blue-400" />
-                                <span className="text-base font-semibold text-[var(--text-primary)]">Email Engine</span>
-                            </div>
-                            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-                                The modern infrastructure for event-driven email automation.
-                            </p>
-                        </div>
-
-                        <div>
-                            <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-5">Product</h4>
-                            <div className="flex flex-col gap-3">
-                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Features</Link>
-                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Integrations</Link>
-                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Pricing</Link>
-                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Changelog</Link>
-                            </div>
-                        </div>
-
-                        <div>
-                            <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-5">Developers</h4>
-                            <div className="flex flex-col gap-3">
-                                <Link href="/docs" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Documentation</Link>
-                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">API Reference</Link>
-                                <a href="https://github.com" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1.5">
-                                    GitHub <ExternalLink className="w-3 h-3" />
-                                </a>
-                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Status</Link>
-                            </div>
-                        </div>
-
-                        <div>
-                            <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-5">Company</h4>
-                            <div className="flex flex-col gap-3">
-                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">About</Link>
-                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Blog</Link>
-                                <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Contact</Link>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="max-w-7xl mx-auto mt-16 pt-8 border-t border-[var(--border)] flex justify-between items-center sm:flex-row flex-col gap-4">
-                        <p className="text-sm text-[var(--text-muted)]">© 2026 Email Engine Inc. All rights reserved.</p>
-                        <div className="flex gap-6">
-                            <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Privacy</Link>
-                            <Link href="#" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Terms</Link>
-                        </div>
-                    </div>
-                </footer>
-            </div>
+          <div className="flex items-center gap-3">
+            <Link href="/login" className="hidden text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] sm:inline-flex">
+              Sign in
+            </Link>
+            <Link href="/signup" className="btn-premium px-5 py-2 text-sm">
+              Get started
+            </Link>
+          </div>
         </div>
-    );
+      </header>
+
+      <main className="relative z-10">
+        <section className="px-4 pb-16 pt-32 sm:px-6 lg:px-8 lg:pb-24 lg:pt-40">
+          <div className="mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="space-y-8">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/10 px-4 py-2 text-sm font-medium text-[var(--accent)]">
+                <Sparkles className="h-4 w-4" />
+                Premium B2B email operations, finally in one place
+              </div>
+
+              <div className="space-y-6">
+                <h1 className="max-w-3xl text-5xl font-semibold tracking-[-0.04em] text-[var(--text-primary)] sm:text-6xl lg:text-7xl">
+                  Email infrastructure with the calm of a product, not the chaos of a toolkit.
+                </h1>
+                <p className="max-w-2xl text-base leading-8 text-[var(--text-muted)] sm:text-lg">
+                  Sh_R_Mail gives modern teams one premium workspace for contacts, templates, campaign orchestration,
+                  analytics, and tenant-level infrastructure. It is built to feel elegant in daily use and dependable when volume rises.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-4 sm:flex-row">
+                <Link href="/signup" className="btn-premium h-12 px-8 text-base font-semibold">
+                  Start free
+                  <MoveRight className="h-4 w-4" />
+                </Link>
+                <Link href="/docs" className="inline-flex h-12 items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] px-8 text-base font-medium text-[var(--text-primary)] shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--bg-hover)]">
+                  Read docs
+                  <ExternalLink className="h-4 w-4" />
+                </Link>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)]">
+                  <p className="text-2xl font-semibold text-[var(--text-primary)]">99.9%</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">Reliable delivery operations across campaigns and triggered mail.</p>
+                </div>
+                <div className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)]">
+                  <p className="text-2xl font-semibold text-[var(--text-primary)]">10M+</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">Messages processed through production-grade infrastructure patterns.</p>
+                </div>
+                <div className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)]">
+                  <p className="text-2xl font-semibold text-[var(--text-primary)]">1 system</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">Contacts, campaigns, analytics, and compliance working together.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="marketing-float">
+              <div className="overflow-hidden rounded-[28px] border border-[var(--border-highlight)] bg-[var(--bg-card)] shadow-[var(--shadow-card)]">
+                <div className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--bg-hover)] px-5 py-4">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-[#ef4444]" />
+                    <span className="h-3 w-3 rounded-full bg-[#f59e0b]" />
+                    <span className="h-3 w-3 rounded-full bg-[#10b981]" />
+                  </div>
+                  <span className="ml-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--text-muted)]">Campaign preflight</span>
+                </div>
+
+                <div className="space-y-6 bg-[#0f172a] p-6 text-left text-sm text-slate-200 sm:p-8">
+                  <div className="rounded-2xl border border-slate-700/80 bg-slate-900/70 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Deployment state</p>
+                        <h2 className="mt-2 text-xl font-semibold text-white">Spring product launch</h2>
+                      </div>
+                      <span className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                        Ready to send
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Audience</p>
+                      <p className="mt-3 text-2xl font-semibold text-white">48,210</p>
+                      <p className="mt-2 text-sm text-slate-400">Suppression and invalid contacts already filtered out.</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Domain health</p>
+                      <p className="mt-3 text-2xl font-semibold text-white">Verified</p>
+                      <p className="mt-2 text-sm text-slate-400">SPF, DKIM, and compliance checks passing.</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 font-mono text-[13px] leading-7 text-slate-300">
+                    <div><span className="text-sky-300">campaign</span>.<span className="text-indigo-300">send</span>({'{'}</div>
+                    <div className="pl-6">template: <span className="text-emerald-300">'spring-launch'</span>,</div>
+                    <div className="pl-6">segment: <span className="text-emerald-300">'active-buyers'</span>,</div>
+                    <div className="pl-6">scheduleAt: <span className="text-amber-300">'2026-04-29T14:00:00Z'</span>,</div>
+                    <div className="pl-6">deliverabilityGuard: <span className="text-sky-300">true</span>,</div>
+                    <div>{'}'});</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="integrations" className="border-y border-[var(--border)] bg-[var(--bg-hover)]/70 py-8">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <p className="mb-6 text-center text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+              Integrates with the stack your team already uses
+            </p>
+            <div className="overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_12%,black_88%,transparent)]">
+              <div className="marketing-marquee flex w-max gap-12 pr-12">
+                {[...integrations, ...integrations, ...integrations].map((item, index) => (
+                  <div key={`${item}-${index}`} className="flex items-center gap-3 text-lg font-semibold text-[var(--text-secondary)]">
+                    <Layers className="h-5 w-5 text-[var(--accent)]" />
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="features" className="px-4 py-24 sm:px-6 lg:px-8 lg:py-32">
+          <div className="mx-auto max-w-7xl">
+            <div className="mx-auto max-w-3xl text-center">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">Whole product thinking</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.03em] text-[var(--text-primary)] sm:text-5xl">
+                Powerful enough for infrastructure, clear enough for everyday work.
+              </h2>
+              <p className="mt-6 text-base leading-8 text-[var(--text-muted)] sm:text-lg">
+                We removed the feeling of bolted-together tools and replaced it with one operating system for professional email teams.
+              </p>
+            </div>
+
+            <div className="mt-16 grid gap-6 md:grid-cols-12">
+              {featureCards.map((feature) => {
+                const Icon = feature.icon;
+
+                return (
+                  <article
+                    key={feature.title}
+                    className={`rounded-[28px] border border-[var(--border)] bg-[var(--bg-card)] p-8 shadow-[var(--shadow-card)] transition-transform duration-300 hover:-translate-y-1 ${feature.className}`}
+                  >
+                    <div className={`mb-6 inline-flex h-12 w-12 items-center justify-center rounded-2xl border ${feature.tint}`}>
+                      <Icon className={`h-5 w-5 ${feature.accent}`} />
+                    </div>
+                    <h3 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">{feature.title}</h3>
+                    <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--text-muted)] sm:text-base">{feature.description}</p>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section id="pricing" className="px-4 pb-24 sm:px-6 lg:px-8 lg:pb-32">
+          <div className="mx-auto max-w-7xl rounded-[32px] border border-[var(--border)] bg-[var(--bg-card)] px-6 py-10 shadow-[var(--shadow-card)] sm:px-8 sm:py-12 lg:px-12">
+            <div className="max-w-3xl">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">Pricing</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.03em] text-[var(--text-primary)]">Pricing that scales with operational complexity.</h2>
+              <p className="mt-5 text-base leading-8 text-[var(--text-muted)] sm:text-lg">
+                Start simple, then grow into stronger orchestration, analytics, and infrastructure controls as your email program matures.
+              </p>
+            </div>
+
+            <div className="mt-12 grid gap-6 lg:grid-cols-3">
+              {pricingTiers.map((tier) => (
+                <article
+                  key={tier.name}
+                  className={`rounded-[24px] border p-6 ${tier.featured ? 'border-[var(--accent)] bg-[var(--accent)]/8 shadow-[var(--shadow-lg)]' : 'border-[var(--border)] bg-[var(--bg-primary)]'}`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-xl font-semibold text-[var(--text-primary)]">{tier.name}</h3>
+                      <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">{tier.description}</p>
+                    </div>
+                    {tier.featured && (
+                      <span className="rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+                        Most used
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-8 text-4xl font-semibold tracking-tight text-[var(--text-primary)]">{tier.price}<span className="ml-2 text-sm font-medium text-[var(--text-muted)]">/ month</span></p>
+                  <ul className="mt-8 space-y-3 text-sm leading-6 text-[var(--text-muted)]">
+                    {tier.bullets.map((bullet) => (
+                      <li key={bullet} className="flex gap-3">
+                        <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
+                        <span>{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="px-4 pb-24 sm:px-6 lg:px-8 lg:pb-32">
+          <div className="mx-auto max-w-5xl rounded-[32px] border border-[var(--border)] bg-[linear-gradient(135deg,rgba(37,88,217,0.14),rgba(15,159,140,0.10))] px-6 py-16 text-center shadow-[var(--shadow-card)] sm:px-10">
+            <h2 className="text-4xl font-semibold tracking-[-0.03em] text-[var(--text-primary)] sm:text-5xl">
+              Ready to give your email stack a calmer control surface?
+            </h2>
+            <p className="mx-auto mt-6 max-w-2xl text-base leading-8 text-[var(--text-muted)] sm:text-lg">
+              Start with a workspace that already thinks in campaigns, deliverability, infrastructure, and team operations.
+            </p>
+            <div className="mt-10 flex flex-col justify-center gap-4 sm:flex-row">
+              <Link href="/signup" className="btn-premium h-12 px-8 text-base font-semibold">
+                Get started for free
+                <MoveRight className="h-4 w-4" />
+              </Link>
+              <Link href="/docs" className="inline-flex h-12 items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] px-8 text-base font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-hover)]">
+                Explore docs
+                <ExternalLink className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer className="relative z-10 border-t border-[var(--border)] bg-[var(--bg-card)]/85 py-16 backdrop-blur-sm">
+        <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
+          <div>
+            <div className="mb-5 flex items-center gap-3">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--accent-gradient)] text-white">
+                <Mail className="h-4 w-4" />
+              </span>
+              <span className="text-base font-semibold text-[var(--text-primary)]">Sh_R_Mail</span>
+            </div>
+            <p className="text-sm leading-7 text-[var(--text-muted)]">
+              Premium email marketing and infrastructure for modern B2B teams.
+            </p>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--text-primary)]">Product</h4>
+            <div className="mt-5 flex flex-col gap-3">
+              <button onClick={() => scrollToSection('features')} className="text-left text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">Features</button>
+              <button onClick={() => scrollToSection('integrations')} className="text-left text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">Integrations</button>
+              <button onClick={() => scrollToSection('pricing')} className="text-left text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">Pricing</button>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--text-primary)]">Developers</h4>
+            <div className="mt-5 flex flex-col gap-3">
+              <Link href="/docs" className="text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">Documentation</Link>
+              <Link href="/integrations" className="text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">Integrations</Link>
+              <a href="https://github.com" className="inline-flex items-center gap-1.5 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">
+                GitHub
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--text-primary)]">Access</h4>
+            <div className="mt-5 flex flex-col gap-3">
+              <Link href="/login" className="text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">Sign in</Link>
+              <Link href="/signup" className="text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">Create account</Link>
+              <Link href="/forgot-password" className="text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]">Reset password</Link>
+            </div>
+          </div>
+        </div>
+
+        <div className="mx-auto mt-14 flex max-w-7xl flex-col gap-4 border-t border-[var(--border)] px-4 pt-8 text-sm text-[var(--text-muted)] sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+          <p>© 2026 Sh_R_Mail. All rights reserved.</p>
+          <div className="flex gap-6">
+            <Link href="/login" className="transition-colors hover:text-[var(--text-primary)]">Privacy</Link>
+            <Link href="/login" className="transition-colors hover:text-[var(--text-primary)]">Terms</Link>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
 }

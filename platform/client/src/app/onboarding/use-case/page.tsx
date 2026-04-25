@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Target, ArrowRight } from 'lucide-react';
+import { OnboardingShell } from '@/components/onboarding';
+import { Button, InlineAlert } from '@/components/ui';
 
 export default function UseCaseOnboarding() {
     const router = useRouter();
@@ -55,77 +57,55 @@ export default function UseCaseOnboarding() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)] p-4">
-            <div className="w-full max-w-lg rounded-2xl bg-[var(--bg-card)] p-8 shadow-xl border border-[var(--border)]">
-                {/* Progress Indicator */}
-                <div className="mb-4">
-                    <p className="text-center text-sm font-medium text-[var(--text-muted)]">Step 2 of 4</p>
-                    <div className="mt-2 h-1 w-full rounded-full bg-[var(--border)]">
-                        <div className="h-1 w-1/2 rounded-full bg-[var(--accent)]"></div>
-                    </div>
+        <OnboardingShell
+            step={2}
+            totalSteps={4}
+            icon={<Target className="h-6 w-6" />}
+            title="How will you use Sh_R_Mail first?"
+            description="We’ll tailor your starting views and recommendations around the kind of sending you care about most."
+        >
+            <form onSubmit={handleSubmit} className="space-y-4">
+                {errors.general && (
+                    <InlineAlert
+                        variant="danger"
+                        title="Couldn’t save your use case"
+                        description={errors.general}
+                    />
+                )}
+
+                <div className="grid gap-3">
+                    {useCases.map((useCase) => (
+                        <label
+                            key={useCase.value}
+                            className={`flex cursor-pointer items-start gap-3 rounded-[var(--radius-lg)] border p-4 transition-all ${selectedUseCase === useCase.value
+                                ? 'border-[var(--accent)] bg-[var(--accent)]/10 shadow-[var(--shadow-sm)]'
+                                : 'border-[var(--border)] bg-[var(--bg-primary)] hover:border-[var(--accent)]/50 hover:bg-[var(--bg-hover)]'
+                                }`}
+                        >
+                            <input
+                                type="radio"
+                                name="useCase"
+                                value={useCase.value}
+                                checked={selectedUseCase === useCase.value}
+                                onChange={(e) => setSelectedUseCase(e.target.value)}
+                                disabled={loading}
+                                className="mt-1 h-4 w-4 cursor-pointer accent-[var(--accent)]"
+                            />
+                            <div className="min-w-0">
+                                <p className="text-sm font-semibold text-[var(--text-primary)]">{useCase.label}</p>
+                                <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">{useCase.description}</p>
+                            </div>
+                        </label>
+                    ))}
                 </div>
 
-                {/* Header */}
-                <div className="mb-8 text-center">
-                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--accent)]/10">
-                        <Target className="h-6 w-6 text-[var(--accent)]" />
-                    </div>
-                    <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] mb-2">
-                        How do you plan to use Email Engine?
-                    </h1>
-                    <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-                        This helps us personalize your setup.
-                    </p>
-                </div>
+                {errors.useCase && <p className="text-sm text-[var(--danger)]">{errors.useCase}</p>}
 
-                {/* Form */}
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    {errors.general && (
-                        <div className="p-3 bg-[var(--danger)]/10 border border-[var(--danger)]/20 rounded-lg text-[var(--danger)] text-sm">
-                            {errors.general}
-                        </div>
-                    )}
-
-                    <div className="flex flex-col gap-3">
-                        {useCases.map((useCase) => (
-                            <label
-                                key={useCase.value}
-                                className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${selectedUseCase === useCase.value
-                                        ? 'border-[var(--accent)] bg-[var(--accent)]/10'
-                                        : 'border-[var(--border)] hover:border-[var(--accent)]/50'
-                                    }`}
-                            >
-                                <input
-                                    type="radio"
-                                    name="useCase"
-                                    value={useCase.value}
-                                    checked={selectedUseCase === useCase.value}
-                                    onChange={(e) => setSelectedUseCase(e.target.value)}
-                                    disabled={loading}
-                                    className="mt-0.5 w-4 h-4 cursor-pointer accent-[var(--accent)]"
-                                />
-                                <div>
-                                    <p className="text-sm font-semibold text-[var(--text-primary)]">{useCase.label}</p>
-                                    <p className="text-xs text-[var(--text-muted)] mt-0.5">{useCase.description}</p>
-                                </div>
-                            </label>
-                        ))}
-                    </div>
-
-                    {errors.useCase && (
-                        <p className="text-sm text-[var(--danger)]">{errors.useCase}</p>
-                    )}
-
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full mt-2 py-3.5 px-6 text-base font-semibold text-white bg-[var(--accent)] hover:bg-[var(--accent-hover)] rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                        {loading ? 'Saving...' : 'Continue'}
-                        {!loading && <ArrowRight className="w-5 h-5" />}
-                    </button>
-                </form>
-            </div>
-        </div>
+                <Button type="submit" size="lg" isLoading={loading} className="w-full">
+                    {loading ? 'Saving...' : 'Continue'}
+                    {!loading && <ArrowRight className="h-5 w-5" />}
+                </Button>
+            </form>
+        </OnboardingShell>
     );
 }

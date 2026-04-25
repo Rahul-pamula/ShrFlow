@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { CheckCircle2, ArrowRight, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { OnboardingShell } from '@/components/onboarding';
+import { Button, InlineAlert } from '@/components/ui';
 
 export default function OnboardingComplete() {
-    const router = useRouter();
     const { refreshUserStatus } = useAuth();
     const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
     const [submitting, setSubmitting] = useState(false);
@@ -65,10 +65,10 @@ export default function OnboardingComplete() {
 
     if (status === 'loading') {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]">
+            <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-12">
                 <div className="text-center">
-                    <Loader2 className="w-12 h-12 text-[var(--accent)] animate-spin mx-auto" />
-                    <p className="mt-4 text-[var(--text-muted)]">Finalizing setup...</p>
+                    <Loader2 className="mx-auto h-12 w-12 animate-spin text-[var(--accent)]" />
+                    <p className="mt-4 text-sm text-[var(--text-muted)]">Finalizing your workspace...</p>
                 </div>
             </div>
         );
@@ -76,53 +76,46 @@ export default function OnboardingComplete() {
 
     if (status === 'error') {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]">
-                <div className="text-center max-w-sm p-6">
-                    <div className="text-4xl mb-4">⚠️</div>
-                    <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-2">Setup Failed</h2>
-                    <p className="text-[var(--text-muted)] mb-6">
-                        We couldn&apos;t activate your workspace. Please try again or contact support.
-                    </p>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="px-5 py-2.5 text-sm font-medium border border-[var(--border)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--bg-hover)] transition-colors"
-                    >
-                        Try Again
-                    </button>
-                </div>
-            </div>
+            <OnboardingShell
+                icon={<CheckCircle2 className="h-6 w-6" />}
+                title="We hit a problem finishing setup"
+                description="Your workspace details are saved, but activation did not complete. Try again and we’ll pick up from here."
+            >
+                <InlineAlert
+                    variant="danger"
+                    title="Workspace activation failed"
+                    description="We couldn’t activate your workspace yet. Please try again or contact support if this keeps happening."
+                />
+
+                <Button variant="secondary" size="lg" onClick={() => window.location.reload()} className="w-full">
+                    Try Again
+                </Button>
+            </OnboardingShell>
         );
     }
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)] p-4">
-            <div className="w-full max-w-lg rounded-2xl bg-[var(--bg-card)] p-12 shadow-xl border border-[var(--border)] text-center">
-                {/* Success Icon */}
-                <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-full bg-[var(--success)]/10">
-                    <CheckCircle2 className="w-12 h-12 text-[var(--success)]" />
-                </div>
+        <OnboardingShell
+            icon={<CheckCircle2 className="h-6 w-6" />}
+            title="You’re all set"
+            description="Your workspace is ready. You can start sending, managing contacts, and setting up infrastructure right away."
+        >
+            <InlineAlert
+                variant="success"
+                title="Workspace activated"
+                description="Everything needed for the initial setup is complete. You can fine-tune details later from Settings."
+            />
 
-                <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-4">
-                    You&apos;re all set 🎉
-                </h1>
-
-                <p className="text-base text-[var(--text-muted)] leading-relaxed mb-10 max-w-sm mx-auto">
-                    Your workspace is ready. You can now start sending events and building automation.
-                </p>
-
-                <button
-                    onClick={handleGoToDashboard}
-                    disabled={submitting}
-                    className="inline-flex items-center justify-center gap-2 px-8 py-3.5 text-base font-semibold text-white bg-[var(--accent)] hover:bg-[var(--accent-hover)] rounded-xl transition-colors disabled:opacity-60 disabled:cursor-not-allowed mb-6"
-                >
+            <div className="space-y-3 text-center">
+                <Button onClick={handleGoToDashboard} size="lg" isLoading={submitting} className="w-full">
                     {submitting ? 'Loading...' : 'Go to Dashboard'}
-                    {!submitting && <ArrowRight className="w-5 h-5" />}
-                </button>
+                    {!submitting && <ArrowRight className="h-5 w-5" />}
+                </Button>
 
                 <p className="text-sm text-[var(--text-muted)]">
                     You can update these settings anytime later.
                 </p>
             </div>
-        </div>
+        </OnboardingShell>
     );
 }

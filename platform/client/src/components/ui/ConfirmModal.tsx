@@ -14,6 +14,7 @@ interface ConfirmModalProps {
     cancelLabel?: string;
     variant?: 'danger' | 'warning' | 'primary';
     isLoading?: boolean;
+    confirmDisabled?: boolean;
     children?: ReactNode;
 }
 
@@ -27,6 +28,7 @@ function ConfirmModal({
     cancelLabel = 'Cancel',
     variant = 'danger',
     isLoading = false,
+    confirmDisabled = false,
     children,
 }: ConfirmModalProps) {
 
@@ -69,10 +71,21 @@ function ConfirmModal({
             document.addEventListener('keydown', handleKeyDown);
             document.body.style.overflow = 'hidden';
             
-            // Set initial focus to cancel button to prevent accidental submission
-            // Use setTimeout to ensure the modal is rendered before focusing
+            // Prefer a user-input field when present so typed confirmations work naturally.
             const timeoutId = setTimeout(() => {
-                cancelBtnRef.current?.focus();
+                const preferredInput = modalRef.current?.querySelector<HTMLElement>(
+                    'input:not([disabled]), textarea:not([disabled]), select:not([disabled])'
+                );
+                if (preferredInput) {
+                    preferredInput.focus();
+                    if ('select' in preferredInput) {
+                        try {
+                            (preferredInput as HTMLInputElement).select?.();
+                        } catch { }
+                    }
+                } else {
+                    cancelBtnRef.current?.focus();
+                }
             }, 10);
             return () => clearTimeout(timeoutId);
         } else {
@@ -174,6 +187,7 @@ function ConfirmModal({
                             size="sm"
                             onClick={onConfirm}
                             isLoading={isLoading}
+                            disabled={confirmDisabled}
                         >
                             {confirmLabel}
                         </Button>

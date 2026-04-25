@@ -13,8 +13,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-    title: "Email Engine",
-    description: "Enterprise Email Marketing Platform",
+    title: "Sh_R_Mail",
+    description: "B2B email marketing and infrastructure platform",
 };
 
 export default function RootLayout({

@@ -1,12 +1,13 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useDeferredValue } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
-import { ArrowLeft, Search, FileSpreadsheet, Users, Globe2, AlertTriangle } from "lucide-react";
-import Link from "next/link";
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { AlertTriangle, ArrowLeft, FileSpreadsheet, Globe2, Search, Users } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { Badge, Button, EmptyState, FilterBar, InlineAlert, Input, PageHeader, SectionCard, StatCard, TableToolbar, useToast } from '@/components/ui';
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = 'http://127.0.0.1:8000';
 
 interface DomainStat {
     domain: string;
@@ -19,11 +20,12 @@ export default function BatchDetailPage() {
     const { batchId } = useParams();
     const router = useRouter();
     const { token } = useAuth();
+    const { error } = useToast();
 
     const [contacts, setContacts] = useState<any[]>([]);
     const [batch, setBatch] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState("");
+    const [search, setSearch] = useState('');
     const deferredSearch = useDeferredValue(search);
     const [domainFilters, setDomainFilters] = useState<string[]>([]);
     const [domainStats, setDomainStats] = useState<DomainStat[]>([]);
@@ -32,14 +34,21 @@ export default function BatchDetailPage() {
     const [total, setTotal] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
 
+    const typoDomains = useMemo(() => domainStats.filter((entry) => entry.suggested_domain), [domainStats]);
+
     const fetchBatch = async () => {
         if (!token) return;
-        const res = await fetch(`${API_BASE}/contacts/batches`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        const json = await res.json();
-        const found = (json.data || []).find((b: any) => b.id === batchId);
-        setBatch(found || null);
+        try {
+            const res = await fetch(`${API_BASE}/contacts/batches`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const json = await res.json();
+            const found = (json.data || []).find((item: any) => item.id === batchId);
+            setBatch(found || null);
+        } catch (fetchError) {
+            console.error(fetchError);
+            error('Failed to load batch details.');
+        }
     };
 
     const fetchContacts = async () => {
@@ -48,20 +57,25 @@ export default function BatchDetailPage() {
         try {
             const params = new URLSearchParams({
                 page: String(page),
-                limit: "20",
+                limit: '20',
                 batch_id: batchId as string,
                 ...(deferredSearch ? { search: deferredSearch } : {}),
-                ...(domainFilters.length > 0 ? { domains: domainFilters.join(",") } : {})
+                ...(domainFilters.length > 0 ? { domains: domainFilters.join(',') } : {}),
             });
             const res = await fetch(`${API_BASE}/contacts/?${params}`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
             });
             const json = await res.json();
             setContacts(json.data || []);
             setTotal(json.meta?.total || 0);
             setTotalPages(json.meta?.total_pages || 0);
-        } catch { setContacts([]); }
-        finally { setLoading(false); }
+        } catch (fetchError) {
+            console.error(fetchError);
+            setContacts([]);
+            error('Failed to load batch contacts.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const fetchDomains = async () => {
@@ -69,15 +83,16 @@ export default function BatchDetailPage() {
         setDomainLoading(true);
         try {
             const params = new URLSearchParams({
-                limit: "12",
-                batch_id: batchId as string
+                limit: '12',
+                batch_id: batchId as string,
             });
             const res = await fetch(`${API_BASE}/contacts/domains?${params}`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
             });
             const json = await res.json();
             setDomainStats(json.data || []);
-        } catch {
+        } catch (fetchError) {
+            console.error(fetchError);
             setDomainStats([]);
         } finally {
             setDomainLoading(false);
@@ -90,228 +105,159 @@ export default function BatchDetailPage() {
 
     const toggleDomainFilter = (domain: string) => {
         setPage(1);
-        setDomainFilters((current) =>
-            current.includes(domain)
-                ? current.filter((item) => item !== domain)
-                : [...current, domain]
-        );
+        setDomainFilters((current) => current.includes(domain) ? current.filter((item) => item !== domain) : [...current, domain]);
     };
 
-    const colors = {
-        bg: "var(--bg-primary)", bgMuted: "var(--bg-card)", border: "var(--border)",
-        text: "var(--text-primary)", textSecondary: "var(--text-muted)",
-        accent: "var(--accent)", success: "var(--success)"
-    };
+    const metrics = [
+        { label: 'Visible Contacts', value: total.toLocaleString() },
+        { label: 'Batch Domains', value: domainStats.length.toString() },
+        { label: 'Possible Typos', value: typoDomains.length.toString() },
+    ];
 
     return (
-        <div style={{ padding: "24px 32px", maxWidth: "1100px" }}>
-            {/* Back link */}
-            <button onClick={() => router.back()} style={{ display: "flex", alignItems: "center", gap: "6px", background: "none", border: "none", color: colors.textSecondary, cursor: "pointer", fontSize: "13px", marginBottom: "20px", padding: 0 }}>
-                <ArrowLeft size={14} /> Back to Contacts
-            </button>
+        <div className="space-y-8 pb-8">
+            <PageHeader
+                title={batch ? batch.file_name : 'Batch Details'}
+                subtitle={batch ? `${batch.imported_count.toLocaleString()} contacts imported on ${new Date(batch.created_at).toLocaleDateString()}.` : 'Inspect imported contacts, filter by domain, and review possible typo domains.'}
+                breadcrumb={
+                    <button onClick={() => router.back()} className="inline-flex items-center gap-1 text-sm text-[var(--text-muted)] transition hover:text-[var(--text-primary)]">
+                        <ArrowLeft className="h-4 w-4" />
+                        Back to Contacts
+                    </button>
+                }
+                action={
+                    <Badge variant="outline">
+                        <Users className="mr-1 h-3.5 w-3.5" />
+                        {total.toLocaleString()} contacts
+                    </Badge>
+                }
+            />
 
-            {/* Header */}
-            <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "24px" }}>
-                <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <FileSpreadsheet size={20} color="#3B82F6" />
-                </div>
-                <div>
-                    <h1 style={{ fontSize: "20px", fontWeight: 600, color: colors.text, margin: 0 }}>
-                        {batch ? batch.file_name : "Loading..."}
-                    </h1>
-                    <p style={{ fontSize: "13px", color: colors.textSecondary, margin: "2px 0 0" }}>
-                        {batch && `${batch.imported_count.toLocaleString()} contacts · Imported ${new Date(batch.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
-                    </p>
-                </div>
-                <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px", padding: "8px 14px", background: "rgba(59,130,246,0.07)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: "8px" }}>
-                    <Users size={14} color="#3B82F6" />
-                    <span style={{ fontSize: "14px", fontWeight: 600, color: "#60A5FA" }}>{total.toLocaleString()}</span>
-                    <span style={{ fontSize: "12px", color: colors.textSecondary }}>contacts</span>
-                </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                {metrics.map((metric) => (
+                    <StatCard key={metric.label} label={metric.label} value={metric.value} icon={<FileSpreadsheet className="h-5 w-5" />} />
+                ))}
             </div>
 
-            <div style={{
-                marginBottom: "18px",
-                padding: "16px",
-                border: `1px solid ${colors.border}`,
-                borderRadius: "14px",
-                background: "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(16,185,129,0.06))"
-            }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                    <Globe2 size={15} color="#93C5FD" />
-                    <span style={{ fontSize: "12px", letterSpacing: "0.12em", textTransform: "uppercase", color: "#93C5FD", fontWeight: 700 }}>
-                        Batch Domains
-                    </span>
-                </div>
-                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
-                    <div style={{ position: "relative", flex: "1 1 320px" }}>
-                        <Search style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", width: "14px", height: "14px", color: colors.textSecondary }} />
-                        <input
-                            placeholder="Search by email..."
+            <SectionCard title="Batch Domains" description="Use domain filters to inspect subsets of the import and catch suspicious patterns before campaigns are sent.">
+                <FilterBar>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_240px_auto]">
+                        <Input
                             value={search}
                             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                            style={{ width: "100%", padding: "8px 12px 8px 34px", fontSize: "13px", border: `1px solid ${colors.border}`, borderRadius: "10px", outline: "none", boxSizing: "border-box", backgroundColor: colors.bgMuted, color: colors.text }}
+                            placeholder="Search by email..."
+                            icon={<Search className="h-4 w-4" />}
                         />
-                    </div>
-                    <div style={{ display: "flex", gap: "8px", flex: "1 1 240px" }}>
                         <select
-                            value={domainFilters[0] || ""}
+                            value={domainFilters[0] || ''}
                             onChange={(e) => {
                                 const value = e.target.value;
                                 setPage(1);
                                 setDomainFilters(value ? [value] : []);
                             }}
-                            style={{ flex: 1, padding: "8px 12px", fontSize: "13px", border: `1px solid ${colors.border}`, borderRadius: "10px", backgroundColor: colors.bgMuted, color: colors.text }}
+                            className="rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
                         >
                             <option value="">All batch domains</option>
                             {domainStats.map((domain) => (
-                                <option key={domain.domain} value={domain.domain}>
-                                    {domain.domain} ({domain.count})
-                                </option>
+                                <option key={domain.domain} value={domain.domain}>{domain.domain} ({domain.count})</option>
                             ))}
                         </select>
                         {domainFilters.length > 0 && (
-                            <button
-                                onClick={() => { setDomainFilters([]); setPage(1); }}
-                                style={{ padding: "8px 12px", fontSize: "13px", background: "transparent", border: `1px solid ${colors.border}`, borderRadius: "10px", color: colors.text, cursor: "pointer" }}
-                            >
-                                Clear
-                            </button>
+                            <Button variant="ghost" onClick={() => { setDomainFilters([]); setPage(1); }}>Clear</Button>
                         )}
                     </div>
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                </FilterBar>
+
+                <div className="mt-4 flex flex-wrap gap-2">
                     {domainLoading && domainStats.length === 0 ? (
-                        <span style={{ fontSize: "12px", color: colors.textSecondary }}>Loading domains...</span>
+                        <span className="text-sm text-[var(--text-muted)]">Loading domains...</span>
                     ) : domainStats.map((entry) => (
                         <button
                             key={entry.domain}
                             onClick={() => toggleDomainFilter(entry.domain)}
-                            style={{
-                                padding: "8px 10px",
-                                borderRadius: "12px",
-                                border: `1px solid ${domainFilters.includes(entry.domain) ? "rgba(59,130,246,0.5)" : colors.border}`,
-                                backgroundColor: domainFilters.includes(entry.domain) ? "rgba(59,130,246,0.12)" : "rgba(9,9,11,0.24)",
-                                color: colors.text,
-                                cursor: "pointer",
-                                textAlign: "left"
-                            }}
+                            className={`rounded-[var(--radius)] border px-3 py-2 text-left transition ${domainFilters.includes(entry.domain) ? 'border-[var(--accent)] bg-[var(--info-bg)]/40' : 'border-[var(--border)] bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)]'}`}
                         >
-                            <div style={{ fontSize: "12px", fontWeight: 600 }}>{entry.domain}</div>
-                            <div style={{ fontSize: "11px", color: colors.textSecondary }}>{entry.count} contacts</div>
+                            <div className="text-sm font-medium text-[var(--text-primary)]">{entry.domain}</div>
+                            <div className="text-xs text-[var(--text-muted)]">{entry.count} contacts</div>
                         </button>
                     ))}
                 </div>
-                {domainFilters.length > 0 && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "12px" }}>
-                        {domainFilters.map((domain) => (
-                            <span
-                                key={domain}
-                                style={{
-                                    padding: "6px 10px",
-                                    borderRadius: "999px",
-                                    background: "rgba(59,130,246,0.12)",
-                                    border: "1px solid rgba(59,130,246,0.25)",
-                                    color: "#BFDBFE",
-                                    fontSize: "12px"
-                                }}
-                            >
-                                {domain}
-                            </span>
-                        ))}
-                    </div>
-                )}
-                {domainStats.some((entry) => entry.suggested_domain) && (
-                    <div style={{
-                        marginTop: "12px",
-                        padding: "10px 12px",
-                        borderRadius: "10px",
-                        border: "1px solid rgba(245,158,11,0.25)",
-                        backgroundColor: "rgba(245,158,11,0.08)",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        color: "#FDE68A",
-                        fontSize: "12px"
-                    }}>
-                        <AlertTriangle size={14} />
-                        Possible typo domains found in this batch. Review entries like{" "}
-                        {domainStats.filter((entry) => entry.suggested_domain).slice(0, 2).map((entry) => `${entry.domain} -> ${entry.suggested_domain}`).join(", ")}.
-                    </div>
-                )}
-            </div>
 
-            {/* Table */}
-            <div style={{ border: `1px solid ${colors.border}`, borderRadius: "8px", overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                    <thead>
-                        <tr style={{ backgroundColor: colors.bgMuted, borderBottom: `1px solid ${colors.border}` }}>
-                            <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 500, color: colors.textSecondary }}>Email</th>
-                            <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 500, color: colors.textSecondary }}>Status</th>
-                            <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 500, color: colors.textSecondary }}>Added</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading ? (
-                            <tr><td colSpan={3} style={{ padding: "32px", textAlign: "center", color: colors.textSecondary }}>Loading...</td></tr>
-                        ) : contacts.length === 0 ? (
-                            <tr><td colSpan={3} style={{ padding: "48px", textAlign: "center", color: colors.textSecondary }}>No contacts found</td></tr>
-                        ) : contacts.map((c) => (
-                            <tr key={c.id} style={{ borderBottom: `1px solid ${colors.border}` }}>
-                                <td style={{ padding: "10px 16px" }}>
-                                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                        <Link href={`/contacts/${c.id}`} style={{ color: colors.accent, textDecoration: "none", fontWeight: 500 }}>
-                                            {c.email}
-                                        </Link>
-                                        {c.email_domain && (
-                                            <span style={{
-                                                width: "fit-content",
-                                                padding: "2px 8px",
-                                                fontSize: "11px",
-                                                borderRadius: "999px",
-                                                backgroundColor: "rgba(59,130,246,0.12)",
-                                                color: "#93C5FD",
-                                                border: "1px solid rgba(59,130,246,0.18)"
-                                            }}>
-                                                {c.email_domain}
-                                            </span>
-                                        )}
-                                    </div>
-                                </td>
-                                <td style={{ padding: "10px 16px" }}>
-                                    <span style={{
-                                        padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 600,
-                                        background: c.status === "subscribed" ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
-                                        color: c.status === "subscribed" ? "#22C55E" : "#EF4444",
-                                        border: `1px solid ${c.status === "subscribed" ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)"}`
-                                    }}>
-                                        {c.status}
-                                    </span>
-                                </td>
-                                <td style={{ padding: "10px 16px", color: colors.textSecondary, fontSize: "12px" }}>
-                                    {new Date(c.created_at).toLocaleDateString()}
-                                </td>
+                {typoDomains.length > 0 && (
+                    <InlineAlert
+                        variant="warning"
+                        title="Possible typo domains found"
+                        description={`Review entries like ${typoDomains.slice(0, 2).map((entry) => `${entry.domain} -> ${entry.suggested_domain}`).join(', ')} before using this batch in campaigns.`}
+                        icon={<AlertTriangle className="mt-0.5 h-4 w-4" />}
+                        className="mt-4"
+                    />
+                )}
+            </SectionCard>
+
+            <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)]">
+                <TableToolbar
+                    title="Imported Contacts"
+                    description="Batch members stay linked back to their original import so you can audit and remediate quickly."
+                    trailing={domainFilters.length > 0 ? <Badge variant="outline">{domainFilters.join(', ')}</Badge> : null}
+                    className="rounded-none border-0 border-b border-[var(--border)]"
+                />
+                {loading ? (
+                    <div className="p-12 text-center text-sm text-[var(--text-muted)]">Loading contacts...</div>
+                ) : contacts.length === 0 ? (
+                    <EmptyState
+                        icon={<FileSpreadsheet className="h-10 w-10" />}
+                        title="No contacts found"
+                        description="Try clearing the search or domain filters to see the full batch again."
+                    />
+                ) : (
+                    <table className="w-full border-collapse">
+                        <thead>
+                            <tr className="border-b border-[var(--border)] bg-[var(--bg-hover)]">
+                                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Email</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Name</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Status</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Added</th>
+                                <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Actions</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {contacts.map((contact) => (
+                                <tr key={contact.id} className="border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--bg-hover)]">
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col gap-1">
+                                            <Link href={`/contacts/${contact.id}`} className="text-sm font-medium text-[var(--accent)] transition hover:opacity-80">
+                                                {contact.email}
+                                            </Link>
+                                            {contact.email_domain && <Badge variant="outline">{contact.email_domain}</Badge>}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-[var(--text-primary)]">
+                                        {[contact.first_name, contact.last_name].filter(Boolean).join(' ') || '—'}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <Badge variant={contact.status === 'subscribed' ? 'success' : 'danger'}>{contact.status}</Badge>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-[var(--text-muted)]">{new Date(contact.created_at).toLocaleDateString()}</td>
+                                    <td className="px-6 py-4 text-right">
+                                        <Link href={`/contacts/${contact.id}`}>
+                                            <Button variant="ghost" size="sm">Edit Contact</Button>
+                                        </Link>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
             </div>
 
-            {/* Pagination */}
             {totalPages > 1 && (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "16px" }}>
-                    <span style={{ fontSize: "13px", color: colors.textSecondary }}>
-                        Showing {(page - 1) * 20 + 1}–{Math.min(page * 20, total)} of {total}
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <span className="text-sm text-[var(--text-muted)]">
+                        Showing {(page - 1) * 20 + 1}-{Math.min(page * 20, total)} of {total}
                     </span>
-                    <div style={{ display: "flex", gap: "8px" }}>
-                        <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-                            style={{ padding: "6px 12px", fontSize: "13px", background: "transparent", border: `1px solid ${colors.border}`, borderRadius: "6px", color: colors.text, cursor: page <= 1 ? "not-allowed" : "pointer", opacity: page <= 1 ? 0.4 : 1 }}>
-                            ← Prev
-                        </button>
-                        <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-                            style={{ padding: "6px 12px", fontSize: "13px", background: "transparent", border: `1px solid ${colors.border}`, borderRadius: "6px", color: colors.text, cursor: page >= totalPages ? "not-allowed" : "pointer", opacity: page >= totalPages ? 0.4 : 1 }}>
-                            Next →
-                        </button>
+                    <div className="flex gap-2">
+                        <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Prev</Button>
+                        <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>Next</Button>
                     </div>
                 </div>
             )}

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
+import { InlineAlert, PageHeader, SectionCard, StatCard } from "@/components/ui";
+
 type Stats = {
   sent: number;
   failed: number;
@@ -36,7 +38,7 @@ export default function CampaignAnalyticsPage() {
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
   const [stats, setStats] = useState<Stats | null>(null);
-   const [sources, setSources] = useState<Record<string, number>>({});
+  const [sources, setSources] = useState<Record<string, number>>({});
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -54,6 +56,7 @@ export default function CampaignAnalyticsPage() {
         ]);
         if (!sRes.ok) throw new Error((await sRes.json()).detail || "Failed to load stats");
         if (!rRes.ok) throw new Error((await rRes.json()).detail || "Failed to load recipients");
+
         const sJson = await sRes.json();
         const rJson = await rRes.json();
         setStats(sJson.stats);
@@ -66,102 +69,130 @@ export default function CampaignAnalyticsPage() {
         setLoading(false);
       }
     };
+
     load();
   }, [token, id, API_BASE]);
 
   const statCards = stats
     ? [
-        { label: "Sent", value: stats.sent },
-        { label: "Opens (unique)", value: stats.unique_opens, sub: `${stats.open_rate}%` },
-        { label: "Opens (total)", value: stats.opens },
-        { label: "Bounce rate", value: `${stats.bounce_rate}%` },
-        { label: "Unsubscribes", value: stats.unsubscribes },
-      ]
+      { title: "Sent", value: stats.sent.toLocaleString(), change: `${stats.failed} failed`, changeType: stats.failed > 0 ? "negative" as const : "neutral" as const },
+      { title: "Unique opens", value: stats.unique_opens.toLocaleString(), change: `${stats.open_rate}% rate`, changeType: "positive" as const },
+      { title: "Total opens", value: stats.opens.toLocaleString(), change: stats.view || "Campaign view", changeType: "neutral" as const },
+      { title: "Bounce rate", value: `${stats.bounce_rate}%`, change: `${stats.bounces} bounces`, changeType: stats.bounces > 0 ? "negative" as const : "neutral" as const },
+      { title: "Unsubscribes", value: stats.unsubscribes.toLocaleString(), change: `${stats.unsubscribe_rate}% rate`, changeType: stats.unsubscribes > 0 ? "negative" as const : "neutral" as const },
+    ]
     : [];
 
   return (
-    <div style={{ padding: "24px", maxWidth: "1100px", margin: "0 auto" }}>
-      <button
-        onClick={() => router.back()}
-        style={{ color: "#8B5CF6", fontSize: "13px", marginBottom: "14px" }}
-      >
-        ← Back
-      </button>
-
-      <h1 style={{ fontSize: "22px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px" }}>
-        Campaign Analytics
-      </h1>
+    <div className="mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6">
+      <PageHeader
+        title="Campaign analytics"
+        subtitle="Monitor delivery, engagement, and recipient-level signals for this campaign."
+        action={(
+          <button
+            onClick={() => router.back()}
+            className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-card)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-hover)]"
+          >
+            Back
+          </button>
+        )}
+      />
 
       {error && (
-        <div style={{ padding: "12px 14px", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", color: "#F87171", marginBottom: "16px" }}>
-          {error}
-        </div>
+        <InlineAlert
+          variant="danger"
+          title="Analytics couldn’t be loaded"
+          description={error}
+        />
       )}
 
-      {loading && <p style={{ color: "var(--text-secondary)" }}>Loading analytics…</p>}
+      {loading && (
+        <SectionCard>
+          <p className="text-sm text-[var(--text-muted)]">Loading analytics…</p>
+        </SectionCard>
+      )}
 
       {!loading && stats && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "20px" }}>
-            {statCards.map((s) => (
-              <div key={s.label} style={{ padding: "14px", border: "1px solid var(--border)", borderRadius: "10px", background: "var(--bg-card)" }}>
-                <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "6px" }}>{s.label}</div>
-                <div style={{ fontSize: "22px", fontWeight: 700, color: "var(--text-primary)" }}>{s.value}</div>
-                {s.sub && <div style={{ fontSize: "12px", color: "#8B5CF6" }}>{s.sub}</div>}
-              </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            {statCards.map((stat) => (
+              <StatCard
+                key={stat.title}
+                label={stat.title}
+                value={stat.value}
+                trend={stat.changeType === "positive" ? 1 : stat.changeType === "negative" ? -1 : 0}
+                trendLabel={stat.change}
+              />
             ))}
           </div>
 
-          <div style={{ marginBottom: "18px" }}>
-            <h3 style={{ color: "var(--text-secondary)", fontSize: "13px", marginBottom: "6px" }}>Proxy / scanner signals</h3>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-              {Object.entries(sources || {}).map(([k, v]) => (
-                <div key={k} style={{ padding: "8px 10px", borderRadius: "8px", border: "1px solid var(--border)", color: "var(--text-primary)", background: "var(--bg-card)" }}>
-                  <span style={{ textTransform: "capitalize", marginRight: "6px", color: "var(--text-secondary)" }}>{k.replace('_', ' ')}</span>
-                  <strong>{v}</strong>
-                </div>
-              ))}
+          <SectionCard
+            title="Proxy and scanner signals"
+            description="Signals detected during campaign activity, grouped by source type."
+          >
+            <div className="flex flex-wrap gap-3">
+              {Object.keys(sources).length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)]">No signal data yet.</p>
+              ) : (
+                Object.entries(sources).map(([key, value]) => (
+                  <div
+                    key={key}
+                    className="rounded-full border border-[var(--border)] bg-[var(--bg-primary)] px-4 py-2 text-sm text-[var(--text-primary)]"
+                  >
+                    <span className="mr-2 text-[var(--text-muted)]">{key.replace("_", " ")}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))
+              )}
             </div>
-          </div>
+          </SectionCard>
 
-          <div style={{ marginTop: "6px" }}>
-            <h2 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "10px" }}>
-              Recipient Activity
-            </h2>
-            <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: "10px" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+          <SectionCard
+            title="Recipient activity"
+            description="Recipient-level outcomes and engagement signals for the current campaign."
+            noPadding
+          >
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-separate border-spacing-0 text-sm">
                 <thead>
-                  <tr style={{ background: "var(--bg-hover)", color: "var(--text-secondary)" }}>
-                    <th style={{ textAlign: "left", padding: "10px" }}>Email</th>
-                    <th style={{ textAlign: "left", padding: "10px" }}>Name</th>
-                    <th style={{ textAlign: "left", padding: "10px" }}>Status</th>
-                    <th style={{ textAlign: "left", padding: "10px" }}>Opened</th>
-                    <th style={{ textAlign: "left", padding: "10px" }}>Bounced</th>
-                    <th style={{ textAlign: "left", padding: "10px" }}>Unsubscribed</th>
-                    <th style={{ textAlign: "left", padding: "10px" }}>Signals</th>
+                  <tr className="bg-[var(--bg-hover)] text-left text-[var(--text-muted)]">
+                    {["Email", "Name", "Status", "Opened", "Bounced", "Unsubscribed", "Signals"].map((label) => (
+                      <th key={label} className="border-b border-[var(--border)] px-4 py-3 font-medium">{label}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {recipients.map((r) => (
-                    <tr key={r.dispatch_id} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ padding: "10px", color: "var(--text-primary)" }}>{r.email}</td>
-                      <td style={{ padding: "10px", color: "var(--text-secondary)" }}>{r.name || "—"}</td>
-                      <td style={{ padding: "10px", color: "var(--text-secondary)", textTransform: "lowercase" }}>{r.status}</td>
-                      <td style={{ padding: "10px", color: r.opened ? "#22C55E" : "#71717A" }}>{r.opened ? "✓ Yes" : "No"}</td>
-                      <td style={{ padding: "10px", color: r.bounced ? "#F87171" : "#71717A" }}>{r.bounced ? "✓ Yes" : "No"}</td>
-                      <td style={{ padding: "10px", color: r.unsubscribed ? "#F59E0B" : "#71717A" }}>{r.unsubscribed ? "✓ Yes" : "No"}</td>
-                      <td style={{ padding: "10px", color: "var(--text-secondary)", fontSize: "12px" }}>{(r.sources || ["—"]).join(", ")}</td>
-                    </tr>
-                  ))}
-                  {recipients.length === 0 && (
+                  {recipients.length === 0 ? (
                     <tr>
-                      <td colSpan={7} style={{ padding: "12px", textAlign: "center", color: "var(--text-muted)" }}>No recipient activity yet.</td>
+                      <td colSpan={7} className="px-4 py-8 text-center text-[var(--text-muted)]">
+                        No recipient activity yet.
+                      </td>
                     </tr>
+                  ) : (
+                    recipients.map((recipient) => (
+                      <tr key={recipient.dispatch_id} className="border-t border-[var(--border)]">
+                        <td className="border-b border-[var(--border)] px-4 py-3 text-[var(--text-primary)]">{recipient.email}</td>
+                        <td className="border-b border-[var(--border)] px-4 py-3 text-[var(--text-muted)]">{recipient.name || "—"}</td>
+                        <td className="border-b border-[var(--border)] px-4 py-3 capitalize text-[var(--text-muted)]">{recipient.status}</td>
+                        <td className={`border-b border-[var(--border)] px-4 py-3 ${recipient.opened ? 'text-[var(--success)]' : 'text-[var(--text-muted)]'}`}>
+                          {recipient.opened ? "Yes" : "No"}
+                        </td>
+                        <td className={`border-b border-[var(--border)] px-4 py-3 ${recipient.bounced ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}`}>
+                          {recipient.bounced ? "Yes" : "No"}
+                        </td>
+                        <td className={`border-b border-[var(--border)] px-4 py-3 ${recipient.unsubscribed ? 'text-[var(--warning)]' : 'text-[var(--text-muted)]'}`}>
+                          {recipient.unsubscribed ? "Yes" : "No"}
+                        </td>
+                        <td className="border-b border-[var(--border)] px-4 py-3 text-[var(--text-muted)]">
+                          {(recipient.sources || ["—"]).join(", ")}
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
             </div>
-          </div>
+          </SectionCard>
         </>
       )}
     </div>

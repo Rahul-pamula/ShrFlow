@@ -1,34 +1,17 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import Link from "next/link";
-import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, User, Mail, Calendar, Tag, Plus, X, ListCollapse, UserCheck } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeft, Calendar, ListCollapse, Mail, Plus, Tag, User, UserCheck, X } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { Badge, Button, InlineAlert, Input, KeyValueList, PageHeader, SectionCard, StatCard, useToast } from '@/components/ui';
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = 'http://localhost:8000';
 
 function apiHeaders(token: string) {
     return { Authorization: `Bearer ${token}` };
 }
-
-// ===== Light Mode Colors (Matched from campaigns page) =====
-const colors = {
-    bgPrimary: 'var(--bg-primary)',
-    bgSecondary: '#f8fafc',
-    bgElevated: '#f1f5f9',
-    borderSubtle: '#e2e8f0',
-    textPrimary: '#0f172a',
-    textSecondary: '#475569',
-    textMuted: '#94a3b8',
-    accentBlue: '#2563eb',
-    statusSuccess: '#16a34a',
-    statusWarning: '#ca8a04',
-    statusError: '#dc2626',
-    border: "var(--border)",
-    bgCard: "var(--bg-card)",
-    bgHover: "var(--bg-hover)",
-};
 
 interface ContactData {
     id: string;
@@ -45,129 +28,152 @@ interface ContactData {
 export default function ContactDetailsPage() {
     const router = useRouter();
     const params = useParams<{ id?: string }>();
-    const contactId = params?.id || "";
+    const contactId = params?.id || '';
     const { token } = useAuth();
+    const { success, error } = useToast();
 
     const [contact, setContact] = useState<ContactData | null>(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const [pageError, setPageError] = useState('');
     const [isEditing, setIsEditing] = useState(false);
-    const [draftEmail, setDraftEmail] = useState("");
+    const [draftEmail, setDraftEmail] = useState('');
+    const [draftFirstName, setDraftFirstName] = useState('');
+    const [draftLastName, setDraftLastName] = useState('');
     const [draftCustomFields, setDraftCustomFields] = useState<Record<string, string>>({});
     const [savingProfile, setSavingProfile] = useState(false);
-
-    // Tagging state
-    const [tagInput, setTagInput] = useState("");
+    const [tagInput, setTagInput] = useState('');
     const [updatingTags, setUpdatingTags] = useState(false);
 
     useEffect(() => {
-        if (!token) return;
+        if (!token || !contactId) return;
 
         async function fetchContact() {
             setLoading(true);
             try {
-                if (!contactId) return;
                 const res = await fetch(`${API_BASE}/contacts/${contactId}`, {
-                    headers: apiHeaders(token!)
+                    headers: apiHeaders(token),
                 });
                 if (res.ok) {
                     const data = await res.json();
                     setContact(data);
-                    setDraftEmail(data.email || "");
+                    setDraftEmail(data.email || '');
+                    setDraftFirstName(data.first_name || '');
+                    setDraftLastName(data.last_name || '');
                     setDraftCustomFields(data.custom_fields || {});
+                    setPageError('');
                 } else if (res.status === 404) {
-                    setError("Contact not found");
+                    setPageError('Contact not found.');
                 } else {
-                    setError("Failed to load contact");
+                    setPageError('Failed to load contact details.');
                 }
-            } catch (e) {
-                setError("An error occurred");
+            } catch (fetchError) {
+                console.error(fetchError);
+                setPageError('An error occurred while loading this contact.');
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         }
 
         fetchContact();
     }, [contactId, token]);
 
-    const handleAddTag = async () => {
-        const newTag = tagInput.trim();
-        if (!newTag || !contact || !token) return;
+    const displayName = useMemo(() => {
+        if (!contact) return 'Contact';
+        return [contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'Unnamed Contact';
+    }, [contact]);
 
-        const currentTags = contact.tags || [];
-        if (currentTags.includes(newTag)) {
-            setTagInput("");
-            return;
-        }
-
-        const newTags = [...currentTags, newTag];
-        await saveTags(newTags);
-        setTagInput("");
-    };
-
-    const handleRemoveTag = async (tagToRemove: string) => {
-        if (!contact || !token) return;
-        const newTags = (contact.tags || []).filter(t => t !== tagToRemove);
-        await saveTags(newTags);
+    const resetDraft = () => {
+        if (!contact) return;
+        setDraftEmail(contact.email || '');
+        setDraftFirstName(contact.first_name || '');
+        setDraftLastName(contact.last_name || '');
+        setDraftCustomFields(contact.custom_fields || {});
+        setIsEditing(false);
     };
 
     const saveTags = async (newTags: string[]) => {
+        if (!contactId || !token) return;
         setUpdatingTags(true);
         try {
-        if (!contactId) return;
-        const res = await fetch(`${API_BASE}/contacts/${contactId}/tags`, {
-            method: "POST",
-            headers: {
-                ...apiHeaders(token!),
-                    "Content-Type": "application/json"
+            const res = await fetch(`${API_BASE}/contacts/${contactId}/tags`, {
+                method: 'POST',
+                headers: {
+                    ...apiHeaders(token),
+                    'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ tags: newTags })
+                body: JSON.stringify({ tags: newTags }),
             });
-            if (res.ok) {
-                const data = await res.json();
-                setContact(data.contact);
-            } else {
-                alert("Failed to update tags");
-            }
-        } catch (e) {
-            console.error(e);
-            alert("Error updating tags");
+            if (!res.ok) throw new Error('Failed to update tags.');
+            const data = await res.json();
+            setContact(data.contact);
+            success('Tags updated.');
+        } catch (tagError) {
+            console.error(tagError);
+            error('Could not update tags.');
+        } finally {
+            setUpdatingTags(false);
         }
-        setUpdatingTags(false);
+    };
+
+    const handleAddTag = async () => {
+        const newTag = tagInput.trim();
+        if (!newTag || !contact) return;
+
+        const currentTags = contact.tags || [];
+        if (currentTags.includes(newTag)) {
+            setTagInput('');
+            return;
+        }
+
+        await saveTags([...currentTags, newTag]);
+        setTagInput('');
+    };
+
+    const handleRemoveTag = async (tagToRemove: string) => {
+        if (!contact) return;
+        await saveTags((contact.tags || []).filter((tag) => tag !== tagToRemove));
     };
 
     const handleSaveContact = async () => {
-        if (!token || !contact) return;
+        if (!token || !contact || !contactId) return;
+        if (!draftFirstName.trim() || !draftLastName.trim()) {
+            error('First name and last name are required.');
+            return;
+        }
+
         setSavingProfile(true);
         try {
             const sanitizedCustomFields = Object.fromEntries(
-                Object.entries(draftCustomFields).filter(([key, value]) => key.trim() && value.trim())
+                Object.entries(draftCustomFields).filter(([key, value]) => key.trim() && String(value).trim())
             );
-        if (!contactId) return;
-        const res = await fetch(`${API_BASE}/contacts/${contactId}`, {
-            method: "PATCH",
-            headers: {
+            const res = await fetch(`${API_BASE}/contacts/${contactId}`, {
+                method: 'PATCH',
+                headers: {
                     ...apiHeaders(token),
-                    "Content-Type": "application/json"
+                    'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     email: draftEmail,
-                    custom_fields: sanitizedCustomFields
-                })
+                    first_name: draftFirstName,
+                    last_name: draftLastName,
+                    custom_fields: sanitizedCustomFields,
+                }),
             });
             const data = await res.json();
-            if (!res.ok) {
-                alert(data.detail || "Failed to update contact");
-                return;
-            }
+            if (!res.ok) throw new Error(data.detail || 'Failed to update contact.');
             setContact(data.contact);
-            setDraftEmail(data.contact.email || "");
+            setDraftEmail(data.contact.email || '');
+            setDraftFirstName(data.contact.first_name || '');
+            setDraftLastName(data.contact.last_name || '');
             setDraftCustomFields(data.contact.custom_fields || {});
             setIsEditing(false);
-        } catch (e) {
-            console.error(e);
-            alert("Error updating contact");
+            success('Contact updated.');
+        } catch (saveError: any) {
+            console.error(saveError);
+            error(saveError.message || 'Could not update contact.');
+        } finally {
+            setSavingProfile(false);
         }
-        setSavingProfile(false);
     };
 
     const handleCustomFieldChange = (key: string, value: string) => {
@@ -177,7 +183,7 @@ export default function ContactDetailsPage() {
     const handleCustomFieldRename = (oldKey: string, nextKey: string) => {
         setDraftCustomFields((current) => {
             const updated = { ...current };
-            const value = updated[oldKey] || "";
+            const value = updated[oldKey] || '';
             delete updated[oldKey];
             if (nextKey.trim()) {
                 updated[nextKey] = value;
@@ -187,304 +193,174 @@ export default function ContactDetailsPage() {
     };
 
     const handleAddCustomField = () => {
-        let nextKey = "new_field";
+        let nextKey = 'new_field';
         let index = 1;
         while (draftCustomFields[nextKey]) {
             index += 1;
             nextKey = `new_field_${index}`;
         }
-        setDraftCustomFields((current) => ({ ...current, [nextKey]: "" }));
+        setDraftCustomFields((current) => ({ ...current, [nextKey]: '' }));
     };
 
     if (loading) {
-        return <div style={{ padding: "40px", color: colors.textSecondary }}>Loading contact details...</div>;
+        return <div className="p-12 text-sm text-[var(--text-muted)]">Loading contact details...</div>;
     }
 
-    if (error || !contact) {
+    if (pageError || !contact) {
         return (
-            <div style={{ padding: "40px", color: colors.statusError }}>
-                <h2>{error}</h2>
-                <button onClick={() => router.push("/contacts")} style={{ marginTop: "16px", padding: "8px 16px", border: `1px solid ${colors.border}`, borderRadius: "6px", background: "none", cursor: "pointer", color: "var(--text-primary)" }}>
-                    Go back to Contacts
-                </button>
+            <div className="space-y-6 p-8">
+                <InlineAlert variant="danger" title="Contact unavailable" description={pageError || 'This contact could not be loaded.'} />
+                <Button variant="secondary" onClick={() => router.push('/contacts')}>Back to Contacts</Button>
             </div>
         );
     }
 
-    const { email, email_domain, first_name, last_name, status, custom_fields, tags, created_at } = contact;
-    const displayName = [first_name, last_name].filter(Boolean).join(" ") || "Unnamed Contact";
+    const customFieldEntries = Object.entries(isEditing ? draftCustomFields : (contact.custom_fields || {}));
+    const statusVariant = contact.status === 'subscribed' ? 'success' : 'warning';
 
     return (
-        <div style={{ padding: "32px 40px", maxWidth: "1000px" }}>
-            {/* Header / Back Link */}
-            <Link href="/contacts" style={{
-                display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px',
-                color: "var(--text-muted)", textDecoration: 'none', marginBottom: '24px'
-            }}>
-                <ArrowLeft style={{ width: '16px', height: '16px' }} />
-                Back to Contacts
-            </Link>
-
-            {/* Profile Header */}
-            <div style={{
-                display: "flex", gap: "24px", alignItems: "flex-start", marginBottom: "40px",
-                padding: "32px", border: `1px solid ${colors.border}`, borderRadius: "12px",
-                backgroundColor: colors.bgCard
-            }}>
-                <div style={{
-                    width: "80px", height: "80px", borderRadius: "40px",
-                    backgroundColor: "var(--bg-hover)", display: "flex",
-                    alignItems: "center", justifyContent: "center",
-                    border: `1px solid ${colors.border}`
-                }}>
-                    <User style={{ width: "32px", height: "32px", color: "var(--text-primary)" }} />
-                </div>
-                <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                        <div>
-                            <h1 style={{ fontSize: "28px", fontWeight: 600, color: "var(--text-primary)", margin: "0 0 8px 0" }}>
-                                {displayName}
-                            </h1>
-                            <div style={{ display: "flex", alignItems: "center", gap: "16px", color: "var(--text-muted)", fontSize: "14px" }}>
-                                <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                                    <Mail style={{ width: "14px", height: "14px" }} /> {email}
-                                </span>
-                                {email_domain && (
-                                    <span style={{
-                                        padding: "2px 8px",
-                                        borderRadius: "999px",
-                                        backgroundColor: "rgba(59,130,246,0.12)",
-                                        border: `1px solid ${colors.border}`,
-                                        color: "var(--text-primary)"
-                                    }}>
-                                        {email_domain}
-                                    </span>
-                                )}
-                                <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                                    <Calendar style={{ width: "14px", height: "14px" }} /> Added {new Date(created_at).toLocaleDateString()}
-                                </span>
-                            </div>
+        <div className="space-y-8 pb-8">
+            <PageHeader
+                title={displayName}
+                subtitle="Inspect contact status, update profile fields, and manage segmentation tags without leaving the contacts workspace."
+                breadcrumb={
+                    <Link href="/contacts" className="inline-flex items-center gap-1 text-sm text-[var(--text-muted)] transition hover:text-[var(--text-primary)]">
+                        <ArrowLeft className="h-4 w-4" />
+                        Back to Contacts
+                    </Link>
+                }
+                action={
+                    isEditing ? (
+                        <div className="flex items-center gap-2">
+                            <Button variant="ghost" onClick={resetDraft}>Cancel</Button>
+                            <Button onClick={handleSaveContact} isLoading={savingProfile}>Save Changes</Button>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            <button
-                                onClick={() => {
-                                    if (isEditing) {
-                                        setDraftEmail(contact.email || "");
-                                        setDraftCustomFields(contact.custom_fields || {});
-                                        setIsEditing(false);
-                                    } else {
-                                        setIsEditing(true);
-                                    }
-                                }}
-                                style={{
-                                    padding: "8px 14px",
-                                    borderRadius: "8px",
-                                    border: `1px solid ${colors.border}`,
-                                    background: isEditing ? colors.bgHover : "transparent",
-                                    color: "var(--text-primary)",
-                                    cursor: "pointer",
-                                    fontSize: "13px",
-                                    fontWeight: 600
-                                }}
-                            >
-                                {isEditing ? "Cancel" : "Edit Contact"}
-                            </button>
-                            <div style={{
-                                padding: '4px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: 600, textTransform: "capitalize",
-                                backgroundColor: status === 'subscribed' ? `${colors.statusSuccess}20` : `${colors.statusError}20`,
-                                color: status === 'subscribed' ? colors.statusSuccess : colors.statusError,
-                                display: "flex", alignItems: "center", gap: "6px"
-                            }}>
-                                {status === 'subscribed' ? <UserCheck style={{ width: "14px", height: "14px" }} /> : <ListCollapse style={{ width: "14px", height: "14px" }} />}
-                                {status}
+                    ) : (
+                        <Button onClick={() => setIsEditing(true)}>Edit Contact</Button>
+                    )
+                }
+            />
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <StatCard label="Contact Status" value={contact.status} icon={contact.status === 'subscribed' ? <UserCheck className="h-5 w-5" /> : <ListCollapse className="h-5 w-5" />} />
+                <StatCard label="Email Domain" value={contact.email_domain || 'Unknown'} icon={<Mail className="h-5 w-5" />} />
+                <StatCard label="Tags" value={(contact.tags || []).length.toString()} icon={<Tag className="h-5 w-5" />} />
+            </div>
+
+            <SectionCard title="Profile Summary" description="Core identity, delivery state, and contact ownership details at a glance.">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="flex h-20 w-20 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-hover)] text-[var(--text-primary)]">
+                            <User className="h-8 w-8" />
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-semibold text-[var(--text-primary)]">{displayName}</h2>
+                            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-[var(--text-muted)]">
+                                <span className="inline-flex items-center gap-1"><Mail className="h-4 w-4" />{contact.email}</span>
+                                <span className="inline-flex items-center gap-1"><Calendar className="h-4 w-4" />Added {new Date(contact.created_at).toLocaleDateString()}</span>
+                                {contact.email_domain && <Badge variant="outline">{contact.email_domain}</Badge>}
                             </div>
                         </div>
                     </div>
+                    <Badge variant={statusVariant}>{contact.status}</Badge>
                 </div>
-            </div>
+            </SectionCard>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
-                {/* Details Column */}
-                <div>
-                    <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "16px", borderBottom: `1px solid ${colors.border}`, paddingBottom: "12px" }}>
-                        Contact Information
-                    </h3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                        <div style={{ display: "grid", gridTemplateColumns: "120px 1fr" }}>
-                            <span style={{ color: "var(--text-muted)", fontSize: "14px" }}>Email</span>
-                            {isEditing ? (
-                                <input
-                                    value={draftEmail}
-                                    onChange={(e) => setDraftEmail(e.target.value)}
-                                    style={{
-                                        padding: "8px 10px",
-                                        fontSize: "14px",
-                                        backgroundColor: "var(--bg-primary)",
-                                        color: "var(--text-primary)",
-                                        border: `1px solid ${colors.border}`,
-                                        borderRadius: "6px"
-                                    }}
-                                />
-                            ) : (
-                                <span style={{ color: "var(--text-primary)", fontSize: "14px", fontWeight: 500 }}>{email}</span>
-                            )}
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.5fr_1fr]">
+                <SectionCard title="Contact Information" description="Update the record fields used in campaigns, segments, and downstream personalization.">
+                    {isEditing ? (
+                        <div className="space-y-4">
+                            <Input label="Email" value={draftEmail} onChange={(e) => setDraftEmail(e.target.value)} />
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <Input label="First Name" value={draftFirstName} onChange={(e) => setDraftFirstName(e.target.value)} placeholder="First Name *" />
+                                <Input label="Last Name" value={draftLastName} onChange={(e) => setDraftLastName(e.target.value)} placeholder="Last Name *" />
+                            </div>
                         </div>
-                        {first_name && (
-                            <div style={{ display: "grid", gridTemplateColumns: "120px 1fr" }}>
-                                <span style={{ color: "var(--text-muted)", fontSize: "14px" }}>First Name</span>
-                                <span style={{ color: "var(--text-primary)", fontSize: "14px", fontWeight: 500 }}>{first_name}</span>
-                            </div>
-                        )}
-                        {last_name && (
-                            <div style={{ display: "grid", gridTemplateColumns: "120px 1fr" }}>
-                                <span style={{ color: "var(--text-muted)", fontSize: "14px" }}>Last Name</span>
-                                <span style={{ color: "var(--text-primary)", fontSize: "14px", fontWeight: 500 }}>{last_name}</span>
-                            </div>
-                        )}
+                    ) : (
+                        <KeyValueList
+                            columns={2}
+                            items={[
+                                { label: 'Email', value: contact.email },
+                                { label: 'First Name', value: contact.first_name || '—' },
+                                { label: 'Last Name', value: contact.last_name || '—' },
+                                { label: 'Status', value: contact.status },
+                            ]}
+                        />
+                    )}
 
-                        {/* Custom Fields */}
-                        {custom_fields && Object.keys(custom_fields).length > 0 && (
-                            <>
-                                <div style={{ height: "1px", backgroundColor: colors.border, margin: "8px 0" }} />
-                                {Object.entries(isEditing ? draftCustomFields : (custom_fields || {})).map(([key, value]) => (
-                                    <div key={key} style={{ display: "grid", gridTemplateColumns: isEditing ? "120px 1fr" : "120px 1fr", gap: "10px" }}>
+                    <div className="mt-6 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">Custom Fields</h3>
+                            {isEditing && <Button variant="secondary" size="sm" onClick={handleAddCustomField}><Plus className="h-3.5 w-3.5" />Add Field</Button>}
+                        </div>
+
+                        {customFieldEntries.length === 0 ? (
+                            <div className="rounded-[var(--radius)] border border-dashed border-[var(--border)] bg-[var(--bg-primary)] p-4 text-sm text-[var(--text-muted)]">
+                                No custom fields yet.
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {customFieldEntries.map(([key, value]) => (
+                                    <div key={key} className="grid grid-cols-1 gap-3 md:grid-cols-[220px_1fr]">
                                         {isEditing ? (
-                                            <input
+                                            <Input
                                                 value={key}
-                                                onChange={(e) => handleCustomFieldRename(key, e.target.value.trim().replace(/\s+/g, "_").toLowerCase())}
-                                                style={{
-                                                    padding: "8px 10px",
-                                                    fontSize: "13px",
-                                                    backgroundColor: "var(--bg-primary)",
-                                                    color: "var(--text-primary)",
-                                                    border: `1px solid ${colors.border}`,
-                                                    borderRadius: "6px",
-                                                    textTransform: "none"
-                                                }}
+                                                onChange={(e) => handleCustomFieldRename(key, e.target.value.trim().replace(/\s+/g, '_').toLowerCase())}
                                             />
                                         ) : (
-                                            <span style={{ color: "var(--text-muted)", fontSize: "14px", textTransform: "capitalize" }}>{key.replace(/_/g, " ")}</span>
+                                            <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-muted)]">
+                                                {key.replace(/_/g, ' ')}
+                                            </div>
                                         )}
                                         {isEditing ? (
-                                            <input
-                                                value={String(value ?? "")}
-                                                onChange={(e) => handleCustomFieldChange(key, e.target.value)}
-                                                style={{
-                                                    padding: "8px 10px",
-                                                    fontSize: "13px",
-                                                    backgroundColor: "var(--bg-primary)",
-                                                    color: "var(--text-primary)",
-                                                    border: `1px solid ${colors.border}`,
-                                                    borderRadius: "6px"
-                                                }}
-                                            />
+                                            <Input value={String(value ?? '')} onChange={(e) => handleCustomFieldChange(key, e.target.value)} />
                                         ) : (
-                                            <span style={{ color: "var(--text-primary)", fontSize: "14px", fontWeight: 500 }}>{value as string}</span>
+                                            <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm font-medium text-[var(--text-primary)]">
+                                                {String(value || '—')}
+                                            </div>
                                         )}
                                     </div>
                                 ))}
-                            </>
-                        )}
-                        {isEditing && (
-                            <div style={{ display: "flex", gap: "10px", paddingTop: "10px" }}>
-                                <button
-                                    onClick={handleAddCustomField}
-                                    style={{
-                                        padding: "8px 12px",
-                                        borderRadius: "8px",
-                                        border: `1px solid ${colors.border}`,
-                                        background: "transparent",
-                                        color: "var(--text-primary)",
-                                        cursor: "pointer"
-                                    }}
-                                >
-                                    Add Custom Field
-                                </button>
-                                <button
-                                    onClick={handleSaveContact}
-                                    disabled={savingProfile}
-                                    style={{
-                                        padding: "8px 14px",
-                                        borderRadius: "8px",
-                                        border: "none",
-                                        background: "var(--accent)",
-                                        color: "white",
-                                        cursor: savingProfile ? "wait" : "pointer",
-                                        opacity: savingProfile ? 0.7 : 1
-                                    }}
-                                >
-                                    {savingProfile ? "Saving..." : "Save Changes"}
-                                </button>
                             </div>
                         )}
                     </div>
-                </div>
+                </SectionCard>
 
-                {/* Tags Column */}
-                <div>
-                    <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "16px", borderBottom: `1px solid ${colors.border}`, paddingBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
-                        <Tag style={{ width: "16px", height: "16px" }} />
-                        Tags
-                    </h3>
-
-                    {/* Tag List */}
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "20px" }}>
-                        {tags && tags.length > 0 ? (
-                            tags.map(tag => (
-                                <span key={tag} style={{
-                                    display: "flex", alignItems: "center", gap: "6px",
-                                    padding: "4px 10px", fontSize: "13px", color: "var(--text-primary)",
-                                    backgroundColor: colors.bgHover, border: `1px solid ${colors.border}`, borderRadius: "16px"
-                                }}>
+                <SectionCard title="Tags" description="Use tags to power audience filtering, follow-up workflows, and quick segmentation.">
+                    <div className="flex flex-wrap gap-2">
+                        {contact.tags && contact.tags.length > 0 ? (
+                            contact.tags.map((tag) => (
+                                <span key={tag} className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg-hover)] px-3 py-1.5 text-sm text-[var(--text-primary)]">
                                     {tag}
                                     <button
                                         onClick={() => handleRemoveTag(tag)}
                                         disabled={updatingTags}
-                                        style={{
-                                            background: "none", border: "none", padding: "0", display: "flex", alignItems: "center",
-                                            cursor: updatingTags ? "not-allowed" : "pointer", color: "var(--text-muted)", opacity: updatingTags ? 0.5 : 1
-                                        }}
+                                        className="text-[var(--text-muted)] transition hover:text-[var(--danger)] disabled:opacity-50"
                                     >
-                                        <X style={{ width: "12px", height: "12px" }} />
+                                        <X className="h-3.5 w-3.5" />
                                     </button>
                                 </span>
                             ))
                         ) : (
-                            <span style={{ color: "var(--text-muted)", fontSize: "14px" }}>No tags added yet.</span>
+                            <span className="text-sm text-[var(--text-muted)]">No tags added yet.</span>
                         )}
                     </div>
 
-                    {/* Add Tag Input */}
-                    <div style={{ display: "flex", gap: "8px" }}>
-                        <input
-                            type="text"
+                    <div className="mt-5 flex gap-3">
+                        <Input
                             value={tagInput}
                             onChange={(e) => setTagInput(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
-                            placeholder="Add a new tag..."
+                            onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
+                            placeholder="Add a new tag"
                             disabled={updatingTags}
-                            style={{
-                                flex: 1, padding: "8px 12px", fontSize: "14px",
-                                backgroundColor: "var(--bg-primary)", color: "var(--text-primary)",
-                                border: `1px solid ${colors.border}`, borderRadius: "6px",
-                                outline: "none"
-                            }}
                         />
-                        <button
-                            onClick={handleAddTag}
-                            disabled={!tagInput.trim() || updatingTags}
-                            style={{
-                                padding: "8px 16px", backgroundColor: "var(--accent)", color: "white",
-                                border: "none", borderRadius: "6px", cursor: (!tagInput.trim() || updatingTags) ? "not-allowed" : "pointer",
-                                opacity: (!tagInput.trim() || updatingTags) ? 0.5 : 1, display: "flex", alignItems: "center", gap: "4px", fontSize: "14px", fontWeight: 500
-                            }}
-                        >
-                            <Plus style={{ width: "16px", height: "16px" }} /> Add
-                        </button>
+                        <Button onClick={handleAddTag} disabled={!tagInput.trim() || updatingTags}>
+                            <Plus className="h-4 w-4" />
+                            Add
+                        </Button>
                     </div>
-                </div>
+                </SectionCard>
             </div>
-
         </div>
     );
 }

@@ -3,6 +3,7 @@ import { Badge } from './Badge';
 export type CampaignStatus =
     | 'draft' | 'scheduled' | 'processing' | 'completed'
     | 'paused' | 'failed' | 'throttled' | 'cancelled'
+    | 'sending' | 'sent' | 'archived'
     | 'active' | 'inactive' | 'bounced' | 'unsubscribed'
     | 'subscribed' | 'verified' | 'pending' | 'suspended';
 
@@ -17,11 +18,14 @@ const statusConfig: Record<CampaignStatus, { label: string; variant: 'success' |
     draft: { label: 'Draft', variant: 'outline' },
     scheduled: { label: 'Scheduled', variant: 'info' },
     processing: { label: 'Sending...', variant: 'info' },
+    sending: { label: 'Sending', variant: 'info' },
     throttled: { label: '⏳ Throttled', variant: 'warning' },
     completed: { label: 'Completed', variant: 'success' },
+    sent: { label: 'Sent', variant: 'success' },
     paused: { label: 'Paused', variant: 'warning' },
     failed: { label: 'Failed', variant: 'danger' },
     cancelled: { label: 'Cancelled', variant: 'outline' },
+    archived: { label: 'Archived', variant: 'outline' },
 
     // Domain / plan statuses
     verified: { label: 'Verified', variant: 'success' },

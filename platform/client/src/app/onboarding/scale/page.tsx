@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { TrendingUp, ArrowRight } from 'lucide-react';
+import { OnboardingShell } from '@/components/onboarding';
+import { Button, InlineAlert } from '@/components/ui';
 
 export default function ScaleOnboarding() {
     const router = useRouter();
@@ -55,74 +57,52 @@ export default function ScaleOnboarding() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)] p-4">
-            <div className="w-full max-w-lg rounded-2xl bg-[var(--bg-card)] p-8 shadow-xl border border-[var(--border)]">
-                {/* Progress Indicator */}
-                <div className="mb-4">
-                    <p className="text-center text-sm font-medium text-[var(--text-muted)]">Step 4 of 4</p>
-                    <div className="mt-2 h-1 w-full rounded-full bg-[var(--border)]">
-                        <div className="h-1 w-full rounded-full bg-[var(--accent)]"></div>
-                    </div>
+        <OnboardingShell
+            step={4}
+            totalSteps={4}
+            icon={<TrendingUp className="h-6 w-6" />}
+            title="What scale are you expecting first?"
+            description="This only sets sensible defaults for throughput, examples, and guardrails. You can change it later."
+        >
+            <form onSubmit={handleSubmit} className="space-y-4">
+                {errors.general && (
+                    <InlineAlert
+                        variant="danger"
+                        title="Couldn’t save expected volume"
+                        description={errors.general}
+                    />
+                )}
+
+                <div className="grid gap-3">
+                    {scaleOptions.map((option) => (
+                        <label
+                            key={option.value}
+                            className={`flex cursor-pointer items-center gap-3 rounded-[var(--radius-lg)] border p-4 transition-all ${selectedScale === option.value
+                                ? 'border-[var(--accent)] bg-[var(--accent)]/10 shadow-[var(--shadow-sm)]'
+                                : 'border-[var(--border)] bg-[var(--bg-primary)] hover:border-[var(--accent)]/50 hover:bg-[var(--bg-hover)]'
+                                }`}
+                        >
+                            <input
+                                type="radio"
+                                name="scale"
+                                value={option.value}
+                                checked={selectedScale === option.value}
+                                onChange={(e) => setSelectedScale(e.target.value)}
+                                disabled={loading}
+                                className="h-4 w-4 cursor-pointer accent-[var(--accent)]"
+                            />
+                            <p className="text-sm font-medium text-[var(--text-primary)]">{option.label}</p>
+                        </label>
+                    ))}
                 </div>
 
-                {/* Header */}
-                <div className="mb-8 text-center">
-                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--accent)]/10">
-                        <TrendingUp className="h-6 w-6 text-[var(--accent)]" />
-                    </div>
-                    <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)] mb-2">
-                        How many events do you expect per month?
-                    </h1>
-                    <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-                        Used only to set sensible defaults.
-                    </p>
-                </div>
+                {errors.scale && <p className="text-sm text-[var(--danger)]">{errors.scale}</p>}
 
-                {/* Form */}
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    {errors.general && (
-                        <div className="p-3 bg-[var(--danger)]/10 border border-[var(--danger)]/20 rounded-lg text-[var(--danger)] text-sm">
-                            {errors.general}
-                        </div>
-                    )}
-
-                    <div className="flex flex-col gap-3">
-                        {scaleOptions.map((option) => (
-                            <label
-                                key={option.value}
-                                className={`flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${selectedScale === option.value
-                                        ? 'border-[var(--accent)] bg-[var(--accent)]/10'
-                                        : 'border-[var(--border)] hover:border-[var(--accent)]/50'
-                                    }`}
-                            >
-                                <input
-                                    type="radio"
-                                    name="scale"
-                                    value={option.value}
-                                    checked={selectedScale === option.value}
-                                    onChange={(e) => setSelectedScale(e.target.value)}
-                                    disabled={loading}
-                                    className="w-4 h-4 cursor-pointer accent-[var(--accent)]"
-                                />
-                                <p className="text-sm font-medium text-[var(--text-primary)]">{option.label}</p>
-                            </label>
-                        ))}
-                    </div>
-
-                    {errors.scale && (
-                        <p className="text-sm text-[var(--danger)]">{errors.scale}</p>
-                    )}
-
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full mt-2 py-3.5 px-6 text-base font-semibold text-white bg-[var(--accent)] hover:bg-[var(--accent-hover)] rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                        {loading ? 'Saving...' : 'Finish Setup'}
-                        {!loading && <ArrowRight className="w-5 h-5" />}
-                    </button>
-                </form>
-            </div>
-        </div>
+                <Button type="submit" size="lg" isLoading={loading} className="w-full">
+                    {loading ? 'Saving...' : 'Finish Setup'}
+                    {!loading && <ArrowRight className="h-5 w-5" />}
+                </Button>
+            </form>
+        </OnboardingShell>
     );
 }

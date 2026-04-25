@@ -15,27 +15,32 @@
   color-scheme: light;
 
   /* Core Canvas */
-  --bg-primary: #F8FAFC;
-  --bg-card: rgba(255, 255, 255, 0.9);
-  --bg-hover: rgba(241, 245, 249, 0.95);
-  --bg-input: rgba(255, 255, 255, 0.95);
+  --bg-primary: #f5f7fb;
+  --bg-secondary: #eef2f8;
+  --bg-card: rgba(255, 255, 255, 0.92);
+  --bg-hover: rgba(233, 239, 248, 0.96);
+  --bg-input: rgba(255, 255, 255, 0.98);
 
   /* Brand Accents */
-  --accent: #3B82F6;
-  --accent-hover: #2563EB;
-  --accent-gradient: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
-  --accent-glow: rgba(59, 130, 246, 0.25);
-  --accent-purple: #8B5CF6;
+  --accent: #2558d9;
+  --accent-hover: #1d46af;
+  --accent-gradient: linear-gradient(135deg, #2558d9 0%, #1570ef 100%);
+  --accent-glow: rgba(37, 88, 217, 0.18);
+  --accent-purple: #2558d9;
+  --ai-accent: #0f9f8c;
+  --ai-accent-soft: rgba(15, 159, 140, 0.12);
 
   /* Text & Typography */
-  --text-primary: #0F172A;
-  --text-secondary: #1E293B;
-  --text-muted: #64748B;
-  --text-inverted: #F8FAFC;
+  --text-primary: #0f172a;
+  --text-secondary: #1f2a44;
+  --text-muted: #5f6b85;
+  --text-inverted: #f8fafc;
 
   /* Borders & Dividers */
-  --border: rgba(148, 163, 184, 0.4);
-  --border-highlight: rgba(148, 163, 184, 0.6);
+  --border: rgba(124, 143, 176, 0.24);
+  --border-highlight: rgba(97, 117, 151, 0.4);
+  --accent-border: rgba(37, 88, 217, 0.22);
+  --border-strong: rgba(97, 117, 151, 0.34);
 
   /* Semantic Feedback */
   --success: #059669;
@@ -60,6 +65,7 @@
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
   --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 18px 40px rgba(15, 23, 42, 0.12);
   --shadow-glow: 0 0 20px var(--accent-glow);
 
   /* Typography Scale */
@@ -71,23 +77,23 @@
   --text-mono: 0.875rem;
 
   /* Shadcn UI Base Tokens (HSL for Tailwind compatibility) */
-  --background: 210 40% 98%;
+  --background: 220 38% 98%;
   --foreground: 222 47% 11%;
   --card: 0 0% 100%;
   --card-foreground: 222 47% 11%;
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
-  --primary: 221 83% 53%;
+  --primary: 222 71% 50%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 210 40% 96%;
+  --secondary: 220 32% 95%;
   --secondary-foreground: 222 47% 11%;
-  --muted: 210 40% 96%;
+  --muted: 220 32% 95%;
   --muted-foreground: 215 16% 47%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
-  --border-hsl: 214 32% 91%;
-  --input-hsl: 214 32% 91%;
-  --ring: 221 83% 53%;
+  --border-hsl: 221 26% 89%;
+  --input-hsl: 221 26% 89%;
+  --ring: 222 71% 50%;
 }
 
 /* ── DARK MODE (.dark class applied by next-themes) ─────────── */
@@ -95,27 +101,32 @@
   color-scheme: dark;
 
   /* Core Canvas */
-  --bg-primary: #09090B;
-  --bg-card: rgba(24, 24, 27, 0.6);
-  --bg-hover: rgba(39, 39, 42, 0.8);
-  --bg-input: rgba(9, 9, 11, 0.8);
+  --bg-primary: #0e1117;
+  --bg-secondary: #151a22;
+  --bg-card: rgba(24, 30, 40, 0.88);
+  --bg-hover: rgba(33, 41, 54, 0.96);
+  --bg-input: rgba(20, 25, 34, 0.98);
 
   /* Brand Accents */
-  --accent: #3B82F6;
-  --accent-hover: #2563EB;
-  --accent-gradient: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
-  --accent-glow: rgba(59, 130, 246, 0.4);
-  --accent-purple: #8B5CF6;
+  --accent: #7b90ff;
+  --accent-hover: #95a6ff;
+  --accent-gradient: linear-gradient(135deg, #6d83ff 0%, #4b8ef8 100%);
+  --accent-glow: rgba(123, 144, 255, 0.18);
+  --accent-purple: #7b90ff;
+  --ai-accent: #39c7ba;
+  --ai-accent-soft: rgba(57, 199, 186, 0.12);
 
   /* Text & Typography */
-  --text-primary: #FAFAFA;
-  --text-secondary: #E4E4E7;
-  --text-muted: #A1A1AA;
+  --text-primary: #f3f5f7;
+  --text-secondary: #d7deea;
+  --text-muted: #96a0ae;
   --text-inverted: #09090B;
 
   /* Borders & Dividers */
-  --border: rgba(63, 63, 70, 0.4);
-  --border-highlight: rgba(161, 161, 170, 0.2);
+  --border: rgba(132, 146, 166, 0.18);
+  --border-highlight: rgba(148, 163, 184, 0.34);
+  --accent-border: rgba(123, 144, 255, 0.3);
+  --border-strong: rgba(148, 163, 184, 0.28);
 
   /* Semantic Feedback */
   --success: #10B981;
@@ -134,28 +145,29 @@
   --info-bg: rgba(14, 165, 233, 0.3);
 
   /* Shadows (deeper for dark) */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.26);
+  --shadow-card: 0 16px 44px rgba(0, 0, 0, 0.34);
+  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.42);
   --shadow-glow: 0 0 20px var(--accent-glow);
 
   /* Shadcn UI Base Tokens — Dark */
-  --background: 240 10% 4%;
+  --background: 221 24% 7%;
   --foreground: 0 0% 98%;
-  --card: 240 10% 4%;
+  --card: 221 19% 12%;
   --card-foreground: 0 0% 98%;
-  --popover: 240 10% 4%;
+  --popover: 221 19% 12%;
   --popover-foreground: 0 0% 98%;
-  --primary: 0 0% 98%;
-  --primary-foreground: 240 5.9% 10%;
-  --secondary: 240 3.7% 15.9%;
+  --primary: 228 100% 74%;
+  --primary-foreground: 221 24% 7%;
+  --secondary: 221 19% 16%;
   --secondary-foreground: 0 0% 98%;
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
+  --muted: 221 19% 16%;
+  --muted-foreground: 220 14% 70%;
   --destructive: 0 62.8% 30.6%;
   --destructive-foreground: 0 0% 98%;
-  --border-hsl: 240 3.7% 15.9%;
-  --input-hsl: 240 3.7% 15.9%;
-  --ring: 240 4.9% 83.9%;
+  --border-hsl: 221 17% 22%;
+  --input-hsl: 221 17% 22%;
+  --ring: 228 100% 74%;
 }
 
 /* ============================================================
@@ -173,7 +185,7 @@ body {
   background-color: var(--bg-primary);
   background-attachment: fixed;
   color: var(--text-primary);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-inter), 'Inter', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -182,7 +194,10 @@ body {
 
 /* Dark mode canvas gradient (only on dark) */
 .dark body {
-  background-image: radial-gradient(circle at 50% 0%, rgba(39, 39, 42, 0.4) 0%, rgba(9, 9, 11, 1) 70%);
+  background-image:
+    radial-gradient(circle at 12% -8%, rgba(91, 110, 255, 0.14) 0%, rgba(14, 17, 23, 0) 34%),
+    radial-gradient(circle at 88% -12%, rgba(61, 199, 186, 0.08) 0%, rgba(14, 17, 23, 0) 28%),
+    linear-gradient(180deg, #151922 0%, #10141b 18%, #0e1117 100%);
 }
 
 /* Focus States */
