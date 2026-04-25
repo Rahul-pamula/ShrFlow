@@ -534,8 +534,13 @@
   {
     "title": "PHASE 1.7 — PostgreSQL RLS & Workspace Lifecycle",
     "tasks": [
-      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[STABILITY]</span> Migrate to Database-Level Row Level Security (RLS)", "done": false, "desc": "Move multi-tenancy logic from application filters to Postgres RLS policies for 100% data isolation guarantee."},
-      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[STABILITY]</span> Tenant Session Context Middleware (SET LOCAL app.current_tenant_id)", "done": false, "desc": "Middleware that injects the current tenant ID into the Postgres transaction scope for RLS enforcement."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[SECURITY — CRITICAL]</span> SNS Webhook Signature Verification (validate x-amz-sns-message-signature before any bounce/complaint processing)", "done": false, "desc": "Anyone who knows your SES webhook URL can POST fake bounce events and mass-unsubscribe all tenants' contacts. Must validate AWS SNS signature on every incoming webhook before any action is taken."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[SECURITY — CRITICAL]</span> CORS lock to FRONTEND_URL env var (remove wildcard * from production)", "done": false, "desc": "Production CORS is currently set to allow all origins (*). Any website can make authenticated requests to the API on behalf of logged-in users. Lock to the FRONTEND_URL env var."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[STABILITY — CRITICAL]</span> asyncpg Connection Pool (platform/api/utils/db_engine.py) — replaces Supabase PostgREST for all core queries", "done": false, "desc": "Supabase PostgREST (HTTP) cannot set Postgres session variables needed for RLS, and adds HTTP overhead to every DB call. asyncpg connects directly over TCP with connection pooling."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[STABILITY — CRITICAL]</span> PostgreSQL RLS: ALTER TABLE ENABLE ROW LEVEL SECURITY + SET LOCAL app.current_tenant_id on every asyncpg transaction", "done": false, "desc": "Moves multi-tenancy enforcement to the database level. Without this, one missing WHERE tenant_id clause in any query is a cross-tenant data leak."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[STABILITY]</span> Redis key namespace standardized to tenant:{tenant_id}:* across all workers and API routes", "done": false, "desc": "Prevents cross-tenant Redis key collisions as short integer IDs could overlap between different resource types."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[WORKSPACE]</span> Migrate to Database-Level Row Level Security (RLS)", "done": false, "desc": "Move multi-tenancy logic from application filters to Postgres RLS policies for 100% data isolation guarantee."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[WORKSPACE]</span> Tenant Session Context Middleware (SET LOCAL app.current_tenant_id)", "done": false, "desc": "Middleware that injects the current tenant ID into the Postgres transaction scope for RLS enforcement."},
       {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[WORKSPACE]</span> Workspace Switcher UI (Global Header Dropdown)", "done": false, "desc": "A premium dropdown in the header to switch between different workspace contexts instantly."},
       {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[WORKSPACE]</span> Member Invitation Flow (SHA-256 tokens + Email)", "done": false, "desc": "End-to-end invitation flow with secure, expiring tokens sent via system email."},
       {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[WORKSPACE]</span> Member Removal & Data Sovereignty Logic", "done": false, "desc": "Logic to ensure that when a member leaves, the workspace data (templates, contacts) stays with the organization."}
@@ -1180,6 +1185,21 @@
         "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> Campaign Health Early Warning System",
         "done": false,
         "desc": "Auto-pauses RabbitMQ dispatch queue if hard bounce rate spikes early during a send to protect sender reputation."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[ARCH REVIEW — CRITICAL]</span> Contact audience streaming — cursor-based pagination LIMIT 500 OFFSET n fed to RabbitMQ",
+        "done": false,
+        "desc": "Worker currently loads the entire campaign audience into memory before dispatching. A 1M-row audience causes an OOM crash. Fix: stream with cursor-based pagination, feeding batches of 500 contacts to RabbitMQ."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[ARCH REVIEW — CRITICAL]</span> Cross-tenant suppression guard in _suppress_contact() — always filter by tenant_id",
+        "done": false,
+        "desc": "A bounce webhook for Tenant A could accidentally suppress a contact in Tenant B if both share the same email address. The _suppress_contact() function must always scope by tenant_id."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[ARCH REVIEW]</span> Merge tag fallback engine — inject default value when {{first_name}} resolves to empty string",
+        "done": false,
+        "desc": "When a merge tag like {{first_name}} has no value in the contact record, the email currently sends with a blank. Fix: inject a configurable fallback (e.g. 'Customer') to prevent broken personalization."
       }
     ]
   },
@@ -1226,10 +1246,13 @@
     ]
   },
   {
-    "title": "PHASE 5.7 — Delivery Reliability & Worker Kill-Switch",
+    "title": "PHASE 5.7 — Backpressure & Queue Protection",
     "tasks": [
-      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[CORE]</span> Redis-based Campaign Kill-Switch", "done": false, "desc": "Ability to halt a campaign in sub-milliseconds across all distributed workers using a Redis signal."},
-      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[CORE]</span> Worker Health Heartbeats (Redis + Dash)", "done": false, "desc": "Real-time health monitoring of RabbitMQ workers with automated restarts on failure."}
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKPRESSURE — CRITICAL]</span> RabbitMQ basic_qos(prefetch_count=10) on all consumers", "done": false, "desc": "Without a prefetch limit, a single worker buffers thousands of messages locally. If it crashes, all those messages are re-queued at once, creating a stampede. prefetch_count=10 limits in-flight messages per worker."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[KILL-SWITCH — CRITICAL]</span> Redis campaign kill-switch: check tenant:{id}:campaign:{cid}:stop before every batch", "done": false, "desc": "Currently there is no way to stop a campaign mid-send without restarting workers. A Redis key checked before every batch allows halting across all distributed workers in milliseconds."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[RELIABILITY — CRITICAL]</span> Standalone scheduler.py process with Redis SET NX EX 90 distributed lock", "done": false, "desc": "The campaign scheduler currently runs inside FastAPI as a background task. Running 2 API replicas fires every scheduled campaign twice. Standalone process + Redis lock prevents this completely."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[RELIABILITY]</span> Worker heartbeat: SET worker:{id}:heartbeat {timestamp} EX 30 on every loop iteration", "done": false, "desc": "Allows detecting dead or stalled workers without external process monitoring. If a heartbeat key expires, the worker is considered dead and can be auto-restarted."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[MONITORING]</span> DLQ (Dead-Letter Queue) depth metric exposed to admin health endpoint", "done": false, "desc": "Track how many messages have failed and landed in the dead-letter queue. A growing DLQ depth is an early warning of systemic delivery failures."}
     ]
   },
   {
@@ -1644,6 +1667,21 @@
         "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[SECURITY]</span> Active session list (device, browser, location, last active — with revoke)",
         "done": false,
         "desc": ""
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[ARCH REVIEW — CRITICAL]</span> Idempotency-Key header check on campaign dispatch endpoint (prevent HTTP retry double-sends)",
+        "done": false,
+        "desc": "If a frontend retries a campaign send request (network timeout), the same campaign can be dispatched twice without an Idempotency-Key check. Fix: check header and deduplicate on the server side."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[ARCH REVIEW]</span> external_msg_id UUID UNIQUE constraint at DB level + worker check before dispatching each message",
+        "done": false,
+        "desc": "Prevents the same email being sent twice to the same recipient on RabbitMQ retry. The UNIQUE constraint is the last safety net if the application-level check is bypassed."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[ARCH REVIEW]</span> Structured JSON logging with requestId + tenantId on every log line (FastAPI middleware)",
+        "done": false,
+        "desc": "Plain text logs are impossible to query in production. Structured JSON with a requestId makes it possible to trace any request end-to-end across API, worker, and webhook logs."
       }
     ]
   },

@@ -396,7 +396,7 @@ graph TD
 ---
 
 ## Phase 1.7 — Enterprise Workspace Lifecycle & Data Isolation
-**WHY:** Ensures data stays with the company, not the individual, and provides a professional invite-only onboarding for team members.
+**WHY:** Ensures data stays with the company, not the individual, and provides a professional invite-only onboarding for team members. Also locks the data isolation layer at the database level so no application bug can ever leak cross-tenant data.
 
 **[BACKEND]**
 - **Invitation System Architecture**:
@@ -409,12 +409,33 @@ graph TD
     - `created_by_user_id` is retained for history, even if the user is removed.
 - **PostgreSQL Row Level Security (RLS)**:
     - Implementation of `ALTER TABLE ENABLE ROW LEVEL SECURITY`.
-    - Session variable `app.current_tenant_id` set via `SET_LOCAL` in the database service.
+    - Session variable `app.current_tenant_id` set via `SET LOCAL` in the database service.
+    - asyncpg connection pool replaces Supabase PostgREST for all write paths (PostgREST cannot set session variables).
+- **Security Hardening (Critical)**:
+    - SNS webhook signature verification on all SES event endpoints — validates `x-amz-sns-message-signature` before processing any bounce/complaint.
+    - CORS locked to `FRONTEND_URL` env var (remove wildcard `*` from production).
+    - Redis key namespace standardized to `tenant:{tenant_id}:*` across all workers and API routes to prevent cross-tenant key collisions.
 
 **[FRONTEND]**
 - **Invite Modal**: Admin UI to enter email and select a Role (Owner, Admin, Member, Viewer).
 - **Public Invitation Landing Page**: Handles token validation and forces signup/login before joining the workspace.
 - **Workspace Switcher Header**: A global dropdown allowing users to move between multiple tenant contexts seamlessly.
+
+**📋 Planned Tasks — Phase 1.7**
+- [SECURITY — CRITICAL] SNS webhook signature verification (validate `x-amz-sns-message-signature` before any bounce/complaint processing)
+- [SECURITY — CRITICAL] CORS lock to `FRONTEND_URL` env var (remove wildcard `*` in production)
+- [STABILITY — CRITICAL] asyncpg connection pool setup (`platform/api/utils/db_engine.py`) — replaces Supabase PostgREST for all core queries
+- [STABILITY — CRITICAL] PostgreSQL RLS: `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` + `SET LOCAL app.current_tenant_id` on every asyncpg transaction
+- [STABILITY] Redis key namespace standardized to `tenant:{tenant_id}:*` across all workers and API routes
+- [WORKSPACE] Invitations table schema + migration
+- [WORKSPACE] POST /invitations — token generation, email send, duplicate check
+- [WORKSPACE] GET /invitations/accept?token=... — validate + join workspace
+- [WORKSPACE] DELETE /invitations/{id} — cancel pending invite
+- [WORKSPACE] Member removal endpoint (delete from tenant_users, invalidate session)
+- [WORKSPACE] Data sovereignty: cascade delete from tenant_users only, never from content tables
+- [WORKSPACE FRONTEND] Invite modal (email + role selector)
+- [WORKSPACE FRONTEND] Public invite landing page (token → signup/login → join)
+- [WORKSPACE FRONTEND] Workspace Switcher dropdown in global header
 
 ---
 
@@ -956,11 +977,32 @@ graph TD
 - [GAP 7] Undetermined / General → retry 2×, then escalate to CRITICAL audit log
 - [GAP 7] Complaint (any subtype) → immediate unsubscribe (`status = 'unsubscribed'`)
 - [NEW] Recipient Preference Center (Granular topic-based opt-outs instead of global unsubscribe)
+- [ARCH REVIEW — CRITICAL] Contact audience streaming — cursor-based pagination `LIMIT 500 OFFSET n` fed to RabbitMQ (prevents OOM on 1M-row audience loads)
+- [ARCH REVIEW — CRITICAL] Cross-tenant suppression guard in `_suppress_contact()` — always filter by `tenant_id` before suppressing, even on webhook path
+- [ARCH REVIEW] Merge tag fallback engine — inject default value (e.g. "Customer") when `{{first_name}}` resolves to empty string, never send broken personalization
 
 > 💡 **Worker Architecture Note (Gap 5):** This phase creates the initial worker. Full microservice decomposition into 5 focused workers (sender, webhook-handler, reputation-worker, warmup-scheduler, dispatch-logger) happens in **Phase 13**.
 
 ---
 
+## Phase 5.7 — Backpressure & Queue Protection
+**WHY:** Without prefetch limits and a kill-switch, a slow worker or a bad campaign can bring down the entire RabbitMQ broker. These are 2-hour fixes that prevent hours of downtime.
+
+**[BACKEND]**
+- **RabbitMQ Consumer Prefetch Limit**: `basic_qos(prefetch_count=10)` on all consumers. Without this, a single worker buffers thousands of messages locally and starves other workers.
+- **Redis Campaign Kill-Switch**: Workers check `tenant:{id}:campaign:{cid}:stop` in Redis before every batch. Set this key to halt a campaign across all workers in milliseconds.
+- **Worker Heartbeat**: Every worker writes `SET worker:{worker_id}:heartbeat {timestamp} EX 30` to Redis. Dead workers are detectable without external process monitoring.
+- **DLQ Monitoring**: Dead-letter queue depth tracked and surfaced in admin health dashboard.
+
+**📋 Planned Tasks — Phase 5.7**
+- [BACKPRESSURE — CRITICAL] RabbitMQ `basic_qos(prefetch_count=10)` on all consumers
+- [KILL-SWITCH — CRITICAL] Redis campaign kill-switch: check `tenant:{id}:campaign:{cid}:stop` before every batch in email_sender.py
+- [RELIABILITY] Worker heartbeat: `SET worker:{id}:heartbeat {ts} EX 30` on every loop iteration
+- [MONITORING] DLQ (Dead-Letter Queue) depth metric exposed to admin health endpoint
+- [RELIABILITY] Standalone `scheduler.py` process with Redis `SET NX EX 90` distributed lock (moved from Phase 5 Audit Fix 9 — THIS IS THE CRITICAL ONE: run 2 API replicas without this and every scheduled campaign fires twice)
+
+---
+
 ## Phase 5.6 — Advanced Feedback & Surveys
 **WHY:** Closes the loop between the sender and the recipient, allowing for quality reviews and direct subscriber feedback.
 
@@ -1000,50 +1042,6 @@ graph TD
 - **Escalate Button**: UI in the Feedback Inbox to notify the platform owners.
 - **Status Tracker**: Tenant view of "Support Pending/Resolved" for escalated items.
 
----
-
----
-
-## Phase 5.6 — Advanced Feedback & Surveys
-**WHY:** Closes the loop between the sender and the recipient, allowing for quality reviews and direct subscriber feedback.
-
-**[BACKEND]**
-- **Feedback & Surveys API**: Support for inbuilt and custom questions stored in JSONB.
-- **Automatic Footer Injection**: MJML logic to inject "How was this email?" links into all outgoing campaigns.
-- **Sentiment Analytics Service**: Aggregates feedback into "Health Scores" per campaign/template.
-
-**[FRONTEND]**
-- **Public Feedback Page**: A lightweight, mobile-optimized page for subscribers to rate and review emails.
-- **Survey Builder (Campaign Wizard)**: UI for tenants to select which inbuilt questions to ask and add their own custom questions.
-- **Feedback Inbox**: A central dashboard for tenants to view and respond to subscriber reports.
-
-**📋 Planned Tasks — Phase 5.6**
-- Feedback/Survey database models (JSONB responses)
-- Automatic MJML Footer Injection (Good/Bad/Other)
-- Public Feedback Landing Page (No-Auth)
-- Sentiment Analytics Engine (Health scores)
-- Survey Builder UI (Campaign Wizard integration)
-- Feedback Inbox UI (Tenant dashboard)
-- "Layout Broken" Critical Alerts (Notify tenant of rendering issues)
-
----
-
-## Phase 5.7 — Support & Escalation Workflow
-**WHY:** Bridges the gap between the Tenant and the platform Developers/Managing Team.
-
-**[BACKEND]**
-- **Escalation API**: Endpoint for tenants to "Push to Support" a specific feedback item or rendering issue.
-- **Tripartite Rendering Snapshots**: When an issue is reported, the system captures:
-    1. **Raw MJML AST**: The source code.
-    2. **Masked JSON Context**: The dynamic data used for merge tags.
-    3. **Compiled HTML**: The final failed output.
-- **Support Ticket Model**: Internal tracking of escalated issues from tenants to the platform team.
-
-**[FRONTEND]**
-- **Escalate Button**: UI in the Feedback Inbox to notify the platform owners.
-- **Status Tracker**: Tenant view of "Support Pending/Resolved" for escalated items.
-
----
 
 ## Phase 5.8 — Event Data Archival Strategy (Gap 4)
 **WHY:** A 100k-recipient campaign instantly creates 100k+ rows. Over 1 year, the `email_events` table will grow to 100M+ rows, catastrophically degrading query performance. We must construct a tiered database isolation model immediately after launch.
@@ -1365,6 +1363,9 @@ graph TD
 - [AUDIT FIX 12] GitHub Actions CI/CD pipeline — lint + test + Docker build + deploy on merge to main
 - [AUDIT FIX 13] git rm frnds_contacts.csv, testmail_contacts.csv, platform/api/app.db; add *.csv and *.db to .gitignore
 - [FRIEND AUDIT FIX 21] Dynamic Config Loading — Replace Path(__file__) .env loading with robust config.py / pydantic-settings
+- [ARCH REVIEW — CRITICAL] Idempotency guard on HTTP dispatch endpoint itself — `Idempotency-Key` header check before accepting campaign send request
+- [ARCH REVIEW] `external_msg_id` UUID uniqueness enforced at DB level (UNIQUE constraint) AND checked in worker before dispatching each message
+- [ARCH REVIEW] Structured JSON logging with `requestId` + `tenantId` on every log line (FastAPI middleware injects these)
 
 ---
 
