@@ -358,6 +358,11 @@
         "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[SECURITY]</span> Token revocation via token_version counter (force-logout all devices)",
         "done": false,
         "desc": "A counter on each user row is incremented to invalidate all existing JWTs instantly — useful for 'sign out everywhere' or account compromise scenarios."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[SECURITY]</span> PostgreSQL Row Level Security (RLS)",
+        "done": false,
+        "desc": "Move multi-tenancy isolation to the database level. Ensures that even if application code has a bug, data cannot leak across tenants."
       }
     ]
   },
@@ -524,6 +529,16 @@
         "done": false,
         "desc": "The application footer contains links to the Privacy Policy and Terms of Service — required for legal compliance and user trust."
       }
+    ]
+  },
+  {
+    "title": "PHASE 1.7 — PostgreSQL RLS & Workspace Lifecycle",
+    "tasks": [
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[STABILITY]</span> Migrate to Database-Level Row Level Security (RLS)", "done": false, "desc": "Move multi-tenancy logic from application filters to Postgres RLS policies for 100% data isolation guarantee."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[STABILITY]</span> Tenant Session Context Middleware (SET LOCAL app.current_tenant_id)", "done": false, "desc": "Middleware that injects the current tenant ID into the Postgres transaction scope for RLS enforcement."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[WORKSPACE]</span> Workspace Switcher UI (Global Header Dropdown)", "done": false, "desc": "A premium dropdown in the header to switch between different workspace contexts instantly."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[WORKSPACE]</span> Member Invitation Flow (SHA-256 tokens + Email)", "done": false, "desc": "End-to-end invitation flow with secure, expiring tokens sent via system email."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[WORKSPACE]</span> Member Removal & Data Sovereignty Logic", "done": false, "desc": "Logic to ensure that when a member leaves, the workspace data (templates, contacts) stays with the organization."}
     ]
   },
   {
@@ -785,7 +800,7 @@
         "desc": "A gallery of pre-built starter templates (welcome email, newsletter, promo) that tenants can select as a starting point instead of building from scratch."
       },
       {
-        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> Template versioning (save history)",
+"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> Template versioning (save history)",
         "done": false,
         "desc": "Every time a template is saved, the previous version is kept — tenants can view a timeline of changes and roll back to any earlier version."
       },
@@ -793,11 +808,43 @@
         "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> Plain text auto-generator (sync from HTML for spam filters)",
         "done": false,
         "desc": "Automatically generates a plain-text version of the email from the HTML body — important for spam filter scores and email clients that don't render HTML."
-      },
+      }
+    ]
+  },
+  {
+    "title": "PHASE 3.5 — Template Engine Design System",
+    "tasks": [
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[DESIGN]</span> Template-Specific Design Tokens (Colors, Typography)", "done": false, "desc": "Dedicated tokens for the email editor to ensure templates match the brand identity perfectly."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[UX]</span> Drag-and-Drop Editor Polishing (Smooth Animations)", "done": false, "desc": "Adding micro-interactions and smooth transitions to the template builder for a premium feel."}
+    ]
+  },
+  {
+    "title": "PHASE 3.6 — Template Delivery Assurance",
+    "tasks": [
       {
         "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> Public View Online link (render template in browser without login)",
         "done": false,
         "desc": "A public URL is generated for each campaign that renders the email in the browser — shown as a 'View this email online' fallback link."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[ARCH]</span> RabbitMQ Rendering Worker",
+        "done": false,
+        "desc": "Offloads MJML-to-HTML transpilation to background workers. Keeps the API responsive during complex template edits."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[ARCH]</span> Thumbnail Generation Engine",
+        "done": false,
+        "desc": "Automatically takes headless screenshots of templates in the background for the library view using Playwright."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[ARCH]</span> AssetManager Service",
+        "done": false,
+        "desc": "A dedicated pipeline for handling template image uploads, optimization, and CDN delivery."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[UI]</span> Section-Based Editor (CKEditor 5)",
+        "done": false,
+        "desc": "Upgrades the editor to use battle-tested CKEditor 5 with predefined, unbreakable MJML sections."
       },
       {
         "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[FRONTEND]</span> Templates list page (grid of template cards with thumbnails)",
@@ -872,12 +919,42 @@
     ]
   },
   {
+    "title": "PHASE 3.5 — Testing & Validation Gateway",
+    "tasks": [
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> Token Validation Service (schema-safe check)",
+        "done": false,
+        "desc": "A Python service that scans MJML for merge tags and verifies they exist in the tenant's actual database schema before sending."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> Mock Data Service (preview-with-payload)",
+        "done": false,
+        "desc": "Allows users to inject custom JSON payloads into their templates to see exactly how personalization will look for real subscribers."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[REAL-TIME]</span> Real-time Preview Sync (WebSockets)",
+        "done": false,
+        "desc": "Uses FastAPI WebSockets to sync the editor state with the preview panel instantly as the user types."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[UX]</span> Exact-line error highlighting in the editor",
+        "done": false,
+        "desc": "When a template fails to compile, the editor highlights the exact line of MJML or Token failure for easy fixing."
+      }
+    ]
+  },
+  {
     "title": "PHASE 4 — Campaign Orchestration",
     "tasks": [
       {
         "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> Campaign CRUD",
         "done": true,
         "desc": "Create, read, update, and delete campaigns — the core data management API for the campaign engine."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[GATEWAY]</span> Pre-Send Integrity Guard",
+        "done": false,
+        "desc": "A mandatory code scan that runs the TokenService against the target audience. If data is missing for tags, it blocks the send."
       },
       {
         "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> Snapshot campaign content + dispatch intents at send time",
@@ -1104,6 +1181,55 @@
         "done": false,
         "desc": "Auto-pauses RabbitMQ dispatch queue if hard bounce rate spikes early during a send to protect sender reputation."
       }
+    ]
+  },
+  {
+    "title": "PHASE 5.6 — Advanced Feedback & Surveys",
+    "tasks": [
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> Feedback/Survey database models (JSONB responses)",
+        "done": false,
+        "desc": "Flexible storage using JSONB to capture both inbuilt quality questions and tenant-defined custom survey answers."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[COMPILER]</span> Automatic MJML Footer Injection (Good/Bad/Other)",
+        "done": false,
+        "desc": "Updates the MJML compiler to automatically inject feedback links into the footer of every outgoing campaign email."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[FRONTEND]</span> Public Feedback Landing Page (No-Auth)",
+        "done": false,
+        "desc": "A lightweight, public-facing page where subscribers can leave ratings and comments without needing to log in."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[ANALYTICS]</span> Sentiment Analytics Engine (Health scores)",
+        "done": false,
+        "desc": "Aggregates feedback data into a 'Campaign Health Score', helping tenants identify if their content is working or annoying users."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[WIZARD]</span> Survey Builder UI (Campaign Wizard integration)",
+        "done": false,
+        "desc": "Allows tenants to toggle inbuilt questions and add their own custom questions during the campaign creation process."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[UX]</span> Feedback Inbox UI (Tenant dashboard)",
+        "done": false,
+        "desc": "A dedicated dashboard for tenants to read and respond to feedback and rendering issues reported by their subscribers."
+      }
+    ]
+  },
+  {
+    "title": "PHASE 5.8 — Event Data Archival Strategy",
+    "tasks": [
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[INFRA]</span> PostgreSQL Partitioning by Range (occurred_at)", "done": false, "desc": "Refactor email_events to use partitions to prevent query degradation as data scales to millions of rows."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[INFRA]</span> Automated Partition Generation (pg_cron)", "done": false, "desc": "Automated monthly creation of new partition tables for the upcoming month."}
+    ]
+  },
+  {
+    "title": "PHASE 5.7 — Delivery Reliability & Worker Kill-Switch",
+    "tasks": [
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[CORE]</span> Redis-based Campaign Kill-Switch", "done": false, "desc": "Ability to halt a campaign in sub-milliseconds across all distributed workers using a Redis signal."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[CORE]</span> Worker Health Heartbeats (Redis + Dash)", "done": false, "desc": "Real-time health monitoring of RabbitMQ workers with automated restarts on failure."}
     ]
   },
   {
@@ -1577,6 +1703,13 @@
     ]
   },
   {
+    "title": "PHASE 9.5 — Global Notification Engine",
+    "tasks": [
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[UI]</span> Notification Bell & Popover (Real-time)", "done": false, "desc": "A centralized notification hub in the UI for system alerts, campaign completions, and billing updates."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> WebSocket Notification Delivery (FastAPI + Redis Pub/Sub)", "done": false, "desc": "Pushing notifications to the frontend in real-time without polling."}
+    ]
+  },
+  {
     "title": "PHASE 10 — Advanced Campaigns",
     "tasks": [
       {
@@ -1639,6 +1772,14 @@
         "done": false,
         "desc": "Allow user to draft a template and instantly generate localized copies for international scaling."
       }
+    ]
+  },
+  {
+    "title": "PHASE 10.5 — AI & Deep RAG Integration",
+    "tasks": [
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[AI]</span> pgvector / Pinecone High-Dimensional Store Setup", "done": false, "desc": "Infrastructure to store campaign and audience embeddings for retrieval-augmented generation."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[AI]</span> Semantic Search API (Cosine Similarity)", "done": false, "desc": "Allows tenants to search their campaign history using natural language context."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[AI]</span> LangChain / LlamaIndex Orchestration Layer", "done": false, "desc": "Processing retrieved context to generate grounded, hallucination-free AI responses."}
     ]
   },
   {
@@ -1742,8 +1883,13 @@
     ]
   },
   {
-    "title": "PHASE 13 — Scale (After Handover)",
+    "title": "PHASE 13 — Scale & Microservices (Gap 5)",
     "tasks": [
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> Worker Decomposition (Sender, Webhook, Reputation, Warmup, Logger)",
+        "done": false,
+        "desc": "Splitting the monolith into 5 focused micro-workers that scale independently based on task volume."
+      },
       {
         "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[BACKEND]</span> Redis queue (replace DB polling)",
         "done": false,
@@ -1814,6 +1960,68 @@
         "done": false,
         "desc": "An internal admin dashboard showing, per tenant, how much is being spent on AWS SES API calls vs the revenue from their current subscription plan."
       }
+    ]
+  },
+  {
+    "title": "PHASE 14 — Platform Command Center (Master Admin)",
+    "tasks": [
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[ARCH]</span> Master Admin Dashboard UI",
+        "done": false,
+        "desc": "The 'God Mode' overview for the platform owners to monitor all tenants, revenue, and system throughput."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[SECURITY]</span> Privacy-Preserving Shadow Mode",
+        "done": false,
+        "desc": "Allows Admins to log into tenant accounts for support while automatically masking PII (scrambling email addresses)."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[UX]</span> Global Workspace Switcher",
+        "done": false,
+        "desc": "Allows Owners to switch between their personal marketing workspace and the Master Admin command center."
+      }
+    ]
+  },
+  {
+    "title": "PHASE 15 — Internal Team Management",
+    "tasks": [
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[ADMIN]</span> Staff Invitation System",
+        "done": false,
+        "desc": "Allows the Platform Owner to invite employees and assign them restricted roles (Support, Compliance, etc.)."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[SECURITY]</span> Granular Staff RBAC",
+        "done": false,
+        "desc": "Restricts internal team members from seeing sensitive financial data or deleting accounts based on their role."
+      }
+    ]
+  },
+  {
+    "title": "PHASE 16 — Unified Profile & Account Settings",
+    "tasks": [
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[UX]</span> User Profile Page",
+        "done": false,
+        "desc": "Management of user avatar, name, and security settings like password resets."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[SECURITY]</span> Multi-Factor Authentication (MFA)",
+        "done": false,
+        "desc": "Adds an extra layer of security for all users (Tenants and Staff) using TOTP apps."
+      },
+      {
+        "text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[UX]</span> Workspace Branding & Member Management",
+        "done": false,
+        "desc": "Allows tenants to set workspace-wide logos and invite team members to collaborate on campaigns."
+      }
+    ]
+  },
+  {
+    "title": "PHASE 17 — Advanced Observability & Self-Healing",
+    "tasks": [
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[INFRA]</span> ClickHouse Migration for High-Volume Analytics", "done": false, "desc": "Moving event data to ClickHouse for sub-second aggregations on millions of rows."},
+      {"text": "<span class='text-xs font-bold text-indigo-400 mr-2 uppercase block sm:inline'>[INFRA]</span> Automated Infrastructure Scaling (K8s/Replica management)", "done": false, "desc": "Scaling workers and API nodes based on queue depth and CPU usage automatically."}
     ]
   }
 ];

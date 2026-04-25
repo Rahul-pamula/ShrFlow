@@ -352,6 +352,7 @@ graph TD
 - MFA via TOTP for workspace admins
 - [AUDIT FIX 1] Cross-tenant webhook suppression — add tenant_id filter to _suppress_contact()
 - [AUDIT FIX 2] JWT refresh token model — 30-min access token + HttpOnly refresh cookie + token_version revocation
+- [SECURITY UPGRADE] **PostgreSQL Row Level Security (RLS)** — Move multi-tenancy logic to the database level for bulletproof isolation.
 - [AUDIT FIX 3] Lock CORS to FRONTEND_URL env var — no wildcard in production
 - [AUDIT FIX 4] Enable SSL cert verification in worker — remove ssl.CERT_NONE
 - [AUDIT FIX 5] Delete /contacts/upload + /test-send from main.py; remove dev scripts from repo root
@@ -391,6 +392,29 @@ graph TD
 - Data export button in Settings
 - Consent column visible in contacts table
 - Privacy policy / Terms page linked from footer
+
+---
+
+## Phase 1.7 — Enterprise Workspace Lifecycle & Data Isolation
+**WHY:** Ensures data stays with the company, not the individual, and provides a professional invite-only onboarding for team members.
+
+**[BACKEND]**
+- **Invitation System Architecture**:
+    - `invitations` table: `email`, `tenant_id`, `role`, `token`, `expires_at`, `invited_by`.
+    - Secure Token Generation (SHA-256) with 7-day expiry.
+    - `POST /invitations`: Validates that the email isn't already a member.
+- **Data Sovereignty Design**:
+    - All business objects (`contacts`, `templates`, `campaigns`) are linked to `tenant_id`, NOT the individual `user_id`.
+    - Cascading rules: Deleting a user ONLY removes their access (deleting from `tenant_users`); it does NOT delete their created content.
+    - `created_by_user_id` is retained for history, even if the user is removed.
+- **PostgreSQL Row Level Security (RLS)**:
+    - Implementation of `ALTER TABLE ENABLE ROW LEVEL SECURITY`.
+    - Session variable `app.current_tenant_id` set via `SET_LOCAL` in the database service.
+
+**[FRONTEND]**
+- **Invite Modal**: Admin UI to enter email and select a Role (Owner, Admin, Member, Viewer).
+- **Public Invitation Landing Page**: Handles token validation and forces signup/login before joining the workspace.
+- **Workspace Switcher Header**: A global dropdown allowing users to move between multiple tenant contexts seamlessly.
 
 ---
 
@@ -645,6 +669,10 @@ graph TD
 **📋 Planned Tasks — Phase 3**
 - Template CRUD
 - Category
+- [ARCH] **RabbitMQ Rendering Worker** — Offload MJML-to-HTML transpilation to background workers for high performance.
+- [ARCH] **Thumbnail Generation Engine** — Automatically take headless screenshots of templates in the background for the library view.
+- [ARCH] **AssetManager Service** — Dedicated S3/CDN optimization pipeline for template images.
+- [UI] **Section-Based Editor (CKEditor 5)** — Structured, MJML-backed drag-and-drop sections that are "unbreakable" for users.
 - Persist compiled HTML from the active block editor
 - Preset gallery and preset-driven template creation
 - Template versioning (save history)
@@ -663,7 +691,43 @@ graph TD
 - Spam score checker (SpamAssassin-style heuristics before campaign send)
 - Mobile preview mode (375px viewport toggle in template editor)
 - Inbox preview simulation (Gmail, Outlook, Apple Mail rendering)
-- Template Accessibility Scanner (WCAG 2.1 color contrast & alt-text heuristic checks before saving)
+
+---
+
+## Phase 3.5 — Testing & Validation Gateway
+**WHY:** The "Pre-Send" gateway ensures that every token resolves and every layout works before the "Send" button is enabled.
+
+**[BACKEND]**
+- **Token Validation Service**: A Python logic that scans MJML for `{{tags}}` and cross-references them with the tenant's data schema.
+- **Mock Data Service**: API that merges a template with a custom JSON payload for realistic "Live Data" previews.
+- **Deep Error Reporting**: Context-aware error mapping that highlights the exact line of MJML/Token failure.
+
+**[FRONTEND]**
+- **Live Preview Sync**: WebSocket-driven updates that sync the editor and the preview panel in real-time.
+- **Mock Data UI**: A panel to enter/select dummy subscriber data to see how merge tags resolve visually.
+
+**📋 Planned Tasks — Phase 3.5**
+- Token Validation Service (schema-safe check)
+- Mock Data Service (preview-with-payload)
+- Real-time Preview Sync (WebSockets)
+- Exact-line error highlighting in the editor
+- Multi-client preview panel (Mocked viewport simulation)
+
+---
+
+---
+
+## Phase 3.5 — Template Validation & Mock Data Injection
+**WHY:** Ensures templates don't break when real data is injected. Prevents merge tag failures and layout shifts.
+
+**[BACKEND]**
+- **Mock Data Generator**: Service to inject sample tenant data (contact names, custom fields) into the MJML compiler for preview.
+- **Validation Engine**: Pre-check for missing merge tags or invalid spintax before a template is saved.
+- **Token Consistency Checker**: Logic to ensure all fields used in a template actually exist in the tenant's contacts table.
+
+**[FRONTEND]**
+- **Live Preview with Samples**: UI toggle to "View with Sample Data" inside the template editor.
+- **Merge Tag Autocomplete**: Deep integration of tenant custom fields into the editor's text inputs.
 
 ---
 
@@ -749,6 +813,7 @@ graph TD
 **📋 Planned Tasks — Phase 4**
 - Campaign CRUD (Implemented)
 - Campaign wizard (details > audience > content > review) (Implemented)
+- [GATEWAY] **Pre-Send Integrity Guard** — Hard stop that runs the TokenService against the target audience before allowing a send.
 - Snapshot campaign content + dispatch intents at send time (Implemented)
 - Spintax + merge tags (Implemented)
 - Scheduled sending (Implemented; dual scheduler consolidation pending)
@@ -896,7 +961,91 @@ graph TD
 
 ---
 
-## Phase 5.5 — Event Data Archival Strategy (Gap 4)
+## Phase 5.6 — Advanced Feedback & Surveys
+**WHY:** Closes the loop between the sender and the recipient, allowing for quality reviews and direct subscriber feedback.
+
+**[BACKEND]**
+- **Feedback & Surveys API**: Support for inbuilt and custom questions stored in JSONB.
+- **Automatic Footer Injection**: MJML logic to inject "How was this email?" links into all outgoing campaigns.
+- **Sentiment Analytics Service**: Aggregates feedback into "Health Scores" per campaign/template.
+
+**[FRONTEND]**
+- **Public Feedback Page**: A lightweight, mobile-optimized page for subscribers to rate and review emails.
+- **Survey Builder (Campaign Wizard)**: UI for tenants to select which inbuilt questions to ask and add their own custom questions.
+- **Feedback Inbox**: A central dashboard for tenants to view and respond to subscriber reports.
+
+**📋 Planned Tasks — Phase 5.6**
+- Feedback/Survey database models (JSONB responses)
+- Automatic MJML Footer Injection (Good/Bad/Other)
+- Public Feedback Landing Page (No-Auth)
+- Sentiment Analytics Engine (Health scores)
+- Survey Builder UI (Campaign Wizard integration)
+- Feedback Inbox UI (Tenant dashboard)
+- "Layout Broken" Critical Alerts (Notify tenant of rendering issues)
+
+---
+
+## Phase 5.7 — Support & Escalation Workflow
+**WHY:** Bridges the gap between the Tenant and the platform Developers/Managing Team.
+
+**[BACKEND]**
+- **Escalation API**: Endpoint for tenants to "Push to Support" a specific feedback item or rendering issue.
+- **Tripartite Rendering Snapshots**: When an issue is reported, the system captures:
+    1. **Raw MJML AST**: The source code.
+    2. **Masked JSON Context**: The dynamic data used for merge tags.
+    3. **Compiled HTML**: The final failed output.
+- **Support Ticket Model**: Internal tracking of escalated issues from tenants to the platform team.
+
+**[FRONTEND]**
+- **Escalate Button**: UI in the Feedback Inbox to notify the platform owners.
+- **Status Tracker**: Tenant view of "Support Pending/Resolved" for escalated items.
+
+---
+
+---
+
+## Phase 5.6 — Advanced Feedback & Surveys
+**WHY:** Closes the loop between the sender and the recipient, allowing for quality reviews and direct subscriber feedback.
+
+**[BACKEND]**
+- **Feedback & Surveys API**: Support for inbuilt and custom questions stored in JSONB.
+- **Automatic Footer Injection**: MJML logic to inject "How was this email?" links into all outgoing campaigns.
+- **Sentiment Analytics Service**: Aggregates feedback into "Health Scores" per campaign/template.
+
+**[FRONTEND]**
+- **Public Feedback Page**: A lightweight, mobile-optimized page for subscribers to rate and review emails.
+- **Survey Builder (Campaign Wizard)**: UI for tenants to select which inbuilt questions to ask and add their own custom questions.
+- **Feedback Inbox**: A central dashboard for tenants to view and respond to subscriber reports.
+
+**📋 Planned Tasks — Phase 5.6**
+- Feedback/Survey database models (JSONB responses)
+- Automatic MJML Footer Injection (Good/Bad/Other)
+- Public Feedback Landing Page (No-Auth)
+- Sentiment Analytics Engine (Health scores)
+- Survey Builder UI (Campaign Wizard integration)
+- Feedback Inbox UI (Tenant dashboard)
+- "Layout Broken" Critical Alerts (Notify tenant of rendering issues)
+
+---
+
+## Phase 5.7 — Support & Escalation Workflow
+**WHY:** Bridges the gap between the Tenant and the platform Developers/Managing Team.
+
+**[BACKEND]**
+- **Escalation API**: Endpoint for tenants to "Push to Support" a specific feedback item or rendering issue.
+- **Tripartite Rendering Snapshots**: When an issue is reported, the system captures:
+    1. **Raw MJML AST**: The source code.
+    2. **Masked JSON Context**: The dynamic data used for merge tags.
+    3. **Compiled HTML**: The final failed output.
+- **Support Ticket Model**: Internal tracking of escalated issues from tenants to the platform team.
+
+**[FRONTEND]**
+- **Escalate Button**: UI in the Feedback Inbox to notify the platform owners.
+- **Status Tracker**: Tenant view of "Support Pending/Resolved" for escalated items.
+
+---
+
+## Phase 5.8 — Event Data Archival Strategy (Gap 4)
 **WHY:** A 100k-recipient campaign instantly creates 100k+ rows. Over 1 year, the `email_events` table will grow to 100M+ rows, catastrophically degrading query performance. We must construct a tiered database isolation model immediately after launch.
 
 **[BACKEND]**
@@ -1307,15 +1456,14 @@ graph TD
 - [FRONTEND] Performance: Abort stale fetches on domains/team/contacts and Next 16 sync params fixing
 
 **📋 Planned Tasks — Phase 8**
-- Settings landing page (/settings) with navigation cards
-- Secure sender verification logic dispatching short-lived OTP tokens
-- API Key management infrastructure storing hashes rather than plain text
-- Team workspace isolation logic (team vs agency data boundary matrices)
-- Fine-grained role evaluation checks (Viewer, Operator, Manager, Admin)
-- Organizational configuration panels for CAN-SPAM geographical details
-- Sender Identity Verification wizard (SPF/DKIM/DMARC DNS instructions)
-- Member invitation flow with role assignment dropdowns
-- API Key generation and revocation UI
+- Workspace Branding (Logo upload, Brand Colors)
+- Member Management Dashboard (Table UI with role filters)
+- Invitation System (Send invite, cancel pending, resend email)
+- Revoke Access Flow (Delete from tenant_users + session invalidate)
+- Voluntary Leave Flow (User-initiated resignation from workspace)
+- Ownership Transfer logic (Nuclear option to swap primary owner)
+- CAN-SPAM Physical Address setup (Mandatory legal compliance)
+- Domain Verification (Generate records, Verify button)
 
 ---
 
@@ -1416,6 +1564,22 @@ graph TD
 - [GAP 6] Days 15–21: 1,000 emails/day cap
 - [GAP 6] Days 22–30: 5,000 emails/day cap
 - [GAP 6] Day 31+: Full capacity granted conditionally (bounce < 2%, complaint < 0.1%)
+
+---
+
+---
+
+## Phase 9.5 — Global Notification System
+**WHY:** Keeps users engaged and informed of system-critical events in real-time.
+
+**[BACKEND]**
+- **Notification Engine**: Centralized service to dispatch alerts (In-App or Email).
+- **WebSocket Gateway**: Real-time delivery of "Toasts" for active dashboard sessions.
+- **Preference Service**: Allows users to choose which types of alerts they want to receive (In-App only, Email only, or both).
+
+**[FRONTEND]**
+- **Notification Center (Bell UI)**: A global header component with unread counts and a list of recent alerts.
+- **Real-Time Toast Library**: Integration of `sonner` or `react-hot-toast` with the WebSocket gateway.
 
 ---
 
@@ -1794,8 +1958,10 @@ graph TD
 - Blacklist verification CRON (MXToolbox API monitoring IP health)
 - Nginx/Kong API Gateway with conditional degradation rules
 - Platform health dashboard (Redis queue depth, worker status)
+- **SMTP Classification Matrix**: Standardize SMTP responses into Invalid, Technical, Content, and Reputation categories.
 - Cost monitoring dashboard (per-tenant SES cost vs plan revenue)
-- ClickHouse / TimescaleDB event analytics lake migration
+- **ClickHouse / TimescaleDB Migration**: Move historical event analytics to a columnar database for sub-second segmentation.
+- **"Double-Writing" Pipeline**: Ingest data into both Postgres and ClickHouse during the migration phase.
 - Degraded-state UI conditional rendering (allow editing while analytics updates)
 - [GAP 4 — Event Archival Strategy] Migrate `email_events` > 90 days old from PostgreSQL to ClickHouse
 - [GAP 4] Rewrite analytics frontend queries to route historical trends (> 90d) to ClickHouse
@@ -1819,6 +1985,70 @@ graph TD
 **System/Legal Emails (Appended internally to every dispatched campaign)**
 - Clean un-subscription notifications natively respecting external click intercepts securely.
 - Mandatory CAN-SPAM/GDPR entity address placements enforcing platform legality completely.
+
+---
+
+## Phase 14 — Platform Command Center (Master Admin)
+**WHY:** A centralized "God Mode" for the Managing Team to monitor all tenants, subscriptions, and escalated issues.
+
+**[ARCH] Workspace Switcher Logic**
+- **Unified Login**: One `/login` for everyone (Tenants and Admins).
+- **Header Toggle**: A visual dropdown in the top header (visible only to staff) to switch between the "Master Admin Dashboard" and the "Personal Marketing Workspace".
+- **Security Check**: Backend middleware enforces `is_platform_admin` flag on all `/admin/*` routes.
+
+**[BACKEND]**
+- **Super-Admin API**: Protected routes for tenant management, billing overrides, and global stats.
+- **Dynamic "SEQ" Reputation Scoring**: Real-time Engagement Quality score (0-100) based on rolling open vs. complaint ratios.
+- **Bounce-Rate "Drift" Watchdog**: Anomaly detection that pauses campaigns if bounce rates spike above historical standard deviations.
+- **"Kill-Switch" Worker Logic**: Workers check Redis `tenant:status` before every batch; instantly NACKing tasks if a tenant is suspended mid-send.
+- **Privacy-Preserving Proxy**: Automatic PII masking (e.g., `rahul@gmail.com` -> `r***@g***.com`) when an Admin enters "Shadow Mode" to debug a tenant's account.
+- **Tenant Performance Watchdog**: Real-time monitoring of all tenants for bounce-rate spikes or spam traps.
+
+**[FRONTEND]**
+- **Super Dashboard**: Visual map of platform-wide health, throughput, and revenue.
+- **Tenant Directory**: Searchable list of all companies on the platform with drill-down views.
+- **Shadow Mode Banner**: Persistent orange banner at the top of the screen ("Shadowing Tenant: [Name]") with an "Exit Shadow Mode" button.
+
+---
+
+## Phase 15 — Internal Team Management & Staff RBAC
+**WHY:** Allows the Platform Owner (You) to build a professional managing team with restricted permissions.
+
+**[BACKEND]**
+- **Internal RBAC Matrix**:
+    - `OWNER`: Full access (Billing, Deletion, Team Invites).
+    - `SUPPORT_LEAD`: Can shadow tenants and manage tickets; no billing access.
+    - `COMPLIANCE`: Can suspend tenants for spam; no template editing access.
+    - `VIEWER`: Read-only access to global analytics.
+- **Staff Invitation System**: Secure invitation flow to onboard employees into the Master Admin context.
+- **Admin Audit Log**: Immutable history tracking every action taken by an internal team member.
+
+**[FRONTEND]**
+- **Master Team Settings**: Management UI for the Owner to add/remove employees and edit roles.
+- **Role-Aware UI**: Automatically hides/disables sensitive financial and deletion buttons based on the employee's role.
+
+---
+
+## Phase 16 — Unified Profile & Account Settings
+**WHY:** Centralized management for user identity, security, and workspace defaults.
+
+**📋 Planned Tasks — Phase 16**
+- User Profile Page (Avatar, Name, Password reset)
+- Multi-Factor Authentication (MFA) setup for both Tenants and Admins
+- Workspace Branding (Upload Logo, define Brand Colors for default template styles)
+- Global Billing Dashboard (Sync with Stripe for invoice history and plan upgrades)
+- Workspace Member Management (Invite co-workers to a specific tenant workspace)
+
+---
+
+## Phase 17 — Advanced Intelligence & AI
+**WHY:** Differentiates the platform by automating optimization and list health.
+
+**📋 Planned Tasks — Phase 17**
+- **Bayesian A/B/n Testing Engine**: Update winner probabilities in real-time using Multi-Armed Bandit algorithms.
+- **Machine Learning STO (Send-Time Optimization)**: Predict the optimal send-hour for every individual subscriber based on historical engagement.
+- **Automatic "Zombie" Removal**: Background worker identifies inactive subscribers (90+ days) and applies a "Sunset Policy" to protect reputation.
+- **Smart Subject Suggestion**: AI-driven subject line generator based on previous high-performing campaigns.
 
 ---
 
