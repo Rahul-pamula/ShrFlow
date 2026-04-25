@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Tuple
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 import random
 import re
 import uuid
@@ -91,6 +91,7 @@ def fetch_contacts_for_target(
     target: str = "all",
     exclude_suppressed: bool = False,
 ) -> Tuple[List[Dict[str, Any]], str]:
+    """Load ALL contacts into memory. Safe for small lists; use stream_contacts_for_target for large audiences."""
     query, audience_label = build_contacts_query(
         supabase=supabase,
         tenant_id=tenant_id,
@@ -99,6 +100,88 @@ def fetch_contacts_for_target(
     )
     result = query.execute()
     return result.data or [], audience_label
+
+
+async def stream_contacts_for_target(
+    tenant_id: str,
+    target: str = "all",
+    exclude_suppressed: bool = False,
+    page_size: int = 500,
+) -> AsyncIterator[List[Dict[str, Any]]]:
+    """
+    Fix 8 — Cursor-based streaming audience loader.
+
+    Yields contacts in pages of `page_size` rows without ever loading
+    the full audience into memory. Safe for 1M+ contact lists.
+
+    Uses asyncpg directly (bypasses Supabase PostgREST HTTP limit).
+    Falls back to an empty stream if the asyncpg pool is not ready.
+
+    Usage:
+        async for page in stream_contacts_for_target(tenant_id, target):
+            for contact in page:
+                process(contact)
+    """
+    try:
+        from utils.db_engine import get_pool
+        pool = get_pool()
+    except RuntimeError:
+        # asyncpg pool not initialised (e.g. running in scheduler before API starts)
+        return
+
+    # Build SQL filter clause based on target
+    where_clauses = ["c.tenant_id = $1"]
+    params: list = [tenant_id]
+    idx = 2  # next param index
+
+    if exclude_suppressed:
+        where_clauses.append("c.status NOT IN ('bounced', 'unsubscribed')")
+
+    if target.startswith("batch:"):
+        batch_id = target.split("batch:", 1)[1]
+        where_clauses.append(f"c.import_batch_id = ${idx}")
+        params.append(batch_id)
+        idx += 1
+    elif target.startswith("domain:"):
+        domain = target.split("domain:", 1)[1].strip().lower()
+        where_clauses.append(f"c.email_domain = ${idx}")
+        params.append(domain)
+        idx += 1
+    elif target.startswith("domains:"):
+        domains = [d.strip().lower() for d in target.split("domains:", 1)[1].split(",") if d.strip()]
+        where_clauses.append(f"c.email_domain = ANY(${idx}::text[])")
+        params.append(domains)
+        idx += 1
+    # "all" and unknown targets: no extra filter
+
+    where_sql = " AND ".join(where_clauses)
+    sql = f"""
+        SELECT c.id, c.email, c.first_name, c.last_name
+        FROM public.contacts c
+        WHERE {where_sql}
+        ORDER BY c.id
+    """
+
+    async with pool.acquire() as conn:
+        # SET LOCAL for RLS so the pool connection is scoped to this tenant
+        async with conn.transaction():
+            await conn.execute("SET LOCAL app.current_tenant_id = $1", tenant_id)
+            # Server-side cursor — streams rows without loading all into memory
+            async with conn.transaction():
+                cursor = await conn.cursor(sql, *params)
+                while True:
+                    rows = await cursor.fetch(page_size)
+                    if not rows:
+                        break
+                    yield [
+                        {
+                            "id": str(r["id"]),
+                            "email": r["email"],
+                            "first_name": r["first_name"],
+                            "last_name": r["last_name"],
+                        }
+                        for r in rows
+                    ]
 
 
 def claim_scheduled_campaign(supabase: Any, campaign_id: str, tenant_id: str, claimed_at: str | None = None) -> bool:

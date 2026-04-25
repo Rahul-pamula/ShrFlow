@@ -34,12 +34,17 @@ services:
     environment:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - DATABASE_URL=${DATABASE_URL}
       - RABBITMQ_URL=${RABBITMQ_URL}
       - REDIS_URL=${REDIS_URL}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - ENVIRONMENT=${ENVIRONMENT}
+      - FRONTEND_URL=${FRONTEND_URL}
+      # Scheduler runs as a dedicated service (scheduler) with Redis lock
+      # NEVER enable this in production with multiple API replicas
+      - ENABLE_EMBEDDED_CAMPAIGN_SCHEDULER=false
     volumes:
-      - ./platform/api/assets:/app/assets # Persist uploaded files
+      - ./platform/api/assets:/app/assets
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s
@@ -60,7 +65,9 @@ services:
     environment:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - DATABASE_URL=${DATABASE_URL}
       - RABBITMQ_URL=${RABBITMQ_URL}
+      - REDIS_URL=${REDIS_URL}
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_USERNAME=${SMTP_USERNAME}
@@ -89,7 +96,9 @@ services:
     environment:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - DATABASE_URL=${DATABASE_URL}
       - RABBITMQ_URL=${RABBITMQ_URL}
+      - REDIS_URL=${REDIS_URL}
       - S3_BUCKET=${S3_BUCKET}
       - S3_REGION=${S3_REGION}
       - S3_ENDPOINT=${S3_ENDPOINT}
@@ -115,7 +124,9 @@ services:
     environment:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - DATABASE_URL=${DATABASE_URL}
       - RABBITMQ_URL=${RABBITMQ_URL}
+      - REDIS_URL=${REDIS_URL}
     command: python background_worker.py
     depends_on:
       api:
@@ -124,6 +135,9 @@ services:
       - email_engine_net
 
   # ── Scheduler ────────────────────────────────────────────
+  # Runs as a SINGLE dedicated container with a Redis distributed lock.
+  # NEVER scale this service (replicas > 1) — the lock prevents double-scheduling
+  # but one instance is always sufficient.
   scheduler:
     build:
       context: .
@@ -135,7 +149,10 @@ services:
     environment:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - DATABASE_URL=${DATABASE_URL}
       - RABBITMQ_URL=${RABBITMQ_URL}
+      - REDIS_URL=${REDIS_URL}
+      - SCHEDULER_POLL_INTERVAL=60
     command: python scheduler.py
     depends_on:
       api:
@@ -155,6 +172,8 @@ services:
     environment:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
       - SYSTEM_SMTP_HOST=${SYSTEM_SMTP_HOST}
       - SYSTEM_SMTP_PORT=${SYSTEM_SMTP_PORT}
       - SYSTEM_SMTP_USERNAME=${SYSTEM_SMTP_USERNAME}
@@ -218,15 +237,3 @@ services:
 networks:
   email_engine_net:
     driver: bridge
-
-# ── Future: Add Redis for scaling ──────────────────────────
-# To enable Redis (Phase 7 Upgrade), uncomment this block:
-#
-#   redis:
-#     image: redis:7-alpine
-#     container_name: email_engine_redis
-#     restart: unless-stopped
-#     ports:
-#       - "6379:6379"
-#     networks:
-#       - email_engine_net

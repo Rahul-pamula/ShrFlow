@@ -88,6 +88,23 @@ graph TD
 ## Phase 0 — UI/UX Foundation & Design System
 **WHY:** Establishes the visual language, reusable UI primitives, interaction rules, and accessibility baseline before feature work scales.
 
+### Phase 0 Implementation Snapshot
+
+The core frontend foundation has now been substantially implemented in the product shell and primary work surfaces.
+
+Implemented foundation work includes:
+- Hybrid app shell with persistent sidebar plus global header.
+- Product IA aligned to Dashboard, Contacts, Templates, Campaigns, Analytics, Infrastructure, and Settings.
+- Shared design primitives expanded beyond the original base set:
+  `SectionCard`, `InlineAlert`, `FilterBar`, `KeyValueList`, `TableToolbar`, `InspectorPanel`, `ModalShell`.
+- Core operational pages standardized onto the shared system:
+  Dashboard, Contacts, Campaigns, Templates, Analytics, Infrastructure, and major Settings areas.
+- Core workflow modernization completed for the campaign wizard shell and primary steps.
+- Native destructive dialogs replaced across major flows with shared confirm patterns.
+- Theme infrastructure active through `next-themes`, currently following the operating system theme via CSS variable tokens.
+
+Remaining Phase 0 cleanup is mostly edge-polish and legacy-page normalization rather than missing foundation architecture.
+
 ### Phase 0 Architecture Flow
 
 ```mermaid

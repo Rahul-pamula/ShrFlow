@@ -76,7 +76,7 @@ async def setup_queues(channel: aio_pika.robust_channel.RobustChannel) -> tuple:
 async def main():
     logger.info("Starting State-Aware Email Worker...")
     connection = await aio_pika.connect_robust(RABBITMQ_URL, ssl=ssl_context)
-    
+
     handler = EmailHandler(
         db=db,
         redis_client=redis_client,
@@ -86,16 +86,21 @@ async def main():
         tracking_secret=TRACKING_SECRET
     )
 
-    async with connection:
-        channel = await connection.channel()
-        await channel.set_qos(prefetch_count=PREFETCH_COUNT)
-        
-        main_queue, holding_exchange = await setup_queues(channel)
-        logger.info(f"Consuming from {QUEUE_NAME}. Waiting for messages...")
-        
-        async with main_queue.iterator() as queue_iter:
-            async for message in queue_iter:
-                await handler.process_message(message, holding_exchange)
+    try:
+        async with connection:
+            channel = await connection.channel()
+            await channel.set_qos(prefetch_count=PREFETCH_COUNT)
+
+            main_queue, holding_exchange = await setup_queues(channel)
+            logger.info(f"Consuming from {QUEUE_NAME}. Waiting for messages...")
+
+            async with main_queue.iterator() as queue_iter:
+                async for message in queue_iter:
+                    await handler.process_message(message, holding_exchange)
+    finally:
+        # Flush any remaining buffered dispatch updates before exit
+        await handler.flush_all()
+        logger.info("Dispatch buffer flushed. Worker shut down cleanly.")
 
 if __name__ == "__main__":
     try:

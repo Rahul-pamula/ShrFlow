@@ -36,7 +36,10 @@ from services.campaign_dispatch_service import (
     queue_campaign_dispatch,
 )
 
-ENABLE_EMBEDDED_CAMPAIGN_SCHEDULER = os.getenv("ENABLE_EMBEDDED_CAMPAIGN_SCHEDULER", "true").lower() == "true"
+# IMPORTANT: Set ENABLE_EMBEDDED_CAMPAIGN_SCHEDULER=false in production.
+# Use the standalone platform/worker/scheduler.py with Redis distributed lock instead.
+# Running BOTH simultaneously will double-schedule every campaign.
+ENABLE_EMBEDDED_CAMPAIGN_SCHEDULER = os.getenv("ENABLE_EMBEDDED_CAMPAIGN_SCHEDULER", "false").lower() == "true"
 
 async def _run_scheduler():
     """Polls every 60 s for campaigns due to be sent and dispatches them."""
@@ -93,26 +96,45 @@ async def _run_scheduler():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: launch background scheduler + connect RabbitMQ. Shutdown: cancel it."""
+    """Startup: launch background scheduler + connect RabbitMQ + init asyncpg pool. Shutdown: close all."""
     from utils.rabbitmq_client import mq_client
+    from utils.db_engine import init_pool, close_pool
     import logging
     startup_logger = logging.getLogger("api_startup")
-    
-    # Ensure RabbitMQ queues are declared with correct arguments (DLX) before workers connect
+
+    # 1. asyncpg connection pool (required for RLS)
+    try:
+        await init_pool()
+        startup_logger.info("asyncpg pool ready.")
+    except Exception as e:
+        startup_logger.error(f"asyncpg pool init failed: {e}")
+
+    # 2. RabbitMQ
     try:
         await mq_client.connect()
         startup_logger.info("RabbitMQ connected and queues declared on startup.")
     except Exception as e:
         startup_logger.error(f"Failed to connect to RabbitMQ on startup: {e}")
 
-    task = asyncio.create_task(_run_scheduler()) if ENABLE_EMBEDDED_CAMPAIGN_SCHEDULER else None
+    task = None
+    if ENABLE_EMBEDDED_CAMPAIGN_SCHEDULER:
+        logging.getLogger("api_startup").warning(
+            "⚠️  Embedded scheduler is ENABLED. This is safe only in single-replica dev mode. "
+            "In production, use platform/worker/scheduler.py with Redis distributed lock instead."
+        )
+        task = asyncio.create_task(_run_scheduler())
+
     yield
+
     if task is not None:
         task.cancel()
         try:
             await task
         except asyncio.CancelledError:
             pass
+
+    await close_pool()
+    startup_logger.info("asyncpg pool closed.")
 
 
 # ── App ────────────────────────────────────────────────────────────────

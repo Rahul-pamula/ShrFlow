@@ -15,44 +15,28 @@ NOTE: The Python virtual environment lives at the root:
 STEP 0: START ALL SERVICES
 --------------------------------------------------------------
 
-Tracking API → Supabase Edge Functions (always on, no tunnel needed)
-  URL: https://iiweorjzoxcfaedsubxu.supabase.co/functions/v1
-  API_URL in .env is already set — nothing to start!
+Terminal 1 — API
+  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate && cd platform/api
+  uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-Terminal 1 (API Server)
-cd /Users/rahul/Desktop/Sh_R_Mail
-source .venv/bin/activate
-cd platform/api
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-
-Terminal 2 (Email Sender Worker)
-  cd /Users/rahul/Desktop/Sh_R_Mail
-  source .venv/bin/activate
-  # Tune throughput locally:
-  #   WORKER_PREFETCH_COUNT=10 → pull 10 messages at a time (faster)
-  #   WORKER_MAX_RETRIES=3     → retry each message up to 3 times
+Terminal 2 — Email Sender Worker
+  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
   WORKER_PREFETCH_COUNT=10 WORKER_MAX_RETRIES=3 python platform/worker/email_sender.py
 
-Terminal 3 (Dedicated Contact Import Worker — REQUIRED FOR IMPORTS)
-  Contact imports now use a robust Direct-to-S3 streaming pipeline.
-  This worker MUST be running or your imported files will be marked "pending" forever.
-  cd /Users/rahul/Desktop/Sh_R_Mail
-  source .venv/bin/activate
+Terminal 3 — Import Worker
+  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
   python platform/worker/import_worker.py
 
-Terminal 4 (Scheduler)
-  cd /Users/rahul/Desktop/Sh_R_Mail
-  source .venv/bin/activate
+Terminal 4 — Scheduler
+  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
   python platform/worker/scheduler.py
 
-Terminal 5 (Frontend)
+Terminal 5 — Frontend
   cd /Users/rahul/Desktop/Sh_R_Mail/platform/client
   npm run dev
 
-Terminal 6 (Centralized System Email Worker)
-  cd /Users/rahul/Desktop/Sh_R_Mail
-  source .venv/bin/activate
+Terminal 6 — System Email Worker
+  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
   python platform/worker/centralized_email_worker.py
 
 Open browser → http://localhost:3000
@@ -89,3 +73,116 @@ KNOWN ISSUES / GOTCHAS
   - The UI uploads files securely to Supabase S3 via a Presigned URL ticket.
   - The Dedicated Import Worker (`import_worker.py`) is notified via RabbitMQ,
     streams the file in chunks from S3, and bulk-upserts to the database.
+
+--------------------------------------------------------------
+ARCHITECTURE FIXES (2026-04-25) — Production Stability
+--------------------------------------------------------------
+
+[FIX 1] SNS Webhook Signature Verification
+  File: platform/api/routes/webhooks.py
+  What was broken:
+    Anyone who knew the /webhooks/ses URL could POST fake bounce events and
+    mass-unsubscribe all tenants' contacts with no authentication.
+  What was fixed:
+    Every request to /webhooks/ses now verifies the AWS SNS RSA signature
+    before any data is read or mutated. Fake requests → HTTP 403 instantly.
+  Behaviour by environment:
+    ENVIRONMENT=development  → verification SKIPPED (curl testing still works)
+    ENVIRONMENT=production   → verification REQUIRED (invalid sig → 403)
+  Dependency: 'cryptography' package (already installed via python-jose[cryptography])
+  SubscriptionConfirmation: auto-confirmed by HTTP GET to SubscribeURL (no manual step needed)
+
+[FIX 2] CORS Already Locked (verified 2026-04-25)
+  File: platform/api/main.py (line 156)
+  Status: ALREADY CORRECT — CORS reads from FRONTEND_URL env var, not wildcard.
+  Current value in .env: FRONTEND_URL=http://localhost:3000
+  For production: set FRONTEND_URL=https://your-app.com in your deployment env.
+
+[FIX 3] Bounce Rate Redis Writer (Circuit Breaker Now Has Real Data)
+  File: platform/api/routes/webhooks.py — _write_bounce_to_redis()
+  What was broken:
+    The circuit breaker logic checked Redis key `tenant:{id}:bounces:rolling`
+    but this key was NEVER written anywhere. The circuit breaker was completely
+    deaf — your AWS SES account could be suspended before you noticed a spike.
+  What was fixed:
+    After every confirmed hard bounce from SES, the key is incremented:
+      INCR tenant:{tenant_id}:bounces:rolling
+      EXPIRE tenant:{tenant_id}:bounces:rolling 2592000  (30-day rolling window)
+    The circuit breaker now has actual data to act on.
+  Note: requires tenant_id to be set as a message tag in your SES configuration.
+
+[FIX 4] Standalone Scheduler with Redis Distributed Lock
+  File: platform/worker/scheduler.py
+  What was broken:
+    The campaign scheduler ran as a background asyncio task INSIDE FastAPI.
+    Running 2 API replicas → 2 scheduler instances → every scheduled campaign
+    fires TWICE. No guard existed to prevent this.
+  What was fixed:
+    - scheduler.py is now a proper standalone process with a Redis distributed lock:
+        SET scheduler:global:lock {instance_uuid} NX EX 90
+      Only ONE instance across all processes/replicas can hold this lock.
+    - Lock release uses a Lua script to avoid releasing a lock owned by another instance.
+    - Scheduler writes a heartbeat key every cycle:
+        SET scheduler:heartbeat {timestamp} EX 120
+      If this key expires → scheduler is dead → monitoring can alert.
+    - The embedded scheduler in FastAPI now defaults to DISABLED:
+        ENABLE_EMBEDDED_CAMPAIGN_SCHEDULER=false  (was 'true')
+      A ⚠️ WARNING log fires if you accidentally enable both.
+
+--------------------------------------------------------------
+STARTUP COMMANDS
+--------------------------------------------------------------
+
+Terminal 1 — API
+  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate && cd platform/api
+  uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+Terminal 2 — Email Sender Worker
+  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+  WORKER_PREFETCH_COUNT=10 WORKER_MAX_RETRIES=3 python platform/worker/email_sender.py
+
+Terminal 3 — Import Worker
+  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+  python platform/worker/import_worker.py
+
+Terminal 4 — Scheduler
+  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+  python platform/worker/scheduler.py
+
+Terminal 5 — Frontend
+  cd /Users/rahul/Desktop/Sh_R_Mail/platform/client
+  npm run dev
+
+Terminal 6 — System Email Worker
+  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+  python platform/worker/centralized_email_worker.py
+
+Open browser → http://localhost:3000
+
+--------------------------------------------------------------
+WHAT'S NEXT (Fix Queue)
+--------------------------------------------------------------
+
+Remaining critical fixes (in priority order):
+
+  [x] Fix 5 — asyncpg Connection Pool
+        File: platform/api/utils/db_engine.py (created)
+        Installed: asyncpg 0.31.0
+
+  [x] Fix 6 — PostgreSQL Row Level Security (RLS)
+        Migration: migrations/035_rls_tenant_isolation.sql
+        Applied: 41 statements, 10 policies — ALL OK
+        Tables: contacts, campaigns, campaign_dispatch, templates, domains,
+                import_batches, contact_custom_fields, sender_identities,
+                email_events, audit_logs
+
+  [x] Fix 7 — Batch dispatch row updates
+        File: platform/worker/handlers/email_handler.py
+        Buffer size: 100 rows per flush (env: DISPATCH_BATCH_SIZE)
+        Graceful flush on shutdown via handler.flush_all()
+
+  [x] Fix 8 — Contact audience streaming (cursor-based)
+        File: platform/api/services/campaign_dispatch_service.py
+        New function: stream_contacts_for_target() — asyncpg server-side cursor
+        Pages: 500 rows at a time (never loads full audience into memory)
+

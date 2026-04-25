@@ -42,7 +42,15 @@ class BulkDeleteRequest(BaseModel):
 
 class UpdateContactRequest(BaseModel):
     email: str
+    first_name: str
+    last_name: str
     custom_fields: Dict[str, str] = {}
+
+
+class BulkTagRequest(BaseModel):
+    contact_ids: List[str]
+    tags: List[str]
+    action: str = "add"  # "add" or "remove"
 
 
 class ImportInitializeRequest(BaseModel):
@@ -342,6 +350,73 @@ async def bulk_delete_contacts(
     return {"deleted_count": deleted_count}
 
 
+@router.get("/tags")
+async def get_all_tags(tenant_id: str = Depends(require_active_tenant)):
+    """Fetch all unique tags used by this tenant"""
+    try:
+        # Use a raw query via rpc if available, or fetch all tags and unique them in Python
+        # For simplicity and given the scale, we'll fetch them from the contacts rows
+        # In a high-volume prod env, we'd use a dedicated 'tags' table.
+        res = db.client.table("contacts")\
+            .select("tags")\
+            .eq("tenant_id", tenant_id)\
+            .not_.is_("tags", "null")\
+            .execute()
+        
+        all_tags = set()
+        for row in res.data or []:
+            if row.get("tags"):
+                all_tags.update(row["tags"])
+        
+        return sorted(list(all_tags))
+    except Exception as e:
+        logger.error(f"Tags fetch error: {e}")
+        return []
+
+
+@router.post("/bulk-tag")
+async def bulk_tag_contacts(
+    body: BulkTagRequest,
+    tenant_id: str = Depends(require_active_tenant),
+    _ = Depends(require_admin_or_owner)
+):
+    """Add or remove tags for multiple contacts"""
+    if not body.contact_ids:
+        raise HTTPException(status_code=400, detail="No contact IDs provided")
+
+    if not body.tags:
+        raise HTTPException(status_code=400, detail="No tags provided")
+
+    # Fetch existing tags for these contacts
+    res = db.client.table("contacts")\
+        .select("id, tags")\
+        .eq("tenant_id", tenant_id)\
+        .in_("id", body.contact_ids)\
+        .execute()
+    
+    updates = []
+    for row in res.data or []:
+        current_tags = set(row.get("tags") or [])
+        new_tags = set(body.tags)
+        
+        if body.action == "add":
+            updated_tags = list(current_tags.union(new_tags))
+        else:
+            updated_tags = list(current_tags.difference(new_tags))
+            
+        updates.append({
+            "id": row["id"],
+            "tenant_id": tenant_id,
+            "tags": updated_tags
+        })
+    
+    if updates:
+        # Batch upsert updates (on conflict id)
+        db.client.table("contacts").upsert(updates).execute()
+
+    return {"updated_count": len(updates)}
+
+
 @router.delete("/all")
 async def delete_all_contacts(tenant_id: str = Depends(require_active_tenant), _ = Depends(require_admin_or_owner)):
     """Delete ALL contacts for tenant (reset)"""
@@ -381,8 +456,8 @@ class ResolveErrorRequest(BaseModel):
     batch_id: str
     error_index: int
     email: str
-    first_name: Optional[str] = ""
-    last_name: Optional[str] = ""
+    first_name: str
+    last_name: str
 
 
 @router.post("/resolve-error")
@@ -421,13 +496,19 @@ async def resolve_error(
     if not can_add:
         raise HTTPException(status_code=400, detail=f"Plan limit reached. {stats['current']}/{stats['limit']} contacts")
 
+    first_name = body.first_name.strip()
+    last_name = body.last_name.strip()
+
+    if not first_name or not last_name:
+        raise HTTPException(status_code=400, detail="First Name and Last Name are required.")
+
     # Add the contact
     contact_data = {
         "tenant_id": tenant_id,
         "email": email,
         "email_domain": ContactService.extract_email_domain(email),
-        "first_name": body.first_name.strip() or None,
-        "last_name": body.last_name.strip() or None,
+        "first_name": first_name,
+        "last_name": last_name,
         "import_batch_id": body.batch_id,
         "created_by_user_id": jwt_payload.user_id
     }
@@ -532,6 +613,8 @@ async def update_contact(
             tenant_id=tenant_id,
             contact_id=contact_id,
             email=body.email,
+            first_name=body.first_name,
+            last_name=body.last_name,
             custom_fields=body.custom_fields
         )
         if not contact:

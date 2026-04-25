@@ -234,24 +234,41 @@ class ContactService:
         invalid_contacts = []
         
         for idx, contact in enumerate(contacts):
-            email = contact.get("email", "").strip()
-            
+            # Enforce required fields: email, first_name, last_name
+            email = str(contact.get("email", "") or "").strip().lower()
+            first_name = contact.get("first_name", "").strip()
+            last_name = contact.get("last_name", "").strip()
+
             if not email or not ContactService.validate_email(email):
                 invalid_contacts.append({
                     "row": idx + 1,
                     "email": email,
-                    "first_name": contact.get("first_name", ""),
-                    "last_name": contact.get("last_name", ""),
+                    "first_name": first_name,
+                    "last_name": last_name,
                     "reason": "Invalid email format"
                 })
                 continue
             
+            if not first_name or not last_name:
+                missing_fields = []
+                if not first_name: missing_fields.append("First Name")
+                if not last_name: missing_fields.append("Last Name")
+                
+                invalid_contacts.append({
+                    "row": idx + 1,
+                    "email": email,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "reason": f"Required fields missing: {', '.join(missing_fields)}"
+                })
+                continue
+
             row = {
                 "tenant_id": tenant_id,
                 "email": email.lower(),
                 "email_domain": ContactService.extract_email_domain(email),
-                "first_name": contact.get("first_name", "").strip() or None,
-                "last_name": contact.get("last_name", "").strip() or None
+                "first_name": first_name,
+                "last_name": last_name
             }
             if "created_by_user_id" in contact:
                 row["created_by_user_id"] = contact["created_by_user_id"]
@@ -418,6 +435,8 @@ class ContactService:
         tenant_id: str,
         contact_id: str,
         email: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
         custom_fields: Optional[Dict[str, Any]] = None
     ) -> Dict:
         """Update a contact email and custom fields."""
@@ -425,9 +444,20 @@ class ContactService:
         if not normalized_email or not ContactService.validate_email(normalized_email):
             raise ValueError("Invalid email format")
 
+        first_name_val = first_name.strip() if first_name else ""
+        last_name_val = last_name.strip() if last_name else ""
+
+        if not first_name_val or not last_name_val:
+            missing = []
+            if not first_name_val: missing.append("First Name")
+            if not last_name_val: missing.append("Last Name")
+            raise ValueError(f"Required fields missing: {', '.join(missing)}")
+
         payload: Dict[str, Any] = {
             "email": normalized_email,
             "email_domain": ContactService.extract_email_domain(normalized_email),
+            "first_name": first_name_val,
+            "last_name": last_name_val,
             "custom_fields": custom_fields or {}
         }
 

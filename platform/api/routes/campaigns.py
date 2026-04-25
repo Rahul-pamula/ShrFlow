@@ -101,18 +101,21 @@ async def list_campaigns(
     tenant_id: str = Depends(require_active_tenant),
     jwt_payload: JWTPayload = Depends(verify_jwt_token)
 ):
-    """List all campaigns for the specific Tenant (excluding archived) with O(1) Pagination"""
+    """List tenant campaigns with O(1) pagination, including archived when requested."""
     from utils.supabase_client import db
-    
-    # Base query for data
-    query = db.client.table("campaigns").select("id, name, subject, status, created_at, scheduled_at").eq("tenant_id", tenant_id).is_("is_archived", "false")
-    
-    # Base query for total count (O(1) metadata)
-    count_query = db.client.table("campaigns").select("id", count="exact").eq("tenant_id", tenant_id).is_("is_archived", "false")
-    
-    if status:
-        query = query.eq("status", status)
-        count_query = count_query.eq("status", status)
+
+    query = db.client.table("campaigns").select("id, name, subject, status, created_at, scheduled_at, is_archived").eq("tenant_id", tenant_id)
+    count_query = db.client.table("campaigns").select("id", count="exact").eq("tenant_id", tenant_id)
+
+    if status == "archived":
+        query = query.is_("is_archived", "true")
+        count_query = count_query.is_("is_archived", "true")
+    else:
+        query = query.is_("is_archived", "false")
+        count_query = count_query.is_("is_archived", "false")
+        if status:
+            query = query.eq("status", status)
+            count_query = count_query.eq("status", status)
         
     query = apply_data_isolation(query, jwt_payload)
     count_query = apply_data_isolation(count_query, jwt_payload)
@@ -125,9 +128,14 @@ async def list_campaigns(
     # Execute Paginated Data
     offset = (page - 1) * limit
     result = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+    campaigns = result.data or []
+
+    if status == "archived":
+        for campaign in campaigns:
+            campaign["status"] = "archived"
     
     return {
-        "campaigns": result.data,
+        "campaigns": campaigns,
         "meta": {
             "total": total,
             "page": page,
@@ -135,6 +143,44 @@ async def list_campaigns(
             "total_pages": total_pages
         }
     }
+
+@router.post("/{campaign_id}/archive")
+async def archive_campaign(campaign_id: str, tenant_id: str = Depends(require_active_tenant), jwt_payload: JWTPayload = Depends(verify_jwt_token)):
+    """Archive a non-draft campaign without deleting analytics."""
+    from utils.supabase_client import db
+
+    result = db.client.table("campaigns").select("status, created_by_user_id, is_archived").eq("id", campaign_id).eq("tenant_id", tenant_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    campaign = result.data[0]
+    if jwt_payload.role == "member" and campaign.get("created_by_user_id") != jwt_payload.user_id:
+        raise HTTPException(status_code=403, detail="You can only archive campaigns that you created.")
+    if campaign.get("is_archived"):
+        return {"status": "archived", "id": campaign_id, "message": "Campaign is already archived."}
+    if campaign["status"] == "draft":
+        raise HTTPException(status_code=400, detail="Draft campaigns should be deleted instead of archived.")
+
+    db.client.table("campaigns").update({"is_archived": True}).eq("id", campaign_id).eq("tenant_id", tenant_id).execute()
+    return {"status": "archived", "id": campaign_id, "message": "Campaign has been archived."}
+
+@router.post("/{campaign_id}/unarchive")
+async def unarchive_campaign(campaign_id: str, tenant_id: str = Depends(require_active_tenant), jwt_payload: JWTPayload = Depends(verify_jwt_token)):
+    """Restore an archived campaign to the active workflow."""
+    from utils.supabase_client import db
+
+    result = db.client.table("campaigns").select("status, created_by_user_id, is_archived").eq("id", campaign_id).eq("tenant_id", tenant_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    campaign = result.data[0]
+    if jwt_payload.role == "member" and campaign.get("created_by_user_id") != jwt_payload.user_id:
+        raise HTTPException(status_code=403, detail="You can only restore campaigns that you created.")
+    if not campaign.get("is_archived"):
+        return {"status": campaign["status"], "id": campaign_id, "message": "Campaign is already active."}
+
+    db.client.table("campaigns").update({"is_archived": False}).eq("id", campaign_id).eq("tenant_id", tenant_id).execute()
+    return {"status": "restored", "id": campaign_id, "message": "Campaign restored to the active workflow."}
 
 @router.get("/{campaign_id}")
 async def get_campaign(campaign_id: str, tenant_id: str = Depends(require_active_tenant), jwt_payload: JWTPayload = Depends(verify_jwt_token)):
@@ -577,4 +623,51 @@ async def send_test_email(campaign_id: str, request: TestEmailRequest, tenant_id
         "status": "queued",
         "message": f"Test email successfully queued in RabbitMQ to {request.recipient_email}",
         "subject": subject
+    }
+
+@router.post("/{campaign_id}/duplicate")
+async def duplicate_campaign(campaign_id: str, tenant_id: str = Depends(require_active_tenant), jwt_payload: JWTPayload = Depends(verify_jwt_token)):
+    """Duplicate an existing campaign (Tenant Scoped)."""
+    from utils.supabase_client import db
+    
+    # 1. Fetch original campaign
+    result = db.client.table("campaigns").select("*").eq("id", campaign_id).eq("tenant_id", tenant_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+        
+    original = result.data[0]
+    
+    # 2. Prepare new data
+    new_campaign_id = str(uuid.uuid4())
+    
+    # Handle naming (Copy)
+    base_name = original['name']
+    if " (Copy)" in base_name:
+        # Avoid nested (Copy) (Copy)
+        base_name = base_name.split(" (Copy)")[0]
+    
+    new_name = f"{base_name} (Copy)"
+    
+    data = {
+        "id": new_campaign_id,
+        "tenant_id": tenant_id,
+        "name": new_name,
+        "subject": original["subject"],
+        "body_html": original["body_html"],
+        "from_name": original["from_name"],
+        "from_prefix": original["from_prefix"],
+        "domain_id": str(original["domain_id"]) if original.get("domain_id") else None,
+        "status": "draft",
+        "created_at": datetime.now().isoformat(),
+        "created_by_user_id": jwt_payload.user_id,
+        "is_archived": False
+    }
+    
+    # 3. Insert new campaign
+    db.client.table("campaigns").insert(data).execute()
+    
+    return {
+        "status": "duplicated",
+        "id": new_campaign_id,
+        "message": f"Campaign duplicated as '{new_name}'"
     }

@@ -90,6 +90,8 @@ async def get_campaign_analytics(
 
     unique_opens  = len(set(e["contact_id"] for e in opens if e["contact_id"]))
 
+    attempted = sent + failed
+
     def rate(num, denom):
         return round((num / denom) * 100, 2) if denom > 0 else 0.0
 
@@ -104,7 +106,7 @@ async def get_campaign_analytics(
             "unsubscribes":    len(unsubs),
             # Rates
             "open_rate":       rate(unique_opens, sent),
-            "bounce_rate":     rate(len(bounces) + failed, sent),
+            "bounce_rate":     rate(len(bounces) + failed, attempted),
             "unsubscribe_rate": rate(len(unsubs), sent),
         },
         "sources": {
@@ -247,7 +249,8 @@ async def get_sender_health(tenant_id: str = Depends(require_active_tenant)):
 def _health_response(sent, opens, clicks, bounces, spam):
     def rate(n, d): return round((n / d) * 100, 2) if d > 0 else 0.0
 
-    bounce_rate = rate(bounces, sent)
+    attempted = sent + bounces
+    bounce_rate = rate(bounces, attempted)
     spam_rate   = rate(spam, sent)
     open_rate   = rate(opens, sent)
 

@@ -86,6 +86,60 @@ class EmailHandler:
         self.tracking_secret = tracking_secret
         self.smtp_client = None
 
+        # ── Fix 7: Batch dispatch update buffer ──────────────────────
+        # Instead of 1 HTTP call per sent email (100k emails = 100k calls),
+        # we buffer updates and flush every DISPATCH_BATCH_SIZE messages.
+        # This reduces DB round-trips by ~99% for large campaigns.
+        self._dispatch_buffer: list[dict] = []
+        self._dispatch_batch_size = int(os.getenv("DISPATCH_BATCH_SIZE", "100"))
+        self._buffer_lock = asyncio.Lock()
+
+    @staticmethod
+    def _is_ses_recipient_verification_error(error: Exception) -> bool:
+        message = str(error).lower()
+        return (
+            "email address is not verified" in message
+            or "identities failed the check" in message
+        )
+
+    async def _buffer_dispatch_update(self, dispatch_id: str, campaign_id: str, recipient_id: str, message_id: str | None) -> None:
+        """Add a DISPATCHED row to the buffer; flush when batch is full."""
+        async with self._buffer_lock:
+            self._dispatch_buffer.append({
+                "id": dispatch_id,
+                "campaign_id": campaign_id,
+                "subscriber_id": recipient_id,
+                "status": "DISPATCHED",
+                "ses_message_id": message_id,
+                "external_msg_id": message_id,
+            })
+            if len(self._dispatch_buffer) >= self._dispatch_batch_size:
+                await self._flush_dispatch_buffer()
+
+    async def _flush_dispatch_buffer(self) -> None:
+        """
+        Flush buffered dispatch updates to Supabase in a single upsert.
+        Must be called under self._buffer_lock.
+        """
+        if not self._dispatch_buffer:
+            return
+        batch = self._dispatch_buffer[:]
+        self._dispatch_buffer.clear()
+        try:
+            # upsert on id — sets status, message IDs, and timestamps for all rows at once
+            self.db.table("campaign_dispatch").upsert(
+                [{**row, "sent_at": "now()", "updated_at": "now()"} for row in batch],
+                on_conflict="id",
+            ).execute()
+            logger.info(f"[BATCH] Flushed {len(batch)} dispatch updates to DB.")
+        except Exception as e:
+            logger.error(f"[BATCH] Batch dispatch flush failed: {e} — rows lost: {len(batch)}")
+
+    async def flush_all(self) -> None:
+        """Flush any remaining buffered rows. Call on graceful shutdown."""
+        async with self._buffer_lock:
+            await self._flush_dispatch_buffer()
+
     async def _get_smtp_client(self):
         if self.smtp_client and self.smtp_client.is_connected:
             return self.smtp_client
@@ -249,19 +303,12 @@ class EmailHandler:
                     await asyncio.sleep(random.uniform(0.1, 0.3))
                     message_id = f"sim-{random.randint(100000, 999999)}"
 
-                # 5. Mark DISPATCHED
-                self.db.table("campaign_dispatch")\
-                    .update({
-                        "status": "DISPATCHED",
-                        "ses_message_id": message_id,
-                        "external_msg_id": message_id,
-                        "sent_at": "now()",
-                        "updated_at": "now()"
-                    })\
-                    .eq("id", dispatch_id)\
-                    .execute()
-
-                logger.info(f"[{dispatch_id}] Status → DISPATCHED (msg_id={message_id})")
+                # 5. Buffer DISPATCHED update and flush before completion check so
+                # the campaign does not remain "sending" while successful rows are
+                # still only held in worker memory.
+                await self._buffer_dispatch_update(dispatch_id, campaign_id, recipient_id, message_id)
+                await self.flush_all()
+                logger.info(f"[{dispatch_id}] Buffered DISPATCHED (msg_id={message_id})")
 
                 # 6. Auto-complete campaign
                 await self._check_campaign_completion(campaign_id)
@@ -273,7 +320,9 @@ class EmailHandler:
                 attempts = int(message.headers.get("attempts", 0) if message.headers else 0)
                 logger.error(f"Worker Error processing message (attempt {attempts + 1}/{self.max_retries}): {e}")
 
-                if attempts + 1 < self.max_retries:
+                is_sandbox_verification_error = self._is_ses_recipient_verification_error(e)
+
+                if attempts + 1 < self.max_retries and not is_sandbox_verification_error:
                     try:
                         delay = min(2 ** attempts, 30)
                         if delay > 0:
@@ -283,8 +332,7 @@ class EmailHandler:
                             headers={"attempts": attempts + 1},
                             delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                         )
-                        exchange = await message.channel.get_exchange("")
-                        await exchange.publish(new_msg, routing_key=self.queue_name)
+                        await message.channel.default_exchange.publish(new_msg, routing_key=self.queue_name)
                         await message.ack()
                         return
                     except Exception as requeue_err:
@@ -299,12 +347,17 @@ class EmailHandler:
                             .update({"status": "FAILED", "error_log": str(e), "updated_at": "now()"})\
                             .eq("id", dispatch_id)\
                             .execute()
-                    if recipient_id:
+                    if recipient_id and not is_sandbox_verification_error:
                         self.db.table("contacts")\
                             .update({"status": "bounced", "bounce_reason": str(e)})\
                             .eq("id", recipient_id)\
                             .execute()
                         logger.warning(f"[{dispatch_id}] Contact {recipient_id} marked as bounced")
+                    elif recipient_id and is_sandbox_verification_error:
+                        logger.warning(
+                            f"[{dispatch_id}] SES sandbox recipient verification failure for contact {recipient_id}; "
+                            "dispatch marked failed without changing contact status"
+                        )
                     
                     # Auto-complete check after failure
                     if campaign_id:
