@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
 
@@ -10,7 +10,8 @@ interface User {
     fullName: string;
     tenantId: string;
     tenantStatus: 'onboarding' | 'active' | 'pending_join';
-    role: string;
+    role: 'MAIN_OWNER' | 'FRANCHISE_OWNER' | 'MANAGER' | 'MEMBER';
+    workspaceType: 'MAIN' | 'FRANCHISE';
     onboardingRequired?: boolean;
 }
 
@@ -22,6 +23,7 @@ interface AuthContextType {
     login: (email: string, password: string, redirectPath?: string) => Promise<void>;
     signup: (email: string, password: string, tenantName: string, firstName?: string, lastName?: string, redirectPath?: string) => Promise<void>;
     logout: () => Promise<void>;
+    handleAuthSuccess: (data: any, emailOverride?: string) => User;
     refreshUserStatus: () => Promise<void>;
     updateUserContext: (updates: Partial<User>) => void;
     switchWorkspace: (tenantId: string) => Promise<void>;
@@ -34,6 +36,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const VALID_THEMES = new Set(['light', 'dark', 'system']);
 
+const computeUIRole = (dbRole?: string | null, workspaceType?: string | null): 'MAIN_OWNER' | 'FRANCHISE_OWNER' | 'MANAGER' | 'MEMBER' => {
+    const role = (dbRole || 'member').toLowerCase();
+    const type = workspaceType || 'MAIN';
+    
+    if (role === 'main_owner' || (role === 'owner' && type === 'MAIN')) return 'MAIN_OWNER';
+    if (role === 'franchise_owner' || (role === 'owner' && type === 'FRANCHISE')) return 'FRANCHISE_OWNER';
+    if (role === 'manager' || role === 'admin') return 'MANAGER';
+    return 'MEMBER';
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -44,60 +56,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isRefreshing = useRef<boolean>(false);
 
+    const handleAuthSuccess = useCallback((data: any, emailOverride?: string): User => {
+        const userData: User = {
+            userId: data.user_id || '',
+            email: data.email || emailOverride || '',
+            fullName: data.full_name || (data.email || emailOverride || '').split('@')[0] || 'User',
+            tenantId: data.tenant_id || '',
+            tenantStatus: (data.tenant_status || 'active') as User['tenantStatus'],
+            onboardingRequired: data.onboarding_required === true || data.onboarding_required === 'true',
+            workspaceType: (data.workspace_type || 'MAIN').toUpperCase() as 'MAIN' | 'FRANCHISE',
+            role: (data.ui_role || computeUIRole(data.role || 'owner', data.workspace_type)) as User['role'],
+        };
+
+        if (data.token) {
+            localStorage.setItem('auth_token', data.token);
+            document.cookie = `auth_token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+        }
+        
+        if (data.tenant_status) {
+            document.cookie = `tenant_status=${data.tenant_status}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+        }
+
+        localStorage.setItem('user_data', JSON.stringify(userData));
+        
+        setUser(userData);
+        setIsAuthenticated(true);
+        return userData;
+    }, []);
+
     // Check for existing session on mount
     useEffect(() => {
         const checkAuth = async () => {
             const token = localStorage.getItem('auth_token');
-            const userData = localStorage.getItem('user_data');
+            const userDataStr = localStorage.getItem('user_data');
 
-            let activeToken = token;
-
-            if (token && userData) {
+            if (token) {
                 try {
-                    // Check token expiration
-                    const payload = JSON.parse(atob(token.split('.')[1]));
-                    const expiryTime = payload.exp * 1000;
-                    
-                    if (Date.now() >= expiryTime - 60000) {
-                        // Token expired or about to expire, attempt refresh
-                        activeToken = await silentRefresh();
-                        if (!activeToken) throw new Error('Session expired');
+                    // 1. Initial hydration from localStorage (fast UI)
+                    if (userDataStr) {
+                        const parsedUser = JSON.parse(userDataStr);
+                        // IMPORTANT: Use the stored user as is (it already has UI roles)
+                        setUser(parsedUser);
+                        setIsAuthenticated(true);
                     }
 
-                    const parsedUser = JSON.parse(userData);
-                    setUser(parsedUser);
-                    setIsAuthenticated(true);
+                    // 2. Verification & Refresh from backend (Source of Truth)
+                    const meRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                    });
 
-                    // ── Theme Sync ────────────────────────────────────────────
-                    // Step 1: localStorage was already applied by next-themes (instant, no flicker).
-                    // Step 2: Hydrate from backend — backend wins after login.
-                    try {
-                        const meRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
-                            headers: { Authorization: `Bearer ${activeToken}` },
-                        });
-                        if (meRes.ok) {
-                            const meData = await meRes.json();
-                            const backendTheme = meData.theme_preference as string;
-                            if (VALID_THEMES.has(backendTheme)) {
-                                setTheme(backendTheme);
-                            }
+                    if (meRes.ok) {
+                        const meData = await meRes.json();
+                        
+                        // Sync theme
+                        if (VALID_THEMES.has(meData.theme_preference)) {
+                            setTheme(meData.theme_preference);
                         }
-                    } catch {
-                        // Silent: network errors should not break auth
-                    }
-                    // ─────────────────────────────────────────────────────────
 
-                    // Redirect based on tenant status
-                    if (parsedUser.tenantStatus === 'pending_join' && pathname !== '/waiting-room') {
-                        router.push('/waiting-room');
-                    } else if (parsedUser.tenantStatus === 'onboarding' && !pathname?.startsWith('/onboarding')) {
-                        router.push('/onboarding/workspace');
+                        // Re-hydrate session with fresh DB data
+                        handleAuthSuccess({
+                            ...meData,
+                            token: token // Keep existing token
+                        });
+                    } else if (meRes.status === 401) {
+                        logout();
                     }
                 } catch (e) {
-
-                    console.error('Auth check error:', e);
-                    localStorage.removeItem('auth_token');
-                    localStorage.removeItem('user_data');
+                    console.error('Auth hydration error:', e);
+                    logout();
                 }
             }
             setIsLoading(false);
@@ -105,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         checkAuth();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [handleAuthSuccess]);
 
 
 
@@ -113,97 +139,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (isLoading) return;
 
-        const publicRoutes = ['/', '/login', '/signup', '/docs', '/forgot-password', '/reset-password', '/verify-email', '/waiting-room', '/team/join', '/contact', '/pricing'];
+        const publicRoutes = ['/', '/login', '/signup', '/docs', '/forgot-password', '/reset-password', '/verify-email', '/waiting-room', '/team/join', '/contact', '/pricing', '/auth/callback'];
         const isPublicRoute = publicRoutes.includes(pathname || '');
         const isOnboardingRoute = pathname?.startsWith('/onboarding');
 
-        console.log('Auth check:', { isAuthenticated, tenantStatus: user?.tenantStatus, pathname, cookie: document.cookie });
+        if (isOnboardingRoute && isAuthenticated) return;
 
-        // Allow onboarding routes if authenticated
-        if (isOnboardingRoute && isAuthenticated) {
-            return;
-        }
-
-        // If not authenticated and trying to access protected route
         if (!isAuthenticated && !isPublicRoute && !isOnboardingRoute) {
-            if (pathname !== '/login') { // Only navigate if not already on login
-                router.push('/login');
-            }
+            if (pathname !== '/login') router.push('/login');
             return;
         }
 
-        // If authenticated but in onboarding status, force onboarding
         if (isAuthenticated && user?.tenantStatus === 'onboarding' && !isOnboardingRoute && !isPublicRoute) {
-            console.log('Redirecting to onboarding (AuthContext)');
-            if (pathname !== '/onboarding/workspace') { // Only navigate if not already there
-                router.push('/onboarding/workspace');
-            }
+            if (pathname !== '/onboarding/workspace') router.push('/onboarding/workspace');
             return;
         }
 
-        // If authenticated but in pending_join status, force waiting room
         if (isAuthenticated && user?.tenantStatus === 'pending_join' && pathname !== '/waiting-room' && !isPublicRoute) {
-            console.log('Redirecting to waiting room (AuthContext)');
             router.push('/waiting-room');
             return;
         }
 
-        // If authenticated and active, redirect away from auth pages
         if (isAuthenticated && user?.tenantStatus === 'active' && (pathname === '/login' || pathname === '/signup')) {
             router.push('/dashboard');
             return;
         }
-    }, [isLoading, isAuthenticated, pathname, user]); // Removed 'router' to prevent re-render loop
+    }, [isLoading, isAuthenticated, pathname, user]);
 
     const login = async (email: string, password: string, redirectPath?: string) => {
         setIsLoading(true);
-
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),
             });
 
             if (!response.ok) {
                 const err = await response.json();
-                console.error('Login failed:', err);
                 throw new Error(err.detail || 'Login failed');
             }
 
             const data = await response.json();
+            const userData = handleAuthSuccess(data, email);
 
-            // Store JWT token in both localStorage AND cookies
-            localStorage.setItem('auth_token', data.token);
-
-            // Set cookie for middleware (expires in 7 days)
-            document.cookie = `auth_token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-            document.cookie = `email_verified=${data.email_verified ? 'true' : 'false'}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-
-            // Store user data
-            const userData = {
-                userId: data.user_id,
-                email: email,
-                fullName: data.full_name || email.split('@')[0],
-                tenantId: data.tenant_id,
-                tenantStatus: data.tenant_status,
-                emailVerified: data.email_verified,
-                role: data.role || 'owner',
-            };
-            localStorage.setItem('user_data', JSON.stringify(userData));
-
-            // Set tenant_status cookie for middleware
-            document.cookie = `tenant_status=${data.tenant_status}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-
-            setUser(userData);
-            setIsAuthenticated(true);
-
-            // Redirect based on tenant status
-            if (data.tenant_status === 'pending_join') {
+            if (userData.tenantStatus === 'pending_join') {
                 router.push('/waiting-room');
-            } else if (data.tenant_status === 'onboarding') {
+            } else if (userData.tenantStatus === 'onboarding') {
                 router.push('/onboarding/workspace');
             } else {
                 router.push(redirectPath || '/dashboard');
@@ -226,7 +208,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     email,
                     password,
                     full_name: `${firstName || ''} ${lastName || ''}`.trim() || email.split('@')[0],
-                    // If tenantName is empty (invite flow), don't create a default workspace
                     ...(tenantName ? { tenant_name: tenantName } : {})
                 }),
             });
@@ -236,7 +217,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 throw new Error(err.detail || 'Signup failed');
             }
 
-            // After successful signup, immediately log them in (and redirect appropriately)
             await login(email, password, redirectPath);
         } catch (error) {
             console.error('Signup error:', error);
@@ -247,36 +227,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const silentRefresh = async (): Promise<string | null> => {
-        if (isRefreshing.current) {
-            console.log('Skipping silent refresh: already in progress');
-            return null;
-        }
-
+        if (isRefreshing.current) return null;
         isRefreshing.current = true;
         try {
-            console.log('Initiating silent token refresh...');
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`, {
                 method: 'POST',
-                credentials: 'include', // Sends HttpOnly cookie
+                credentials: 'include',
             });
 
             if (response.ok) {
                 const data = await response.json();
                 localStorage.setItem('auth_token', data.token);
-                // We keep a small max-age just so middleware can pick it up. Standard session length.
                 document.cookie = `auth_token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-                console.log('Silent token refresh successful');
                 return data.token;
             } else {
-                const errorData = await response.json().catch(() => ({}));
-                console.warn('Refresh failed on server:', response.status, errorData);
-                throw new Error(errorData.detail || `Refresh failed with status ${response.status}`);
+                throw new Error('Refresh failed');
             }
         } catch (err) {
-            console.error('Silent refresh failed error:', err);
-            // Don't call logout() directly here to avoid redirect loops on public pages
-            localStorage.removeItem('auth_token');
-            localStorage.removeItem('user_data');
+            console.error('Silent refresh failed:', err);
+            logout();
             return null;
         } finally {
             isRefreshing.current = false;
@@ -285,16 +254,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const logout = async () => {
         if (debounceTimer.current) clearTimeout(debounceTimer.current);
-        
         try {
             await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
                 method: 'POST',
                 credentials: 'include',
             });
         } catch (err) {
-            console.warn('Logout API call failed, proceeding to clear local state', err);
+            console.warn('Logout API failed', err);
         }
-
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user_data');
         document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
@@ -302,16 +269,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         window.location.href = '/login';
     };
 
-    /**
-     * setThemePref
-     * 1. Applies the theme to the UI instantly (next-themes handles localStorage).
-     * 2. Debounces the backend PATCH call by 500ms to avoid API spam.
-     * Never passes raw user input to setTheme — always validates first.
-     */
     const setThemePref = (theme: 'light' | 'dark' | 'system') => {
         if (!VALID_THEMES.has(theme)) return;
-        setTheme(theme); // Instant UI update
-
+        setTheme(theme);
         if (debounceTimer.current) clearTimeout(debounceTimer.current);
         debounceTimer.current = setTimeout(async () => {
             const token = localStorage.getItem('auth_token');
@@ -325,18 +285,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     },
                     body: JSON.stringify({ theme }),
                 });
-            } catch {
-                // Silent: theme change still applied locally even if API fails
-            }
+            } catch {}
         }, 500);
     };
 
     const refreshUserStatus = async () => {
-        // Update user status after completing onboarding
         const userData = localStorage.getItem('user_data');
         if (userData) {
             const parsedUser = JSON.parse(userData);
             parsedUser.tenantStatus = 'active';
+            parsedUser.role = computeUIRole(parsedUser.role, parsedUser.workspaceType);
             localStorage.setItem('user_data', JSON.stringify(parsedUser));
             setUser(parsedUser);
         }
@@ -344,7 +302,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const updateUserContext = (updates: Partial<User>) => {
         if (!user) return;
-        const updatedUser = { ...user, ...updates };
+        const updatedUser = { ...user, ...updates, role: computeUIRole(updates.role ?? user.role, updates.workspaceType ?? user.workspaceType) };
         setUser(updatedUser);
         localStorage.setItem('user_data', JSON.stringify(updatedUser));
     };
@@ -364,36 +322,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 body: JSON.stringify({ tenant_id: tenantId }),
             });
 
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.detail || 'Failed to switch workspace');
-            }
+            if (!response.ok) throw new Error('Failed to switch workspace');
 
             const data = await response.json();
-
-            // Structure matches the data we get on login
-            const userData: User = {
-                userId: data.user_id,
-                tenantId: data.tenant_id,
-                email: user?.email || '', // email doesn't change
-                tenantStatus: data.tenant_status,
-                onboardingRequired: data.onboarding_required,
-                // preserve old data for things like full_name or avatar
-                role: data.role || 'member',
-                fullName: user?.fullName || '',
-            };
-
-            // 1. Update localStorage
-            localStorage.setItem('auth_token', data.token);
-            localStorage.setItem('user_data', JSON.stringify(userData));
-
-            // 2. Update cookies for Next.js middleware
-            document.cookie = `auth_token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-            document.cookie = `tenant_status=${data.tenant_status}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-
-            // 3. Force a hard reload to clear any cached states in memory and re-render everything
-            window.location.href = '/dashboard';
-            
+            handleAuthSuccess(data);
+            router.push('/dashboard');
         } catch (error) {
             console.error('Workspace switch error:', error);
             throw error;
@@ -401,7 +334,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setIsLoading(false);
         }
     };
-
 
     return (
         <AuthContext.Provider
@@ -413,6 +345,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 login,
                 signup,
                 logout,
+                handleAuthSuccess,
                 refreshUserStatus,
                 updateUserContext,
                 switchWorkspace,
@@ -427,8 +360,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
     const context = useContext(AuthContext);
-    if (context === undefined) {
-        throw new Error('useAuth must be used within an AuthProvider');
-    }
+    if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
     return context;
 }

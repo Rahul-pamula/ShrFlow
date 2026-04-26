@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Copy, Plus, Activity, RefreshCw, Globe, CheckCircle2, ShieldAlert, X } from 'lucide-react';
+import { can } from '@/utils/permissions';
+import { useRouter } from 'next/navigation';
 import { useToast, Badge, Button, ConfirmModal, EmptyState, InlineAlert, InspectorPanel, KeyValueList, PageHeader, SectionCard, StatCard } from '@/components/ui';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
@@ -57,8 +59,15 @@ function DnsTable({
 }
 
 export default function DomainSettingsPage() {
-    const { token } = useAuth();
+    const { token, user } = useAuth();
+    const router = useRouter();
     const { success, error, info } = useToast();
+
+    useEffect(() => {
+        if (user && !can(user, 'VIEW_DOMAIN')) {
+            router.replace('/dashboard');
+        }
+    }, [user, router]);
     const [domains, setDomains] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
@@ -175,6 +184,10 @@ export default function DomainSettingsPage() {
     ];
 
     const selectedStatusVariant = selectedDomain?.status === 'verified' ? 'success' : selectedDomain?.status === 'failed' ? 'danger' : 'warning';
+
+    if (!user || !can(user, 'VIEW_DOMAIN')) {
+        return null;
+    }
 
     return (
         <div className="space-y-8 pb-8">

@@ -51,68 +51,123 @@ A franchise owner is not modeled as a special extra role in the parent workspace
 The following diagram should be read from top to bottom. It starts at the ShrMail platform layer and moves downward into workspace structure, team structure, franchise branching, exports, and governance.
 
 ```mermaid
-flowchart TD
-    A["ShrMail Platform"] --> B["Workspace / Tenant Boundary"]
+graph TD
 
-    B --> C["Workspace Identity"]
-    C --> C1["Organization Profile"]
-    C --> C2["Branding"]
-    C --> C3["Legal Address"]
-    C --> C4["Domains and Senders"]
-    C --> C5["API Keys and Technical Settings"]
+%% ROOT
+A[ShrMail Platform]
 
-    B --> D["Workspace Membership Model"]
-    D --> D1["Owner"]
-    D --> D2["Manager"]
-    D --> D3["Member"]
-    D --> D4["Pending Invitations"]
-    D --> D5["Removed / Historical Membership State"]
+%% WORKSPACE
+A --> B[Workspace / Tenant]
 
-    D1 --> E["Administrative Actions"]
-    D2 --> F["Operational Actions"]
-    D3 --> G["Limited Participation Actions"]
+%% USER MANAGEMENT
+B --> C[User Management]
 
-    E --> E1["Invite Manager"]
-    E --> E2["Invite Member"]
-    E --> E3["Invite Franchise Owner"]
-    E --> E4["Transfer Ownership"]
-    E --> E5["Remove Access"]
-    E --> E6["Export Team Data"]
-    E --> E7["Delete Franchise"]
+C --> C1[Owner 👑]
+C --> C2[Manager 🧑💼]
+C --> C3[Member 👨💻]
 
-    F --> F1["Manage Campaigns"]
-    F --> F2["Manage Contacts"]
-    F --> F3["Invite Members if policy allows"]
-    F --> F4["Export permitted members if policy allows"]
+%% OWNER POWERS
+C1 --> O1[Invite Users]
+C1 --> O2[Assign Roles]
+C1 --> O3[Remove Users]
+C1 --> O4[Transfer Ownership 🔁]
+C1 --> O5[Billing Control]
+C1 --> O6[Approve Requests]
+C1 --> O7[Approve Franchise]
 
-    G --> G1["Participate in campaigns"]
-    G --> G2["View reports if policy allows"]
-    G --> G3["Leave workspace"]
+%% MANAGER CREATION FLOW
+O1 --> MAdd[Owner invites user]
+MAdd --> MRole[Assign as Manager]
 
-    B --> H["Franchise Workspace Branch"]
-    H --> H1["Child Workspace Created"]
-    H1 --> H2["Child Workspace Owner"]
-    H1 --> H3["Child Workspace Managers"]
-    H1 --> H4["Child Workspace Members"]
-    H1 --> H5["Child Workspace Campaigns"]
-    H1 --> H6["Child Workspace Contacts"]
-    H1 --> H7["Child Workspace Billing / Settings"]
-    H1 --> H8["Child Workspace Domains / Senders"]
+%% MEMBER CREATION FLOW
+O1 --> MbAdd[Owner/Manager invites user]
+MbAdd --> MbRole[Assign as Member]
 
-    B --> I["Exports and Reporting"]
-    I --> I1["Sync Download for Small Exports"]
-    I --> I2["Async Export Job for Large Exports"]
-    I2 --> I3["Secure Storage"]
-    I3 --> I4["Signed Download Link"]
-    I4 --> I5["User Notification Email"]
+%% OWNERSHIP TRANSFER
+O4 --> T1[Select Existing Member]
+O4 --> T2[Or Invite New User]
+T1 --> T3[Make New Owner]
+T2 --> T3
+T3 --> T4[Old Owner becomes Manager (optional)]
 
-    B --> J["Governance and Audit"]
-    J --> J1["Audit Logs"]
-    J --> J2["Retention Policy"]
-    J --> J3["Soft Delete for Membership"]
-    J --> J4["Last Owner Protection"]
-    J --> J5["Franchise Deletion Policy"]
-    J --> J6["Export History"]
+%% MANAGER PERMISSIONS
+C2 --> M1[Create Campaigns]
+C2 --> M2[Send Emails]
+C2 --> M3[Manage Contacts]
+C2 --> M4[View Analytics]
+C2 --> M5[View Billing]
+C2 --> M6[Invite Members]
+C2 --> M7[Request Actions]
+
+M7 --> MR1[Request Billing Change]
+M7 --> MR2[Request Franchise]
+
+%% MEMBER PERMISSIONS
+C3 --> MB1[Create Campaigns]
+C3 --> MB2[Send Emails]
+C3 --> MB3[View Analytics]
+C3 --> MB4[View Billing]
+
+%% CORE SYSTEMS
+B --> D[Core Systems]
+
+D --> D1[Campaigns]
+D --> D2[Contacts]
+D --> D3[Analytics]
+D --> D4[Billing & Usage]
+D --> D5[Senders]
+D --> D6[Permissions]
+D --> D7[Requests]
+D --> D8[Notifications]
+D --> D9[Activity Logs]
+
+%% BILLING RULES
+D4 --> BR1[Only Owner can Change Plan]
+D4 --> BR2[Manager/Member View Only]
+D4 --> BR3[Usage Shared Across Workspace]
+
+%% REQUEST FLOW
+D7 --> R1[Manager Creates Request]
+R1 --> R2[Owner Reviews]
+R2 --> R3[Approve or Reject]
+R3 --> R4[Execute if Approved]
+
+%% SENDER RULES
+D5 --> S1[Owner Verifies Sender]
+S1 --> S2[All Members Use Sender]
+
+%% FRANCHISE SYSTEM
+B --> E[Franchise System]
+
+E --> E1[Manager/Owner Request Franchise]
+E1 --> E2[Owner Approval Required]
+E2 --> E3[Create New Workspace]
+
+%% FRANCHISE WORKSPACE
+E3 --> F[Franchise Workspace]
+
+F --> F1[Franchise Owner]
+F --> F2[Franchise Managers]
+F --> F3[Franchise Members]
+
+F --> F4[Own Campaigns]
+F --> F5[Own Contacts]
+F --> F6[Own Billing]
+F --> F7[Own Senders]
+
+%% RELATIONSHIP
+B --> REL1[Parent Workspace]
+REL1 --> REL2[Linked to Franchise Workspace]
+
+%% RULES
+B --> G[Global Rules]
+
+G --> G1[Tenant = Container]
+G --> G2[Owner = Highest Authority]
+G --> G3[Manager Cannot Change Billing]
+G --> G4[Manager Cannot Create Franchise Directly]
+G --> G5[Members Have Limited Access]
+G --> G6[Franchise is Separate Workspace]
 ```
 
 ## 8.1 Workspace Administration Foundation
@@ -233,6 +288,7 @@ The Manager can:
 - view operational analytics
 - possibly invite Members if this is allowed by policy
 - possibly export limited user lists if policy allows
+- **Request Actions:** Create requests for high-level actions (Billing changes, Franchise creation) for Owner review.
 
 The Manager cannot:
 
@@ -333,7 +389,7 @@ The transfer process should:
 - require a deliberate confirmation step
 - prevent the workspace from becoming ownerless
 - record the previous owner and the new owner in audit history
-- optionally downgrade the previous owner to Manager or remove them later by separate action
+- **Role Downgrade:** The previous owner can optionally be downgraded to Manager or Member.
 
 ### Removal and Historical Continuity
 
@@ -368,22 +424,26 @@ The parent workspace may create and monitor franchises, but parent users should 
 
 ### Franchise Creation Lifecycle
 
-The parent Owner creates a franchise through an invitation-driven provisioning process.
+The creation of a franchise follows the Request-Approval orchestration.
 
 ```mermaid
 flowchart TD
-    A["Parent Owner opens Franchise Accounts"] --> B["Click Add Franchise Owner"]
-    B --> C["Enter franchise owner email and initial details"]
-    C --> D["Create pending child workspace"]
-    D --> E["Create franchise invitation"]
-    E --> F["Send franchise invite email"]
-    F --> G["Invitee accepts token"]
-    G --> H["Create or attach user identity"]
-    H --> I["Assign user as Owner of child workspace"]
-    I --> J["Activate child workspace"]
-    J --> K["Franchise owner logs into isolated workspace"]
-    K --> L["Franchise owner manages own team and data"]
-    L --> M["Audit franchise creation and activation"]
+    A["Manager or Owner opens Franchise Management"] --> B["Initiate 'Request Franchise'"]
+    B --> C["Enter target franchise owner email and details"]
+    C --> D{"Requester is Owner?"}
+    
+    D -->|Yes| E["Auto-Approve Request"]
+    D -->|No| F["Queue Request for Owner Review"]
+    
+    F --> G["Owner Reviews & Approves"]
+    G --> E
+    
+    E --> H["Create pending child workspace"]
+    H --> I["Create & Send franchise invitation"]
+    I --> J["Invitee accepts token"]
+    J --> K["Assign user as Owner of child workspace"]
+    K --> L["Activate child workspace"]
+    L --> M["Audit franchise activation"]
 ```
 
 ### Parent and Child Workspace Rules
@@ -647,6 +707,81 @@ flowchart TD
 ```
 
 ## Detailed Delivery Checklist
+
+### 8.1 Foundation ✅
+
+- ✅ workspace administration shell documented
+- ✅ workspace identity model documented
+- ✅ membership model documented
+- ✅ parent-child workspace model documented (`parent_tenant_id`, `workspace_type`, `franchise_status` columns — migration 036)
+- ✅ permission enforcement model documented
+- ✅ `_normalize_public_role()` — `admin` → `manager` mapping in backend
+- ✅ `_normalize_storage_role()` — `manager` → `admin` reverse mapping for DB writes
+- ✅ `AuthContext.tsx` — `normalizeRole()` maps JWT role `admin` → `manager`
+
+### 8.2 Team Management ✅
+
+- ✅ Team Members page (`/settings/team`)
+- ✅ Owner / Manager / Member role definitions
+- ✅ invite manager flow
+- ✅ invite member flow
+- ✅ resend invite flow
+- ✅ cancel invite flow
+- ✅ invitation acceptance flow (`/team/join`)
+- ✅ inviter name shown on pending invites
+- ✅ change role flow
+- ✅ remove member flow
+- ✅ leave workspace flow (Profile page → "Leave Workspace" section)
+- ✅ ownership transfer flow (with confirm modal)
+- ✅ last-owner protection (backend enforced via `_count_owners()`)
+- ✅ export members flow (CSV sync download)
+
+### 8.3 Franchise Lifecycle ✅
+
+- ✅ Franchise Accounts page (`/settings/franchises`)
+- ✅ add franchise flow (owner email + workspace name)
+- ✅ child workspace provisioning (`POST /team/franchises`)
+- ✅ `pending_invite / active / suspended / deleted` franchise statuses
+- ✅ `workspace_type` and `franchise_status` constraints on `tenants` table (migration 036)
+- ✅ `invite_type` and `franchise_tenant_id` on `team_invitations` table (migration 036)
+- ✅ franchise suspend / reactivate / delete actions
+- ✅ franchise isolation — each franchise is its own tenant with independent campaigns, contacts, senders
+
+### 8.4 Export ✅
+
+- ✅ Team Members export control (owner/manager only)
+- ✅ role-based export permissions
+- ✅ sync export path (CSV download button on Team page)
+- ✅ export history page (`/settings/exports`)
+- ✅ audit log written on every export event
+
+### 8.5 Governance ✅
+
+- ✅ audit log coverage (all team, franchise, ownership, export, request actions)
+- ✅ Audit History page (`/settings/audit`) with filterable feed and CSV export
+- ✅ membership soft-delete policy — content stays, access revoked
+- ✅ destructive confirmation dialogs across all high-risk actions
+- ✅ franchise deletion audit trail
+- ✅ export logging and download traceability
+- ✅ Manager Request System (`workspace_requests` table — migration 037)
+  - ✅ `POST /team/workspace-requests` — manager submits request
+  - ✅ `GET /team/workspace-requests` — owner sees all, manager sees own
+  - ✅ `POST /team/workspace-requests/{id}/approve` — owner approves
+  - ✅ `POST /team/workspace-requests/{id}/reject` — owner rejects
+  - ✅ Workspace Requests page (`/settings/requests`) with role-aware UI
+
+---
+
+## Final Notes
+
+This document intentionally reads as a system design chapter rather than a lightweight phase bullet list. Phase 8 is operationally important because it defines who controls a workspace, how teams expand, how franchises branch, how sensitive member data is exported, and how ShrMail preserves trust during destructive or high-risk actions.
+
+The most important principle across the whole phase is simple:
+
+workspace ownership is stable, membership is controlled, franchise boundaries are isolated, exports are governed, and every sensitive action is visible in history.
+
+**Phase 8 Status: ✅ COMPLETE**
+
 
 ### 8.1 Foundation
 

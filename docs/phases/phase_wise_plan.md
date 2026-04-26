@@ -1391,6 +1391,126 @@ graph TD
 
 ### Phase 8 Parent Architecture Flow
 
+```mermaid
+graph TD
+
+%% ROOT
+A[ShrMail Platform]
+
+%% WORKSPACE
+A --> B[Workspace / Tenant]
+
+%% USER MANAGEMENT
+B --> C[User Management]
+
+C --> C1[Owner 👑]
+C --> C2[Manager 🧑💼]
+C --> C3[Member 👨💻]
+
+%% OWNER POWERS
+C1 --> O1[Invite Users]
+C1 --> O2[Assign Roles]
+C1 --> O3[Remove Users]
+C1 --> O4[Transfer Ownership 🔁]
+C1 --> O5[Billing Control]
+C1 --> O6[Approve Requests]
+C1 --> O7[Approve Franchise]
+
+%% MANAGER CREATION FLOW
+O1 --> MAdd[Owner invites user]
+MAdd --> MRole[Assign as Manager]
+
+%% MEMBER CREATION FLOW
+O1 --> MbAdd[Owner/Manager invites user]
+MbAdd --> MbRole[Assign as Member]
+
+%% OWNERSHIP TRANSFER
+O4 --> T1[Select Existing Member]
+O4 --> T2[Or Invite New User]
+T1 --> T3[Make New Owner]
+T2 --> T3
+T3 --> T4[Old Owner becomes Manager (optional)]
+
+%% MANAGER PERMISSIONS
+C2 --> M1[Create Campaigns]
+C2 --> M2[Send Emails]
+C2 --> M3[Manage Contacts]
+C2 --> M4[View Analytics]
+C2 --> M5[View Billing]
+C2 --> M6[Invite Members]
+C2 --> M7[Request Actions]
+
+M7 --> MR1[Request Billing Change]
+M7 --> MR2[Request Franchise]
+
+%% MEMBER PERMISSIONS
+C3 --> MB1[Create Campaigns]
+C3 --> MB2[Send Emails]
+C3 --> MB3[View Analytics]
+C3 --> MB4[View Billing]
+
+%% CORE SYSTEMS
+B --> D[Core Systems]
+
+D --> D1[Campaigns]
+D --> D2[Contacts]
+D --> D3[Analytics]
+D --> D4[Billing & Usage]
+D --> D5[Senders]
+D --> D6[Permissions]
+D --> D7[Requests]
+D --> D8[Notifications]
+D --> D9[Activity Logs]
+
+%% BILLING RULES
+D4 --> BR1[Only Owner can Change Plan]
+D4 --> BR2[Manager/Member View Only]
+D4 --> BR3[Usage Shared Across Workspace]
+
+%% REQUEST FLOW
+D7 --> R1[Manager Creates Request]
+R1 --> R2[Owner Reviews]
+R2 --> R3[Approve or Reject]
+R3 --> R4[Execute if Approved]
+
+%% SENDER RULES
+D5 --> S1[Owner Verifies Sender]
+S1 --> S2[All Members Use Sender]
+
+%% FRANCHISE SYSTEM
+B --> E[Franchise System]
+
+E --> E1[Manager/Owner Request Franchise]
+E1 --> E2[Owner Approval Required]
+E2 --> E3[Create New Workspace]
+
+%% FRANCHISE WORKSPACE
+E3 --> F[Franchise Workspace]
+
+F --> F1[Franchise Owner]
+F --> F2[Franchise Managers]
+F --> F3[Franchise Members]
+
+F --> F4[Own Campaigns]
+F --> F5[Own Contacts]
+F --> F6[Own Billing]
+F --> F7[Own Senders]
+
+%% RELATIONSHIP
+B --> REL1[Parent Workspace]
+REL1 --> REL2[Linked to Franchise Workspace]
+
+%% RULES
+B --> G[Global Rules]
+
+G --> G1[Tenant = Container]
+G --> G2[Owner = Highest Authority]
+G --> G3[Manager Cannot Change Billing]
+G --> G4[Manager Cannot Create Franchise Directly]
+G --> G5[Members Have Limited Access]
+G --> G6[Franchise is Separate Workspace]
+```
+
 ### Phase 8 Scope Summary
 - `Phase 8.1` establishes the workspace admin foundation, roles, settings baseline, and shared data model.
 - `Phase 8.2` implements team management for Owners, Managers, and Members.

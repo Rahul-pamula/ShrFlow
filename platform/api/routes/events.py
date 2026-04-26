@@ -6,17 +6,21 @@ Returns a merged activity feed from:
 """
 from fastapi import APIRouter, Depends, Query
 from typing import Optional
-from utils.jwt_middleware import require_active_tenant
+from utils.jwt_middleware import require_active_tenant, JWTPayload
+from utils.permissions import require_permission
 
 router = APIRouter(prefix="/events", tags=["Events"])
+
 
 @router.get("/")
 async def list_events(
     page: int = 1,
     limit: int = 50,
     event_type: Optional[str] = None,
-    tenant_id: str = Depends(require_active_tenant)
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("VIEW_ANALYTICS"))
 ):
+
     """
     Activity feed: merge dispatch events + tracking events
     """
@@ -44,14 +48,13 @@ async def list_events(
     result = dispatch_query.execute()
     records = result.data or []
 
-    # Count total for pagination
-    count_query = db.client.table("campaign_dispatch")\
-        .select("id", count="exact")\
-        .eq("campaigns.tenant_id", tenant_id)
+    # Count total for pagination (Scoped to tenant)
     count_res = db.client.table("campaign_dispatch")\
-        .select("id", count="exact")\
+        .select("id, campaigns!inner(tenant_id)", count="exact")\
+        .eq("campaigns.tenant_id", tenant_id)\
         .execute()
     total = count_res.count or len(records)
+
 
     events = []
     for r in records:
@@ -96,7 +99,11 @@ async def list_events(
 
 
 @router.get("/summary")
-async def events_summary(tenant_id: str = Depends(require_active_tenant)):
+async def events_summary(
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("VIEW_ANALYTICS"))
+):
+
     """Quick stats card for dashboard (O(1) Space Complexity)"""
     from utils.supabase_client import db
     

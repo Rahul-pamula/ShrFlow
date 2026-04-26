@@ -19,6 +19,7 @@ import {
     StopCircle,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { can } from "@/utils/permissions";
 import { Button, ConfirmModal, EmptyState, FilterBar, InlineAlert, PageHeader, SectionCard, TableToolbar, StatusBadge, useToast } from "@/components/ui";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
@@ -43,7 +44,7 @@ function actionButtonClass(tone: "default" | "success" | "warning" | "danger" = 
 }
 
 export default function CampaignsPage() {
-    const { token } = useAuth();
+    const { token, user } = useAuth();
     const router = useRouter();
     const { success, error: toastError, info } = useToast();
     const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -187,10 +188,12 @@ export default function CampaignsPage() {
                 title="Campaigns"
                 subtitle="Create, schedule, pause, and archive outbound campaigns from one place."
                 action={
-                    <Button onClick={handleCreateNew}>
-                        <Plus className="h-4 w-4" />
-                        Create Campaign
-                    </Button>
+                    can(user, 'CREATE_CAMPAIGN') ? (
+                        <Button onClick={handleCreateNew}>
+                            <Plus className="h-4 w-4" />
+                            Create Campaign
+                        </Button>
+                    ) : undefined
                 }
             />
 
@@ -296,7 +299,7 @@ export default function CampaignsPage() {
                     icon={activeTab === "archived" ? <Archive className="h-10 w-10" /> : <Megaphone className="h-10 w-10" />}
                     title={activeTab === "archived" ? "No archived campaigns" : activeTab === "all" ? "No campaigns yet" : `No ${activeTab} campaigns`}
                     description={activeTab === "archived" ? "Archived campaigns will appear here for later reference." : "Create your first campaign to start sending and tracking performance."}
-                    action={activeTab !== "archived" ? <Button onClick={handleCreateNew}>Create Campaign</Button> : undefined}
+                    action={activeTab !== "archived" && can(user, 'CREATE_CAMPAIGN') ? <Button onClick={handleCreateNew}>Create Campaign</Button> : undefined}
                 />
             )}
 

@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Mail, Shield, Trash2, UserPlus, Users, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Mail, RefreshCcw, Shield, Trash2, UserCog, UserPlus, Users, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { can } from '@/utils/permissions';
+import { useRouter } from 'next/navigation';
 import { Badge, Button, ConfirmModal, InlineAlert, Input, KeyValueList, ModalShell, PageHeader, SectionCard, StatCard, TableToolbar, useToast } from '@/components/ui';
+
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
-type Role = 'owner' | 'admin' | 'member';
+type Role = 'owner' | 'manager' | 'member';
 type IsolationModel = 'team' | 'agency';
 
 interface Member {
@@ -15,7 +18,6 @@ interface Member {
     email: string;
     full_name: string | null;
     role: Role;
-    isolation_model?: IsolationModel;
     joined_at: string;
 }
 
@@ -26,17 +28,20 @@ interface Invite {
     expires_at: string;
     created_at: string;
     inviter_id?: string;
+    inviter_name?: string | null;
 }
 
 const selectClassName = 'rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20';
 
 function RoleBadge({ role, isCurrentUser = false }: { role: Role; isCurrentUser?: boolean }) {
-    const variant = role === 'owner' ? 'warning' : role === 'admin' ? 'info' : 'outline';
+    const variant = role === 'owner' ? 'warning' : role === 'manager' ? 'info' : 'outline';
     return <Badge variant={variant}>{role}{isCurrentUser ? ' (You)' : ''}</Badge>;
 }
 
 export default function TeamSettingsPage() {
-    const { token, user } = useAuth();
+    const { token, user, isLoading: authLoading } = useAuth();
+    const router = useRouter();
+
     const { success, error } = useToast();
 
     const [members, setMembers] = useState<Member[]>([]);
@@ -44,34 +49,50 @@ export default function TeamSettingsPage() {
     const [loading, setLoading] = useState(true);
     const [showInviteModal, setShowInviteModal] = useState(false);
     const [inviteEmail, setInviteEmail] = useState('');
-    const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member');
+    const [inviteRole, setInviteRole] = useState<'manager' | 'member'>('member');
     const [inviteIsolation, setInviteIsolation] = useState<IsolationModel>('team');
     const [inviteStatus, setInviteStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
     const [pendingRemoveMember, setPendingRemoveMember] = useState<Member | null>(null);
     const [pendingCancelInvite, setPendingCancelInvite] = useState<Invite | null>(null);
+    const [pendingTransferMember, setPendingTransferMember] = useState<Member | null>(null);
     const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
     const [confirmBusy, setConfirmBusy] = useState(false);
+    const [resendingInviteId, setResendingInviteId] = useState<string | null>(null);
+    const [exportBusy, setExportBusy] = useState(false);
+    const [showExportModal, setShowExportModal] = useState(false);
+    const [exportRole, setExportRole] = useState<'all' | 'manager' | 'member'>('all');
+    const [exportInvitedBy, setExportInvitedBy] = useState<string>('all');
 
     const membersAbortRef = useRef<AbortController | null>(null);
     const invitesAbortRef = useRef<AbortController | null>(null);
 
     const myRole = members.find((member) => member.user_id === user?.userId)?.role || 'member';
-    const isAdminOrOwner = myRole === 'admin' || myRole === 'owner';
+    const isManagerOrOwner = myRole === 'manager' || myRole === 'owner';
 
     const metrics = useMemo(() => ([
         { label: 'Active Members', value: members.length.toString() },
         { label: 'Pending Invites', value: invites.length.toString() },
-        { label: 'Owners / Admins', value: members.filter((member) => member.role !== 'member').length.toString() },
-        { label: 'Agency-Isolated', value: members.filter((member) => member.isolation_model === 'agency').length.toString() },
+        { label: 'Owners / Managers', value: members.filter((member) => member.role !== 'member').length.toString() },
     ]), [members, invites]);
 
     useEffect(() => {
-        fetchTeam();
+        if (!authLoading) {
+            if (user && !can(user, 'VIEW_TEAM')) {
+                router.replace('/dashboard');
+            } else if (token) {
+                fetchTeam();
+            }
+        }
         return () => {
             membersAbortRef.current?.abort();
             invitesAbortRef.current?.abort();
         };
-    }, [token]);
+    }, [authLoading, token, user]);
+
+    if (authLoading || (user && !can(user, 'VIEW_TEAM'))) {
+        return null;
+    }
+
 
     const fetchTeam = async () => {
         if (!token) return;
@@ -111,7 +132,6 @@ export default function TeamSettingsPage() {
     const resetInviteForm = () => {
         setInviteEmail('');
         setInviteRole('member');
-        setInviteIsolation('team');
         setInviteStatus('idle');
     };
 
@@ -127,7 +147,6 @@ export default function TeamSettingsPage() {
                 body: JSON.stringify({
                     email: inviteEmail,
                     role: inviteRole,
-                    isolation_model: inviteIsolation,
                 }),
             });
 
@@ -212,7 +231,90 @@ export default function TeamSettingsPage() {
         }
     };
 
-    const handleChangeMember = async (userId: string, field: 'role' | 'isolation_model', value: string) => {
+    const handleResendInvite = async (invite: Invite) => {
+        setResendingInviteId(invite.id);
+        try {
+            const res = await fetch(`${API_BASE}/team/invites/${invite.id}/resend`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.detail || 'Failed to resend invitation.');
+            }
+            success(`Invitation resent to ${invite.email}.`);
+            fetchTeam();
+        } catch (resendError: any) {
+            console.error(resendError);
+            error(resendError.message || 'Could not resend that invitation.');
+        } finally {
+            setResendingInviteId(null);
+        }
+    };
+
+    const handleExportMembers = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setExportBusy(true);
+        try {
+            const params = new URLSearchParams();
+            if (exportRole !== 'all') params.append('role', exportRole);
+            if (exportInvitedBy !== 'all') params.append('invited_by', exportInvitedBy);
+            
+            const res = await fetch(`${API_BASE}/team/members/export?${params.toString()}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.detail || 'Failed to export members.');
+            }
+
+            const blob = await res.blob();
+            const disposition = res.headers.get('Content-Disposition') || '';
+            const match = disposition.match(/filename="?([^"]+)"?/i);
+            const filename = match?.[1] || 'workspace_team_members.csv';
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            setShowExportModal(false);
+            success('Team member export downloaded.');
+        } catch (exportError: any) {
+            console.error(exportError);
+            error(exportError.message || 'Could not export workspace members.');
+        } finally {
+            setExportBusy(false);
+        }
+    };
+
+    const handleTransferOwnership = async () => {
+        if (!pendingTransferMember) return;
+        setConfirmBusy(true);
+        try {
+            const res = await fetch(`${API_BASE}/team/members/${pendingTransferMember.user_id}/transfer-ownership`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ new_owner_role_for_current_user: 'manager' }),
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.detail || 'Failed to transfer ownership.');
+            }
+            success(`Ownership transferred to ${pendingTransferMember.email}.`);
+            setPendingTransferMember(null);
+            fetchTeam();
+        } catch (transferError: any) {
+            console.error(transferError);
+            error(transferError.message || 'Could not transfer ownership.');
+        } finally {
+            setConfirmBusy(false);
+        }
+    };
+
+    const handleChangeMember = async (userId: string, field: 'role', value: string) => {
         try {
             const res = await fetch(`${API_BASE}/team/members/${userId}/role`, {
                 method: 'PATCH',
@@ -240,8 +342,21 @@ export default function TeamSettingsPage() {
         <div className="space-y-8 pb-8">
             <PageHeader
                 title="Team Members"
-                subtitle="Manage workspace access, roles, and data isolation so campaign work and infrastructure control stay appropriately separated."
-                action={isAdminOrOwner ? <Button onClick={() => setShowInviteModal(true)}><UserPlus className="h-4 w-4" />Invite Member</Button> : null}
+                subtitle="Manage workspace access and roles so campaign work and infrastructure control stay appropriately separated."
+                action={
+                    isManagerOrOwner ? (
+                        <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" onClick={() => setShowExportModal(true)}>
+                                <Download className="mr-2 h-4 w-4" />
+                                Export
+                            </Button>
+                            <Button size="sm" onClick={() => setShowInviteModal(true)}>
+                                <UserPlus className="mr-2 h-4 w-4" />
+                                Invite Member
+                            </Button>
+                        </div>
+                    ) : undefined
+                }
             />
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -250,19 +365,19 @@ export default function TeamSettingsPage() {
                 ))}
             </div>
 
-            {!isAdminOrOwner && (
+            {!isManagerOrOwner && (
                 <InlineAlert
                     variant="info"
                     title="Workspace management is limited"
-                    description="Only owners and admins can invite members, remove users, or change workspace-level permissions."
+                    description="Only owners and managers can invite members, remove users, or change workspace-level permissions."
                 />
             )}
 
-            <SectionCard title="Active Members" description="Use roles for administrative scope and isolation modes for data visibility boundaries.">
+            <SectionCard title="Active Members" description="Use roles for administrative scope boundaries.">
                 <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)]">
                     <TableToolbar
                         title="Workspace Access"
-                        description="The person with owner access can control both role changes and isolation modes."
+                        description="The person with owner access can control role changes."
                         trailing={<Badge variant="outline">{members.length} active</Badge>}
                         className="rounded-none border-0 border-b border-[var(--border)]"
                     />
@@ -284,19 +399,6 @@ export default function TeamSettingsPage() {
 
                                     <div className="flex flex-col gap-3 lg:items-end">
                                         <div className="flex flex-wrap items-center gap-2">
-                                            {canEditMember && member.role !== 'owner' ? (
-                                                <select
-                                                    value={member.isolation_model || 'team'}
-                                                    onChange={(e) => handleChangeMember(member.user_id, 'isolation_model', e.target.value)}
-                                                    className={selectClassName}
-                                                >
-                                                    <option value="team">Team Mode</option>
-                                                    <option value="agency">Agency Mode</option>
-                                                </select>
-                                            ) : (
-                                                <Badge variant="outline">{member.role === 'owner' ? 'All Access' : `${member.isolation_model || 'team'} mode`}</Badge>
-                                            )}
-
                                             {canEditMember ? (
                                                 <select
                                                     value={member.role}
@@ -304,7 +406,7 @@ export default function TeamSettingsPage() {
                                                     className={selectClassName}
                                                 >
                                                     <option value="owner">Owner</option>
-                                                    <option value="admin">Admin</option>
+                                                    <option value="manager">Manager</option>
                                                     <option value="member">Member</option>
                                                 </select>
                                             ) : (
@@ -320,7 +422,13 @@ export default function TeamSettingsPage() {
                                                     Leave
                                                 </Button>
                                             )}
-                                            {isAdminOrOwner && member.role !== 'owner' && !isCurrentUser && (
+                                            {myRole === 'owner' && member.role !== 'owner' && !isCurrentUser && (
+                                                <Button variant="ghost" size="sm" onClick={() => setPendingTransferMember(member)}>
+                                                    <UserCog className="h-3.5 w-3.5" />
+                                                    Make Owner
+                                                </Button>
+                                            )}
+                                            {isManagerOrOwner && member.role !== 'owner' && !isCurrentUser && (
                                                 <Button variant="ghost" size="sm" className="text-[var(--danger)] hover:bg-[var(--danger-bg)] hover:text-[var(--danger)]" onClick={() => setPendingRemoveMember(member)}>
                                                     <Trash2 className="h-3.5 w-3.5" />
                                                     Remove
@@ -349,6 +457,7 @@ export default function TeamSettingsPage() {
                                         <div>
                                             <p className="text-sm font-semibold text-[var(--text-primary)]">{invite.email}</p>
                                             <p className="text-sm text-[var(--text-muted)]">Invited as {invite.role}</p>
+                                            {invite.inviter_name && <p className="text-xs text-[var(--text-muted)]">Sent by {invite.inviter_name}</p>}
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3">
@@ -357,7 +466,13 @@ export default function TeamSettingsPage() {
                                         ) : (
                                             <span className="text-xs text-[var(--text-muted)]">Expires {new Date(invite.expires_at).toLocaleDateString()}</span>
                                         )}
-                                        {(isAdminOrOwner || invite.inviter_id === user?.userId) && (
+                                        {(isManagerOrOwner || invite.inviter_id === user?.userId) && (
+                                            <Button variant="ghost" size="sm" onClick={() => handleResendInvite(invite)} isLoading={resendingInviteId === invite.id}>
+                                                <RefreshCcw className="h-3.5 w-3.5" />
+                                                Resend
+                                            </Button>
+                                        )}
+                                        {(isManagerOrOwner || invite.inviter_id === user?.userId) && (
                                             <Button variant="ghost" size="sm" className="text-[var(--danger)] hover:bg-[var(--danger-bg)] hover:text-[var(--danger)]" onClick={() => setPendingCancelInvite(invite)}>
                                                 <X className="h-3.5 w-3.5" />
                                                 Cancel Invite
@@ -371,18 +486,17 @@ export default function TeamSettingsPage() {
                 </SectionCard>
             )}
 
-            <SectionCard title="Roles & Isolation Permissions" description="This matrix keeps administrative control and data-visibility boundaries explicit across the workspace.">
+            <SectionCard title="Roles & Permissions" description="This matrix keeps administrative control boundaries explicit across the workspace.">
                 <KeyValueList
                     columns={2}
                     items={[
-                        { label: 'Owner', value: 'Full access', helper: 'Can manage roles, isolation modes, domains, and billing.' },
-                        { label: 'Admin', value: 'Operational admin', helper: 'Can manage domains, invites, and shared workspace operations.' },
-                        { label: 'Team Member', value: 'Shared workspace contributor', helper: 'Can create campaigns and import contacts against shared data.' },
-                        { label: 'Agency Member', value: 'Isolated contributor', helper: 'Can work in the workspace while seeing only their own data.' },
+                        { label: 'Owner', value: 'Full access', helper: 'Can manage roles, domains, and billing.' },
+                        { label: 'Manager', value: 'Operational manager', helper: 'Can manage domains, invites, and shared workspace operations.' },
+                        { label: 'Team Member', value: 'Shared workspace contributor', helper: 'Can create campaigns and import contacts.' },
                     ]}
                 />
                 <div className="mt-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)] p-4 text-sm text-[var(--text-muted)]">
-                    Owners and admins can manage sending domains and members. Isolation mode only changes what data a member can view, not whether they can create campaigns.
+                    Owners and managers can manage sending domains and members.
                 </div>
             </SectionCard>
 
@@ -394,8 +508,8 @@ export default function TeamSettingsPage() {
                     resetInviteForm();
                 }}
                 title="Invite Team Member"
-                description="An invitation link will be sent to their email. Choose both the workspace role and data visibility model before sending."
-                maxWidthClass="max-w-2xl"
+                description="An invitation link will be sent to their email. Choose the workspace role before sending."
+                maxWidthClass="max-w-md"
             >
                 <form onSubmit={handleSendInvite} className="space-y-6">
                     <Input
@@ -408,10 +522,10 @@ export default function TeamSettingsPage() {
                         autoFocus
                     />
 
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-6">
                         <SectionCard title="Workspace Role" description="Controls administrative permissions inside the workspace." noPadding className="border-0 bg-transparent">
                             <div className="grid gap-3">
-                                {(['member', 'admin'] as const).map((role) => (
+                                {(user?.role === 'MANAGER' ? ['member'] as const : ['member', 'manager'] as const).map((role) => (
                                     <button
                                         key={role}
                                         type="button"
@@ -419,26 +533,7 @@ export default function TeamSettingsPage() {
                                         className={`rounded-[var(--radius)] border p-4 text-left transition ${inviteRole === role ? 'border-[var(--accent)] bg-[var(--info-bg)]/40' : 'border-[var(--border)] bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)]'}`}
                                     >
                                         <p className="text-sm font-semibold text-[var(--text-primary)] capitalize">{role}</p>
-                                        <p className="mt-1 text-xs text-[var(--text-muted)]">{role === 'admin' ? 'Manage billing, domains, and member access.' : 'Build campaigns and work with audience data.'}</p>
-                                    </button>
-                                ))}
-                            </div>
-                        </SectionCard>
-
-                        <SectionCard title="Access Mode" description="Controls whether they see shared or isolated workspace data." noPadding className="border-0 bg-transparent">
-                            <div className="grid gap-3">
-                                {([
-                                    { value: 'team', label: 'Team Mode', description: 'Shares workspace campaigns, contacts, and history.' },
-                                    { value: 'agency', label: 'Agency Mode', description: 'Shows only the member’s own data and activity.' },
-                                ] as const).map((mode) => (
-                                    <button
-                                        key={mode.value}
-                                        type="button"
-                                        onClick={() => setInviteIsolation(mode.value)}
-                                        className={`rounded-[var(--radius)] border p-4 text-left transition ${inviteIsolation === mode.value ? 'border-[var(--accent)] bg-[var(--info-bg)]/40' : 'border-[var(--border)] bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)]'}`}
-                                    >
-                                        <p className="text-sm font-semibold text-[var(--text-primary)]">{mode.label}</p>
-                                        <p className="mt-1 text-xs text-[var(--text-muted)]">{mode.description}</p>
+                                        <p className="mt-1 text-xs text-[var(--text-muted)]">{role === 'manager' ? 'Manage domains, invites, and member access.' : 'Build campaigns and work with audience data.'}</p>
                                     </button>
                                 ))}
                             </div>
@@ -496,18 +591,98 @@ export default function TeamSettingsPage() {
             />
 
             <ConfirmModal
+                isOpen={Boolean(pendingTransferMember)}
+                onClose={() => setPendingTransferMember(null)}
+                onConfirm={handleTransferOwnership}
+                title="Transfer ownership?"
+                message={pendingTransferMember ? `${pendingTransferMember.email} will become the new owner of this workspace, and you will become a manager.` : 'Transfer ownership.'}
+                confirmLabel="Transfer Ownership"
+                isLoading={confirmBusy && Boolean(pendingTransferMember)}
+                variant="warning"
+            />
+
+            <ConfirmModal
                 isOpen={confirmLeaveOpen}
                 onClose={() => setConfirmLeaveOpen(false)}
                 onConfirm={handleLeaveWorkspace}
                 title="Leave workspace?"
-                message="You will lose access to campaigns, contacts, and workspace configuration. Verified domains or sender identities tied to this workspace may no longer be usable for you."
+                message="Are you sure you want to leave this workspace? You will lose access immediately."
                 confirmLabel="Leave Workspace"
-                isLoading={confirmBusy && confirmLeaveOpen}
+                isLoading={confirmBusy}
             >
                 <div className="rounded-[var(--radius)] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm text-[var(--text-primary)]">
                     You will need a fresh invitation to regain access later.
                 </div>
             </ConfirmModal>
+
+            <ModalShell
+                isOpen={showExportModal}
+                onClose={() => !exportBusy && setShowExportModal(false)}
+                title="Export Workspace Members"
+                description="Download a CSV file of members in this workspace."
+            >
+                <form onSubmit={handleExportMembers} className="space-y-4">
+                    <div className="space-y-4">
+                        <div>
+                            <label className="mb-1 block text-sm font-medium text-[var(--text-primary)]">
+                                Filter by Role
+                            </label>
+                            <select
+                                value={exportRole}
+                                onChange={(e) => setExportRole(e.target.value as any)}
+                                className={selectClassName + ' w-full'}
+                                disabled={exportBusy}
+                            >
+                                <option value="all">All Roles</option>
+                                <option value="manager">Managers Only</option>
+                                <option value="member">Members Only</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label className="mb-1 block text-sm font-medium text-[var(--text-primary)]">
+                                Filter by Inviter
+                            </label>
+                            <select
+                                value={exportInvitedBy}
+                                onChange={(e) => setExportInvitedBy(e.target.value)}
+                                className={selectClassName + ' w-full'}
+                                disabled={exportBusy || myRole === 'manager'}
+                            >
+                                <option value="all">All Members</option>
+                                {myRole === 'manager' ? (
+                                    <option value={user?.userId || 'me'}>Invited by Me</option>
+                                ) : (
+                                    <>
+                                        <option value={user?.userId || 'me'}>Invited by Me</option>
+                                        {members
+                                            .filter(m => m.role === 'manager' && m.user_id !== user?.userId)
+                                            .map(m => (
+                                                <option key={m.user_id} value={m.user_id}>
+                                                    Invited by {m.full_name || m.email}
+                                                </option>
+                                            ))
+                                        }
+                                    </>
+                                )}
+                            </select>
+                            {myRole === 'manager' && (
+                                <p className="mt-1 text-xs text-[var(--text-muted)]">
+                                    As a Manager, you can only export members you invited.
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                    <div className="mt-6 flex justify-end gap-3">
+                        <Button type="button" variant="outline" onClick={() => setShowExportModal(false)} disabled={exportBusy}>
+                            Cancel
+                        </Button>
+                        <Button type="submit" isLoading={exportBusy}>
+                            Download CSV
+                        </Button>
+                    </div>
+                </form>
+            </ModalShell>
         </div>
     );
 }

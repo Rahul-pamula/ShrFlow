@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MailCheck, Plus, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { can } from '@/utils/permissions';
 import { Badge, Button, ConfirmModal, EmptyState, InlineAlert, Input, KeyValueList, PageHeader, SectionCard, StatCard, TableToolbar, useToast } from '@/components/ui';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
@@ -23,7 +24,7 @@ interface Domain {
 const selectClassName = 'w-full rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20';
 
 export default function SenderIdentitiesPage() {
-    const { token } = useAuth();
+    const { token, user } = useAuth();
     const { success, error, info } = useToast();
 
     const [senders, setSenders] = useState<SenderIdentity[]>([]);
@@ -203,58 +204,60 @@ export default function SenderIdentitiesPage() {
 
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.6fr_1fr]">
                 <div className="space-y-6">
-                    <SectionCard
-                        title="Add New Sender"
-                        description="Create sender addresses from verified domains so campaigns use deliberate, auditable FROM identities."
-                    >
-                        {errorMessage && (
-                            <InlineAlert
-                                variant="danger"
-                                title="Could not add sender"
-                                description={errorMessage}
-                                icon={<ShieldAlert className="mt-0.5 h-4 w-4" />}
-                                className="mb-4"
-                            />
-                        )}
-                        <form onSubmit={handleAddSender} className="space-y-4">
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                <Input
-                                    label="Sender Prefix"
-                                    value={prefixInput}
-                                    onChange={(e) => setPrefixInput(e.target.value.replace(/[^a-zA-Z0-9.\-_]/g, ''))}
-                                    placeholder="hello"
-                                    helperText="Use safe mailbox characters only."
-                                    required
+                    {can(user, 'ADD_SENDER') && (
+                        <SectionCard
+                            title="Add New Sender"
+                            description="Create sender addresses from verified domains so campaigns use deliberate, auditable FROM identities."
+                        >
+                            {errorMessage && (
+                                <InlineAlert
+                                    variant="danger"
+                                    title="Could not add sender"
+                                    description={errorMessage}
+                                    icon={<ShieldAlert className="mt-0.5 h-4 w-4" />}
+                                    className="mb-4"
                                 />
-                                <div className="space-y-1.5">
-                                    <label className="block text-sm font-medium text-[var(--text-primary)]">Verified Domain</label>
-                                    <select
-                                        value={selectedDomain}
-                                        onChange={(e) => setSelectedDomain(e.target.value)}
-                                        className={selectClassName}
+                            )}
+                            <form onSubmit={handleAddSender} className="space-y-4">
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    <Input
+                                        label="Sender Prefix"
+                                        value={prefixInput}
+                                        onChange={(e) => setPrefixInput(e.target.value.replace(/[^a-zA-Z0-9.\-_]/g, ''))}
+                                        placeholder="hello"
+                                        helperText="Use safe mailbox characters only."
                                         required
-                                    >
-                                        {verifiedDomains.length === 0 ? (
-                                            <option value="">No verified domains found</option>
-                                        ) : (
-                                            verifiedDomains.map((domain) => (
-                                                <option key={domain.id} value={domain.domain_name}>@{domain.domain_name}</option>
-                                            ))
-                                        )}
-                                    </select>
+                                    />
+                                    <div className="space-y-1.5">
+                                        <label className="block text-sm font-medium text-[var(--text-primary)]">Verified Domain</label>
+                                        <select
+                                            value={selectedDomain}
+                                            onChange={(e) => setSelectedDomain(e.target.value)}
+                                            className="rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
+                                            required
+                                        >
+                                            {verifiedDomains.length === 0 ? (
+                                                <option value="">No verified domains found</option>
+                                            ) : (
+                                                verifiedDomains.map((domain) => (
+                                                    <option key={domain.id} value={domain.domain_name}>@{domain.domain_name}</option>
+                                                ))
+                                            )}
+                                        </select>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <Button type="submit" isLoading={isSubmitting} disabled={!prefixInput || !selectedDomain || verifiedDomains.length === 0}>
-                                    <Plus className="h-4 w-4" />
-                                    Add Sender
-                                </Button>
-                                <p className="text-sm text-[var(--text-muted)]">
-                                    Resulting address: <span className="font-medium text-[var(--text-primary)]">{prefixInput || 'prefix'}@{selectedDomain || 'domain.com'}</span>
-                                </p>
-                            </div>
-                        </form>
-                    </SectionCard>
+                                <div className="flex items-center gap-3">
+                                    <Button type="submit" isLoading={isSubmitting} disabled={!prefixInput || !selectedDomain || verifiedDomains.length === 0}>
+                                        <Plus className="h-4 w-4" />
+                                        Add Sender
+                                    </Button>
+                                    <p className="text-sm text-[var(--text-muted)]">
+                                        Resulting address: <span className="font-medium text-[var(--text-primary)]">{prefixInput || 'prefix'}@{selectedDomain || 'domain.com'}</span>
+                                    </p>
+                                </div>
+                            </form>
+                        </SectionCard>
+                    )}
 
                     <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)]">
                         <TableToolbar

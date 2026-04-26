@@ -16,6 +16,7 @@ export default function Header({ setMobileMenuOpen }: HeaderProps) {
     const pathname = usePathname();
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [workspaceName, setWorkspaceName] = useState<string | null>(null);
+    const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Fetch workspace name on mount
@@ -38,6 +39,28 @@ export default function Header({ setMobileMenuOpen }: HeaderProps) {
             }
         };
         fetchWorkspaceName();
+    }, [user]);
+
+    // Fetch pending workspace requests count for owners
+    useEffect(() => {
+        if (!user || (user.role !== 'MAIN_OWNER' && user.role !== 'FRANCHISE_OWNER')) return;
+        const fetchPendingRequests = async () => {
+            try {
+                const token = localStorage.getItem('auth_token');
+                if (!token) return;
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/team/requests`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const pending = data.filter((r: any) => r.status === 'pending');
+                    setPendingRequestsCount(pending.length);
+                }
+            } catch (err) {
+                console.error('Failed to fetch pending requests', err);
+            }
+        };
+        fetchPendingRequests();
     }, [user]);
 
     // Close dropdown on outside click
@@ -70,7 +93,7 @@ export default function Header({ setMobileMenuOpen }: HeaderProps) {
     const initials = (user.fullName || user.email || 'U').charAt(0).toUpperCase();
 
     // Map the internal role to a friendly label
-    const roleLabel = user.role === 'owner' ? 'Owner' : user.role === 'admin' ? 'Admin' : 'Member';
+    const roleLabel = user.role === 'MAIN_OWNER' ? 'Main Owner' : user.role === 'FRANCHISE_OWNER' ? 'Franchise Owner' : user.role === 'MANAGER' ? 'Manager' : 'Member';
 
 
 
@@ -107,11 +130,15 @@ export default function Header({ setMobileMenuOpen }: HeaderProps) {
             <div className="flex items-center gap-3 flex-1 justify-end relative" ref={dropdownRef}>
 
                 {/* Notifications Button */}
-                <button className="relative p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-full hover:bg-[var(--bg-secondary)] transition-colors">
+                <Link href="/settings/requests" className="relative p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-full hover:bg-[var(--bg-secondary)] transition-colors" title="Workspace Requests">
                     <Bell className="w-5 h-5" />
                     {/* Notification Dot */}
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[var(--ai-accent)] rounded-full border border-[var(--bg-primary)]"></span>
-                </button>
+                    {pendingRequestsCount > 0 && (
+                        <span className="absolute top-1 right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--danger)] text-[9px] font-bold text-white border-[1.5px] border-[var(--bg-primary)]">
+                            {pendingRequestsCount}
+                        </span>
+                    )}
+                </Link>
 
                 {/* Profile Avatar Button */}
                 <div className="h-8 w-[1px] bg-[var(--border)] mx-1 hidden sm:block"></div>
@@ -142,8 +169,8 @@ export default function Header({ setMobileMenuOpen }: HeaderProps) {
                             
                             <div className="flex items-center gap-2 mt-1">
                                 <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                                    user.role === 'owner' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 
-                                    user.role === 'admin' ? 'bg-[var(--accent)]/10 text-[var(--accent)] border-[var(--accent)]/20' : 
+                                    (user.role === 'MAIN_OWNER' || user.role === 'FRANCHISE_OWNER') ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 
+                                    user.role === 'MANAGER' ? 'bg-[var(--accent)]/10 text-[var(--accent)] border-[var(--accent)]/20' : 
                                     'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
                                 }`}>
                                     {roleLabel}

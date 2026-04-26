@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Plus, Search, Trash2, Copy, FileText, ChevronRight, Sparkles, LayoutTemplate } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
+import { can } from "@/utils/permissions";
+
 import { TEMPLATE_PRESETS } from "./templatePresets";
 import { Button, ConfirmModal, FilterBar, EmptyState, PageHeader, SectionCard, StatCard, useToast } from "@/components/ui";
 
@@ -24,7 +26,8 @@ interface Template {
 }
 
 export default function TemplatesPage() {
-    const { token, isLoading: authLoading } = useAuth();
+    const { token, user, isLoading: authLoading } = useAuth();
+
     const router = useRouter();
     const { success, error } = useToast();
 
@@ -38,10 +41,18 @@ export default function TemplatesPage() {
     const [pendingAction, setPendingAction] = useState<{ type: "duplicate" | "delete"; id: string } | null>(null);
 
     useEffect(() => {
-        if (!authLoading && token) {
-            fetchTemplates();
+        if (!authLoading) {
+            if (user && !can(user, "VIEW_TEMPLATE")) {
+                router.replace("/dashboard");
+            } else if (token) {
+                fetchTemplates();
+            }
         }
-    }, [authLoading, token, page]);
+    }, [authLoading, token, user, page]);
+
+    if (authLoading || (user && !can(user, "VIEW_TEMPLATE"))) {
+        return null;
+    }
 
     const fetchTemplates = async () => {
         setLoading(true);

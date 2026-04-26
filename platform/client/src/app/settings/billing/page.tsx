@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, CalendarClock, CheckCircle2, CreditCard, TrendingUp, Users, Zap } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { can } from '@/utils/permissions';
+import { useRouter } from 'next/navigation';
 import { Badge, Button, ConfirmModal, EmptyState, InlineAlert, PageHeader, SectionCard, StatCard, useToast } from '@/components/ui';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
@@ -55,8 +57,15 @@ function ProgressBar({ percent }: { percent: number }) {
 }
 
 export default function BillingPage() {
-    const { token } = useAuth();
+    const { token, user } = useAuth();
+    const router = useRouter();
     const { success, error: toastError } = useToast();
+
+    useEffect(() => {
+        if (user && !can(user, 'VIEW_BILLING')) {
+            router.replace('/dashboard');
+        }
+    }, [user, router]);
 
     const [data, setData] = useState<BillingData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -142,6 +151,10 @@ export default function BillingPage() {
 
     if (loading) {
         return <div className="p-12 text-sm text-[var(--text-muted)]">Loading billing information...</div>;
+    }
+
+    if (!user || !can(user, 'VIEW_BILLING')) {
+        return null;
     }
 
     if (pageError || !data) {

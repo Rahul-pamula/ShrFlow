@@ -15,8 +15,10 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 from utils.jwt_middleware import require_authenticated_user, JWTPayload
+from utils.permissions import require_permission
 
 router = APIRouter(prefix="/onboarding", tags=["Onboarding"])
+
 
 
 # === Pydantic Models ===
@@ -65,20 +67,15 @@ class OnboardingResponse(BaseModel):
 
 # === Helper Functions ===
 
-def get_tenant_id_from_header(x_tenant_id: str = Header(...)) -> str:
-    """Extract tenant ID from header (temporary until JWT is implemented)"""
-    if not x_tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="X-Tenant-ID header is required"
-        )
-    return x_tenant_id
+# Deprecated header helper removed. derive tenant_id from JWT authority.
+
 
 
 # === Routes ===
 
 @router.get("/status", response_model=OnboardingStatusResponse)
-async def get_onboarding_status(tenant_id: str = Header(..., alias="X-Tenant-ID")):
+async def get_onboarding_status(jwt_payload: JWTPayload = Depends(require_permission("VIEW_SETTINGS"))):
+
     """
     Get current onboarding progress for a tenant.
     
@@ -88,6 +85,8 @@ async def get_onboarding_status(tenant_id: str = Header(..., alias="X-Tenant-ID"
     - Next recommended stage
     """
     from utils.supabase_client import db
+    tenant_id = jwt_payload.tenant_id
+
     
     # Get tenant
     tenant_result = db.client.table("tenants").select("*").eq("id", tenant_id).execute()
@@ -155,8 +154,9 @@ async def get_onboarding_status(tenant_id: str = Header(..., alias="X-Tenant-ID"
 @router.put("/basic-info", response_model=OnboardingResponse)
 async def update_basic_info(
     request: BasicInfoRequest,
-    jwt_payload: JWTPayload = Depends(require_authenticated_user)
+    jwt_payload: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))
 ):
+
     """
     Stage 2: Update basic tenant profile.
     
@@ -201,8 +201,9 @@ async def update_basic_info(
 @router.put("/compliance", response_model=OnboardingResponse)
 async def update_compliance(
     request: ComplianceRequest,
-    jwt_payload: JWTPayload = Depends(require_authenticated_user)
+    jwt_payload: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))
 ):
+
     """
     Stage 3: Update business address (REQUIRED for sending emails).
     
@@ -249,8 +250,9 @@ async def update_compliance(
 @router.put("/intent", response_model=OnboardingResponse)
 async def update_intent(
     request: IntentRequest,
-    tenant_id: str = Header(..., alias="X-Tenant-ID")
+    jwt_payload: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))
 ):
+
     """
     Stage 4: Update business context (optional).
     
@@ -261,6 +263,8 @@ async def update_intent(
     - Your audience size
     """
     from utils.supabase_client import db
+    tenant_id = jwt_payload.tenant_id
+
     
     try:
         # Build metadata
@@ -299,12 +303,14 @@ async def update_intent(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update intent data: {str(e)}"
+            detail="Access denied."
         )
 
 
+
 @router.post("/complete", response_model=OnboardingResponse)
-async def complete_onboarding(jwt_payload: JWTPayload = Depends(require_authenticated_user)):
+async def complete_onboarding(jwt_payload: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))):
+
     """
     Complete onboarding and activate tenant.
     
@@ -365,8 +371,9 @@ async def complete_onboarding(jwt_payload: JWTPayload = Depends(require_authenti
         print(f"ERROR: Failed to complete onboarding: {e}", flush=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to complete onboarding: {str(e)}"
+            detail="Access denied."
         )
+
 """
 New Onboarding Endpoints for 4-Step Flow
 """
@@ -402,15 +409,18 @@ class ScaleRequest(BaseModel):
 @router.post("/workspace")
 async def save_workspace(
     request: WorkspaceRequest,
-    user: JWTPayload = Depends(require_authenticated_user)
+    user: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))
 ):
+
     """Save workspace name and user role"""
     from utils.supabase_client import db
     
     try:
-        # Update tenant with workspace info
+        # Update tenant with workspace info (syncing both workspace_name and company_name)
         db.client.table("tenants").update({
             "workspace_name": request.workspace_name,
+            "company_name": request.workspace_name,
+            "organization_name": request.workspace_name,
             "user_role": request.user_role,
             "updated_at": datetime.utcnow().isoformat()
         }).eq("id", user.tenant_id).execute()
@@ -419,15 +429,17 @@ async def save_workspace(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save workspace info: {str(e)}"
+            detail="Access denied."
         )
+
 
 
 @router.post("/use-case")
 async def save_use_case(
     request: UseCaseRequest,
-    user: JWTPayload = Depends(require_authenticated_user)
+    user: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))
 ):
+
     """Save primary use case"""
     from utils.supabase_client import db
     
@@ -441,15 +453,17 @@ async def save_use_case(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save use case: {str(e)}"
+            detail="Access denied."
         )
+
 
 
 @router.post("/integrations")
 async def save_integrations(
     request: IntegrationsRequest,
-    user: JWTPayload = Depends(require_authenticated_user)
+    user: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))
 ):
+
     """Save integration sources"""
     from utils.supabase_client import db
     
@@ -463,15 +477,17 @@ async def save_integrations(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save integrations: {str(e)}"
+            detail="Access denied."
         )
+
 
 
 @router.post("/scale")
 async def save_scale(
     request: ScaleRequest,
-    user: JWTPayload = Depends(require_authenticated_user)
+    user: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))
 ):
+
     """Save expected scale"""
     from utils.supabase_client import db
     
@@ -485,5 +501,6 @@ async def save_scale(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save scale: {str(e)}"
+            detail="Access denied."
         )
+

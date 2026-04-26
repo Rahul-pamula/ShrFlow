@@ -7,7 +7,8 @@ Endpoints:
   GET /analytics/campaigns/{id}/recipients → per-recipient event breakdown
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
-from utils.jwt_middleware import require_active_tenant
+from utils.jwt_middleware import require_active_tenant, JWTPayload
+from utils.permissions import require_permission
 from utils.supabase_client import db
 import logging
 
@@ -20,7 +21,8 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 @router.get("/campaigns/{campaign_id}")
 async def get_campaign_analytics(
     campaign_id: str,
-    tenant_id: str = Depends(require_active_tenant)
+    tenant_id: str = Depends(require_active_tenant),
+    _: JWTPayload = Depends(require_permission("VIEW_ANALYTICS")),
 ):
     """
     Full analytics for a single campaign.
@@ -82,7 +84,8 @@ async def get_campaign_analytics(
     unsub_contact_ids = [e["contact_id"] for e in unsub_events if e.get("contact_id")]
     active_unsubs = set()
     if unsub_contact_ids:
-        status_res = db.client.table("contacts").select("id, status").in_("id", unsub_contact_ids).execute()
+        status_res = db.client.table("contacts").select("id, status").in_("id", unsub_contact_ids).eq("tenant_id", tenant_id).execute()
+
         for c in (status_res.data or []):
             if c["status"] == "unsubscribed":
                 active_unsubs.add(c["id"])
@@ -126,7 +129,8 @@ async def get_campaign_analytics(
 @router.get("/campaigns/{campaign_id}/recipients")
 async def get_campaign_recipients(
     campaign_id: str,
-    tenant_id: str = Depends(require_active_tenant)
+    tenant_id: str = Depends(require_active_tenant),
+    _: JWTPayload = Depends(require_permission("VIEW_ANALYTICS")),
 ):
     """
     Returns per-recipient status for a campaign:
@@ -199,7 +203,10 @@ async def get_campaign_recipients(
 # ── Sender Health (Tenant-Wide Reputation) ────────────────────────────────────
 
 @router.get("/sender-health")
-async def get_sender_health(tenant_id: str = Depends(require_active_tenant)):
+async def get_sender_health(
+    tenant_id: str = Depends(require_active_tenant),
+    _: JWTPayload = Depends(require_permission("VIEW_ANALYTICS")),
+):
     """
     Tenant's overall sender reputation.
     Aggregates last 30 days of data across all campaigns.

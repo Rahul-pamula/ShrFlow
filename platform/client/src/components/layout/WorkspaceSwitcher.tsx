@@ -77,10 +77,17 @@ export default function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitch
     const displayName = currentWorkspace?.company_name || user?.tenantId?.slice(0, 8) || 'Workspace';
     const initial = displayName.charAt(0).toUpperCase();
 
+    const normalizeRole = (role: string) => role === 'admin' ? 'manager' : role;
+    const formatRole = (role: string) => {
+        const normalizedRole = normalizeRole(role);
+        return normalizedRole.charAt(0).toUpperCase() + normalizedRole.slice(1);
+    };
+
     // Role badge color
     const roleColor = (role: string) => {
-        if (role === 'owner') return 'text-amber-400';
-        if (role === 'admin') return 'text-[var(--accent)]';
+        const normalizedRole = normalizeRole(role);
+        if (normalizedRole === 'owner') return 'text-amber-400';
+        if (normalizedRole === 'manager') return 'text-[var(--accent)]';
         return 'text-[var(--text-muted)]';
     };
 
@@ -125,7 +132,7 @@ export default function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitch
                     </p>
                     {currentWorkspace && (
                         <p className={`text-[10px] font-medium uppercase tracking-wider leading-tight mt-0.5 ${roleColor(currentWorkspace.role)}`}>
-                            {currentWorkspace.role}
+                            {formatRole(currentWorkspace.role)}
                         </p>
                     )}
                 </div>
@@ -168,7 +175,7 @@ export default function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitch
                                             {currentWorkspace.company_name}
                                         </p>
                                         <p className={`text-[10px] font-medium uppercase tracking-wider ${roleColor(currentWorkspace.role)}`}>
-                                            {currentWorkspace.role}
+                                            {formatRole(currentWorkspace.role)}
                                         </p>
                                     </div>
                                     <Check className="w-4 h-4 text-[var(--accent)] flex-shrink-0" />
@@ -193,7 +200,7 @@ export default function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitch
                                             {ws.company_name}
                                         </p>
                                         <p className={`text-[10px] font-medium uppercase tracking-wider ${roleColor(ws.role)}`}>
-                                            {ws.role}
+                                            {formatRole(ws.role)}
                                         </p>
                                     </div>
                                     {isSwitching === ws.tenant_id && (
@@ -214,7 +221,7 @@ export default function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitch
                     {/* Create new workspace link */}
                     <div className="border-t border-[var(--border)] p-1">
                         <Link
-                            href="/onboarding/workspace"
+                            href="/onboarding/new"
                             onClick={() => setIsOpen(false)}
                             className="flex items-center gap-2 px-3 py-2 text-[13px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded-lg transition-colors"
                         >

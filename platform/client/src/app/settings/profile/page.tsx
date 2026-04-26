@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Camera, Mail, ShieldCheck, User } from 'lucide-react';
+import { Camera, LogOut, Mail, ShieldCheck, User } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { Button, InlineAlert, Input, KeyValueList, PageHeader, SectionCard, StatCard, useToast } from '@/components/ui';
+import { Button, ConfirmModal, InlineAlert, Input, KeyValueList, PageHeader, SectionCard, StatCard, useToast } from '@/components/ui';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
@@ -20,10 +20,11 @@ const TIMEZONES = [
     { value: 'Australia/Sydney', label: 'Sydney (AEDT)' },
 ];
 
-const selectClassName = 'w-full rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20';
+const selectClassName =
+    'w-full rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20';
 
 export default function ProfileSettingsPage() {
-    const { token, updateUserContext } = useAuth();
+    const { token, updateUserContext, user, logout } = useAuth();
     const { success, error, info } = useToast();
 
     const [isLoading, setIsLoading] = useState(true);
@@ -33,14 +34,15 @@ export default function ProfileSettingsPage() {
     const [email, setEmail] = useState('');
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [isChangingPassword, setIsChangingPassword] = useState(false);
+    const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+    const [leaveBusy, setLeaveBusy] = useState(false);
 
     const isGoogleAuth = false;
+    const isOwner = user?.role === 'MAIN_OWNER' || user?.role === 'FRANCHISE_OWNER';
     const initials = useMemo(() => (fullName || email || 'U').charAt(0).toUpperCase(), [fullName, email]);
 
     useEffect(() => {
-        if (token) {
-            fetchProfile();
-        }
+        if (token) fetchProfile();
     }, [token]);
 
     const fetchProfile = async () => {
@@ -65,7 +67,6 @@ export default function ProfileSettingsPage() {
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSaving(true);
-
         try {
             const res = await fetch(`${API_BASE}/settings/profile`, {
                 method: 'PATCH',
@@ -73,20 +74,11 @@ export default function ProfileSettingsPage() {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    full_name: fullName,
-                    timezone,
-                }),
+                body: JSON.stringify({ full_name: fullName, timezone }),
             });
-
-            if (!res.ok) {
-                throw new Error('Failed to save profile.');
-            }
-
+            if (!res.ok) throw new Error('Failed to save profile.');
             const data = await res.json();
-            if (updateUserContext && data.data) {
-                updateUserContext({ fullName: data.data.full_name });
-            }
+            if (updateUserContext && data.data) updateUserContext({ fullName: data.data.full_name });
             setIsEditingProfile(false);
             success('Profile updated.');
         } catch (saveError) {
@@ -94,6 +86,28 @@ export default function ProfileSettingsPage() {
             error('Could not save your profile changes.');
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleLeaveWorkspace = async () => {
+        setLeaveBusy(true);
+        try {
+            const res = await fetch(`${API_BASE}/team/members/me/leave`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.detail || 'Failed to leave workspace.');
+            }
+            success('You have left the workspace.');
+            setConfirmLeaveOpen(false);
+            setTimeout(() => logout(), 800);
+        } catch (leaveError: any) {
+            console.error(leaveError);
+            error(leaveError.message || 'Could not leave workspace.');
+        } finally {
+            setLeaveBusy(false);
         }
     };
 
@@ -117,6 +131,7 @@ export default function ProfileSettingsPage() {
 
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.7fr_1fr]">
                 <div className="space-y-6">
+                    {/* ── Basic Information ─────────────────────────── */}
                     <SectionCard
                         title="Basic Information"
                         description="Update the name and timezone shown throughout approvals, activity history, and team collaboration surfaces."
@@ -161,6 +176,7 @@ export default function ProfileSettingsPage() {
                         )}
                     </SectionCard>
 
+                    {/* ── Security ─────────────────────────────────── */}
                     <SectionCard title="Security & Login" description="Keep sign-in details clear and reduce account risk when working across devices or teams.">
                         <div className="space-y-5">
                             <KeyValueList
@@ -170,7 +186,6 @@ export default function ProfileSettingsPage() {
                                     { label: 'Email Verification', value: 'Verified', helper: 'Your primary email is confirmed.' },
                                 ]}
                             />
-
                             {isGoogleAuth ? (
                                 <InlineAlert
                                     variant="info"
@@ -200,9 +215,42 @@ export default function ProfileSettingsPage() {
                             )}
                         </div>
                     </SectionCard>
+
+                    {/* ── Leave Workspace ───────────────────────────── */}
+                    <SectionCard
+                        title="Leave Workspace"
+                        description="Remove your own access from this workspace. Your campaigns, contacts, and templates will stay with the workspace."
+                    >
+                        {isOwner ? (
+                            <InlineAlert
+                                variant="warning"
+                                title="Owners cannot leave"
+                                description="You are the workspace owner. Transfer ownership to another member before leaving, or delete the workspace."
+                            />
+                        ) : (
+                            <div className="flex flex-col gap-4 rounded-[var(--radius)] border border-[var(--danger)]/25 bg-[var(--danger-bg)]/40 p-4 md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <p className="text-sm font-medium text-[var(--text-primary)]">Leave this workspace</p>
+                                    <p className="mt-1 text-sm text-[var(--text-muted)]">
+                                        You will lose access immediately. Content you created stays with the workspace.
+                                    </p>
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="shrink-0 text-[var(--danger)] hover:bg-[var(--danger-bg)] hover:text-[var(--danger)]"
+                                    onClick={() => setConfirmLeaveOpen(true)}
+                                >
+                                    <LogOut className="h-3.5 w-3.5" />
+                                    Leave Workspace
+                                </Button>
+                            </div>
+                        )}
+                    </SectionCard>
                 </div>
 
                 <div className="space-y-6">
+                    {/* ── Avatar ───────────────────────────────────── */}
                     <SectionCard title="Avatar" description="A clearer profile makes approvals, ownership, and audit trails easier to scan.">
                         <div className="flex flex-col items-center text-center">
                             <div className="relative mb-4">
@@ -226,7 +274,8 @@ export default function ProfileSettingsPage() {
                         </div>
                     </SectionCard>
 
-                    <SectionCard title="Need Help?" description="If you’re locked out or need recovery support, our team can help restore access safely.">
+                    {/* ── Need Help ────────────────────────────────── */}
+                    <SectionCard title="Need Help?" description="If you're locked out or need recovery support, our team can help restore access safely.">
                         <a href="mailto:support@emailengine.com" className="text-sm font-medium text-[var(--info)] transition hover:opacity-80">
                             Contact support
                         </a>
@@ -236,6 +285,17 @@ export default function ProfileSettingsPage() {
                     </SectionCard>
                 </div>
             </div>
+
+            <ConfirmModal
+                isOpen={confirmLeaveOpen}
+                onClose={() => setConfirmLeaveOpen(false)}
+                onConfirm={handleLeaveWorkspace}
+                title="Leave this workspace?"
+                message="You will lose access immediately. All campaigns, contacts, and templates you created will remain with the workspace. This action cannot be undone."
+                confirmLabel="Leave Workspace"
+                isLoading={leaveBusy}
+                variant="danger"
+            />
         </div>
     );
 }

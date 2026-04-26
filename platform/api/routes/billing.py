@@ -3,7 +3,8 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from utils.supabase_client import db
-from utils.jwt_middleware import require_active_tenant
+from utils.jwt_middleware import require_active_tenant, JWTPayload
+from utils.permissions import require_permission
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -41,7 +42,10 @@ def _get_plan(plan_id: str) -> dict:
 
 
 @router.get("/plan")
-async def get_current_plan(tenant_id: str = Depends(require_active_tenant)):
+async def get_current_plan(
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("VIEW_BILLING"))
+):
     """
     Returns current plan, usage stats, all available plans, and any scheduled downgrade.
     """
@@ -95,7 +99,11 @@ async def get_current_plan(tenant_id: str = Depends(require_active_tenant)):
 
 
 @router.post("/change-plan")
-async def change_plan(request: ChangePlanRequest, tenant_id: str = Depends(require_active_tenant)):
+async def change_plan(
+    request: ChangePlanRequest, 
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("VIEW_BILLING"))
+):
     """
     Industry-standard plan change logic:
     - UPGRADE   (higher price) → immediate, limits update now
@@ -174,7 +182,10 @@ async def change_plan(request: ChangePlanRequest, tenant_id: str = Depends(requi
 
 
 @router.post("/cancel-downgrade")
-async def cancel_downgrade(tenant_id: str = Depends(require_active_tenant)):
+async def cancel_downgrade(
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("VIEW_BILLING"))
+):
     """Cancel a pending scheduled downgrade. The tenant stays on their current plan."""
     tenant = _get_tenant_billing(tenant_id)
 
@@ -194,6 +205,10 @@ async def cancel_downgrade(tenant_id: str = Depends(require_active_tenant)):
 
 # ── Legacy endpoint: keep for backwards compatibility ────────────────────────
 @router.post("/upgrade")
-async def legacy_upgrade(request: ChangePlanRequest, tenant_id: str = Depends(require_active_tenant)):
+async def legacy_upgrade(
+    request: ChangePlanRequest, 
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("VIEW_BILLING"))
+):
     """Deprecated. Use POST /billing/change-plan instead."""
-    return await change_plan(request, tenant_id)
+    return await change_plan(request, tenant_id=tenant_id, jwt_payload=jwt_payload)

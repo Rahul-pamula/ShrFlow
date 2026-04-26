@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import List, Optional, Dict
 from pydantic import BaseModel, EmailStr
 import os
@@ -8,8 +8,11 @@ import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-from utils.jwt_middleware import require_active_tenant, JWTPayload, verify_jwt_token, require_admin_or_owner
+from utils.jwt_middleware import require_active_tenant, JWTPayload, verify_jwt_token
+from utils.permissions import require_permission
+from utils.rate_limiter import limiter
 from utils.supabase_client import db
+from services.audit_service import write_log
 
 router = APIRouter(prefix="/senders", tags=["Senders"])
 
@@ -40,7 +43,10 @@ async def send_verification_email(to_email: str, token: str):
 
 # ─── List Senders ──────────────────────────────────────────────────────────────
 @router.get("/")
-async def list_senders(tenant_id: str = Depends(require_active_tenant), jwt_payload: JWTPayload = Depends(verify_jwt_token)):
+async def list_senders(
+    tenant_id: str = Depends(require_active_tenant), 
+    jwt_payload: JWTPayload = Depends(require_permission("VIEW_SENDER"))
+):
     """
     List sender identities. 
     Agency Member: Sees only their own.
@@ -57,7 +63,13 @@ async def list_senders(tenant_id: str = Depends(require_active_tenant), jwt_payl
 
 # ─── Add New Sender → sends verification email via our SMTP ───────────────────
 @router.post("/")
-async def add_sender_identity(body: AddSenderRequest, tenant_id: str = Depends(require_active_tenant), jwt_payload: JWTPayload = Depends(verify_jwt_token)):
+@limiter.limit("5/hour")
+async def add_sender_identity(
+    request: Request,
+    body: AddSenderRequest, 
+    tenant_id: str = Depends(require_active_tenant), 
+    jwt_payload: JWTPayload = Depends(require_permission("ADD_SENDER"))
+):
     """
     Request verification for a sender email address.
     Sends a custom verification email FROM our centralized SMTP (shrmail.app@gmail.com)
@@ -66,11 +78,20 @@ async def add_sender_identity(body: AddSenderRequest, tenant_id: str = Depends(r
     """
     email = body.email.strip().lower()
     
-    # 1. Verify domain is registered and verified in THIS tenant
+    # 1. Verify domain is registered and verified.
+    # For FRANCHISE workspaces, check the MAIN OWNER's domain.
     domain_part = email.split("@")[1]
-    d_res = db.client.table("domains").select("status").eq("tenant_id", tenant_id).eq("domain_name", domain_part).execute()
+    
+    domain_tenant_id = tenant_id
+    if jwt_payload.workspace_type == "FRANCHISE":
+        # Get parent_tenant_id
+        t_res = db.client.table("tenants").select("parent_tenant_id").eq("id", tenant_id).single().execute()
+        if t_res.data and t_res.data.get("parent_tenant_id"):
+            domain_tenant_id = t_res.data.get("parent_tenant_id")
+            
+    d_res = db.client.table("domains").select("status").eq("tenant_id", domain_tenant_id).eq("domain_name", domain_part).execute()
     if not d_res.data or d_res.data[0]["status"] != "verified":
-        raise HTTPException(status_code=400, detail="The domain for this email must be verified in your workspace first.")
+        raise HTTPException(status_code=403, detail="Access denied.")
 
     # 2. Check if already verified in DB
     existing = db.client.table("sender_identities").select("id, status").eq("tenant_id", tenant_id).eq("email", email).execute()
@@ -99,6 +120,15 @@ async def add_sender_identity(body: AddSenderRequest, tenant_id: str = Depends(r
 
     # 5. Send the verification email via our own SMTP
     await send_verification_email(email, token)
+
+    await write_log(
+        tenant_id=tenant_id,
+        user_id=jwt_payload.user_id,
+        action="sender.add",
+        resource_type="sender_identity",
+        resource_id=inserted.data[0].get("id"),
+        metadata={"email_domain": email.split("@")[1]},  # domain only — not PII
+    )
 
     return {
         "status": "success",
@@ -164,7 +194,11 @@ async def confirm_sender_token(token: str):
 
 # ─── Resend Verification ───────────────────────────────────────────────────────
 @router.post("/{sender_id}/verify")
-async def resend_verification(sender_id: str, tenant_id: str = Depends(require_active_tenant), jwt_payload: JWTPayload = Depends(verify_jwt_token)):
+async def resend_verification(
+    sender_id: str, 
+    tenant_id: str = Depends(require_active_tenant), 
+    jwt_payload: JWTPayload = Depends(require_permission("ADD_SENDER"))
+):
     """Resend the verification email with a fresh token."""
     res = db.client.table("sender_identities").select("*").eq("id", sender_id).eq("tenant_id", tenant_id).execute()
     if not res.data:
@@ -190,7 +224,11 @@ async def resend_verification(sender_id: str, tenant_id: str = Depends(require_a
 
 # ─── Delete Sender ─────────────────────────────────────────────────────────────
 @router.delete("/{sender_id}")
-async def delete_sender(sender_id: str, tenant_id: str = Depends(require_active_tenant), jwt_payload: JWTPayload = Depends(verify_jwt_token)):
+async def delete_sender(
+    sender_id: str, 
+    tenant_id: str = Depends(require_active_tenant), 
+    jwt_payload: JWTPayload = Depends(require_permission("ADD_SENDER"))
+):
     """Delete sender identity from DB."""
     res = db.client.table("sender_identities").select("*").eq("id", sender_id).eq("tenant_id", tenant_id).execute()
     if not res.data:

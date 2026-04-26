@@ -99,7 +99,7 @@ export default function TeamJoinPage() {
                         const parsed = JSON.parse(rawUserData);
                         parsed.tenantId = data.tenant_id;
                         parsed.tenantStatus = 'active';
-                        parsed.role = data.role || 'member';
+                        parsed.role = data.role === 'admin' ? 'manager' : (data.role || 'member');
                         localStorage.setItem('user_data', JSON.stringify(parsed));
                     }
                 }

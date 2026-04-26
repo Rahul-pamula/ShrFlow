@@ -19,13 +19,31 @@ ALGORITHM = "HS256"
 
 
 class JWTPayload:
-    """Validated JWT payload"""
-    def __init__(self, user_id: str, tenant_id: str, email: str, role: str, isolation_model: str = "team"):
+    """Validated JWT payload & DB Context"""
+    def __init__(self, user_id: str, tenant_id: str, email: str, role: str, workspace_type: str, ui_role: str, tenant_status: str, onboarding_required: bool, isolation_model: str = "team"):
         self.user_id = user_id
         self.tenant_id = tenant_id
         self.email = email
         self.role = role
+        self.workspace_type = workspace_type
+        self.ui_role = ui_role
+        self.tenant_status = tenant_status
+        self.onboarding_required = onboarding_required
         self.isolation_model = isolation_model
+
+
+def normalize_public_role(role: Optional[str]) -> Optional[str]:
+    """Expose public-facing role names while remaining compatible with legacy storage."""
+    if role == "admin":
+        return "manager"
+    return role
+
+
+def normalize_storage_role(role: Optional[str]) -> Optional[str]:
+    """Map public-facing role names back to legacy stored values when needed."""
+    if role == "manager":
+        return "admin"
+    return role
 
 
 def verify_jwt_token(authorization: str = Header(..., alias="Authorization")) -> JWTPayload:
@@ -57,31 +75,73 @@ def verify_jwt_token(authorization: str = Header(..., alias="Authorization")) ->
         # Decode and verify JWT
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         
-        # Extract required fields
+        # Extract required fields from JWT (Identity)
         user_id = payload.get("user_id")
         tenant_id = payload.get("tenant_id")
         email = payload.get("email")
-        role = payload.get("role")
-        isolation_model = payload.get("isolation_model", "team")
         
-        if not all([user_id, tenant_id, email, role]):
+        if not all([user_id, tenant_id, email]):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload: missing required fields"
+                detail="Invalid token payload: missing required identity fields"
             )
+
+        # SECURITY: Remove JWT trust. Fetch Authority from DB.
+        from utils.supabase_client import db
+        tu_res = db.client.table("tenant_users").select("role, isolation_model").eq("user_id", user_id).eq("tenant_id", tenant_id).execute()
+        if not tu_res.data:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is not a member of this workspace.")
         
+        db_role = normalize_public_role(tu_res.data[0].get("role", "member"))
+        isolation_model = tu_res.data[0].get("isolation_model", "team")
+
+        t_res = db.client.table("tenants").select("workspace_type, status, onboarding_required").eq("id", tenant_id).execute()
+        if not t_res.data:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+        
+        tenant_info = t_res.data[0]
+        raw_workspace_type = tenant_info.get("workspace_type")
+        tenant_status = tenant_info.get("status", "active")
+        onboarding_required = tenant_info.get("onboarding_required", False)
+        
+        # FAIL CLOSED: if workspace_type is null/missing/unrecognized, deny access.
+        # Never default to MAIN — a missing value must not grant elevated privilege.
+        if not raw_workspace_type or raw_workspace_type.upper() not in ("MAIN", "PRIMARY", "FRANCHISE"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied."
+            )
+        workspace_type = "FRANCHISE" if raw_workspace_type.upper() == "FRANCHISE" else "MAIN"
+
+        # Compute UI Role equivalent (e.g. MAIN_OWNER)
+        ui_role = "MEMBER"
+        if db_role == "owner" and workspace_type == "MAIN":
+            ui_role = "MAIN_OWNER"
+        elif db_role == "owner" and workspace_type == "FRANCHISE":
+            ui_role = "FRANCHISE_OWNER"
+        elif db_role == "manager":
+            ui_role = "MANAGER"
+        elif db_role == "member":
+            ui_role = "MEMBER"
+
         return JWTPayload(
             user_id=user_id,
             tenant_id=tenant_id,
             email=email,
-            role=role,
+            role=db_role,
+            workspace_type=workspace_type,
+            ui_role=ui_role,
+            tenant_status=tenant_status,
+            onboarding_required=onboarding_required,
             isolation_model=isolation_model
         )
         
-    except JWTError as e:
+    except HTTPException:
+        raise  # Re-raise our own exceptions untouched
+    except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {str(e)}",
+            detail="Invalid token.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -170,7 +230,7 @@ def require_active_tenant(
     if tenant_status != "active":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Tenant is in '{tenant_status}' status. Complete onboarding to access this feature."
+            detail="Access denied."
         )
     
     return tenant_id
@@ -191,13 +251,13 @@ def require_authenticated_user(
 
 def require_admin_or_owner(jwt_payload: JWTPayload = Depends(verify_jwt_token)) -> JWTPayload:
     """
-    Require the user to have 'admin' or 'owner' role.
+    Require the user to have 'manager' or 'owner' role.
     Use this for destructive actions, domain management, team invites, etc.
     """
-    if jwt_payload.role not in ["admin", "owner"]:
+    if jwt_payload.role not in ["manager", "owner"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Action forbidden. Admin or Owner role required, but you are a '{jwt_payload.role}'."
+            detail="Access denied."
         )
     return jwt_payload
 
@@ -206,7 +266,7 @@ def apply_data_isolation(query_builder, jwt_payload: JWTPayload):
     Modifies a Supabase query builder to enforce Agency vs Team isolation rules.
     Reads the isolation model directly from the JWT.
     
-    - Owner/Admin: See all rows.
+    - Owner/Manager: See all rows.
     - Agency + Member: See only their own rows.
     - Team + Member: See all rows.
     """
@@ -214,7 +274,7 @@ def apply_data_isolation(query_builder, jwt_payload: JWTPayload):
     user_id = jwt_payload.user_id
     model = getattr(jwt_payload, "isolation_model", "team")
     
-    if role in ["owner", "admin"]:
+    if role in ["owner", "manager"]:
         return query_builder
         
     if model == "agency":

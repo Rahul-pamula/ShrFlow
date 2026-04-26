@@ -6,41 +6,48 @@ import {
     Mail, ChevronLeft, LayoutDashboard, Users, BarChart3,
     LayoutTemplate, Settings, ServerCog, Megaphone, ChevronRight,
     User, Building2, CreditCard, Shield, Key, Globe,
-    MailCheck, UserPlus, Bell, Lock, Sliders,
+    MailCheck, UserPlus, Bell, Lock, Sliders, Store, History, Download, MessageSquareDot,
 } from 'lucide-react';
 import { useState } from 'react';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
+import { useAuth } from '@/context/AuthContext';
+import { can, Action } from '@/utils/permissions';
 
 /* ============================================================
    SIDEBAR — Single sidebar with inline Settings submenu
    ============================================================ */
 
-const NAV_SECTIONS = [
+type NavItem = { name: string; href: string; icon: any; action?: Action };
+
+const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
     {
         label: 'Operate',
         items: [
             { name: 'Dashboard', href: '/dashboard',     icon: LayoutDashboard },
-            { name: 'Contacts',  href: '/contacts',      icon: Users },
-            { name: 'Templates', href: '/templates',     icon: LayoutTemplate },
-            { name: 'Campaigns', href: '/campaigns',     icon: Megaphone },
+            { name: 'Contacts',  href: '/contacts',      icon: Users, action: 'VIEW_CONTACT' },
+            { name: 'Templates', href: '/templates',     icon: LayoutTemplate, action: 'VIEW_TEMPLATE' },
+            { name: 'Campaigns', href: '/campaigns',     icon: Megaphone, action: 'VIEW_CAMPAIGN' },
         ],
     },
     {
         label: 'Observe',
         items: [
-            { name: 'Analytics', href: '/analytics',     icon: BarChart3 },
+            { name: 'Analytics', href: '/analytics',     icon: BarChart3, action: 'VIEW_ANALYTICS' },
         ],
     },
+
     {
         label: 'Configure',
         items: [
-            { name: 'Infrastructure', href: '/infrastructure', icon: ServerCog },
-            { name: 'Settings',       href: '/settings',       icon: Settings },
+            { name: 'Infrastructure', href: '/infrastructure', icon: ServerCog, action: 'VIEW_SETTINGS' },
+            { name: 'Settings',       href: '/settings',       icon: Settings, action: 'VIEW_SETTINGS' },
         ],
     },
 ];
 
-const SETTINGS_SUB = [
+type SubItem = { href: string; icon: any; label: string; action?: Action };
+
+const SETTINGS_SUB: { label: string; items: SubItem[] }[] = [
     {
         label: 'Account',
         items: [
@@ -53,24 +60,28 @@ const SETTINGS_SUB = [
     {
         label: 'Workspace',
         items: [
-            { href: '/settings/organization',  icon: Building2,  label: 'Organization' },
-            { href: '/settings/team',          icon: Users,      label: 'Team' },
-            { href: '/settings/team/requests', icon: UserPlus,   label: 'Access Requests' },
-            { href: '/settings/billing',       icon: CreditCard, label: 'Billing & Plan' },
+            { href: '/settings/organization',  icon: Building2,         label: 'Organization', action: 'VIEW_SETTINGS' },
+            { href: '/settings/team',          icon: Users,             label: 'Team', action: 'VIEW_SETTINGS' },
+            { href: '/settings/team/requests', icon: UserPlus,          label: 'Access Requests', action: 'VIEW_SETTINGS' },
+            { href: '/settings/franchises',    icon: Store,             label: 'Franchise Accounts', action: 'ADD_FRANCHISE' },
+            { href: '/settings/requests',      icon: MessageSquareDot,  label: 'Workspace Requests', action: 'VIEW_SETTINGS' },
+            { href: '/settings/billing',       icon: CreditCard,        label: 'Billing & Plan', action: 'VIEW_BILLING' },
+            { href: '/settings/audit',         icon: History,           label: 'Audit History', action: 'VIEW_SETTINGS' },
+            { href: '/settings/exports',       icon: Download,          label: 'Export History', action: 'VIEW_SETTINGS' },
         ],
     },
     {
         label: 'Email',
         items: [
-            { href: '/settings/domain',        icon: Globe,     label: 'Domain' },
-            { href: '/settings/senders',       icon: MailCheck, label: 'Senders' },
-            { href: '/settings/compliance',    icon: Shield,    label: 'Compliance' },
+            { href: '/settings/domain',        icon: Globe,     label: 'Domain', action: 'VIEW_DOMAIN' },
+            { href: '/settings/senders',       icon: MailCheck, label: 'Senders', action: 'VIEW_SETTINGS' },
+            { href: '/settings/compliance',    icon: Shield,    label: 'Compliance', action: 'VIEW_SETTINGS' },
         ],
     },
     {
         label: 'Developer',
         items: [
-            { href: '/settings/api-keys',      icon: Key,       label: 'API Keys' },
+            { href: '/settings/api-keys',      icon: Key,       label: 'API Keys', action: 'VIEW_SETTINGS' },
         ],
     },
 ];
@@ -83,6 +94,7 @@ interface SidebarProps {
 export default function Sidebar({ mobileMenuOpen, setMobileMenuOpen }: SidebarProps) {
     const pathname = usePathname();
     const [collapsed, setCollapsed] = useState(false);
+    const { user } = useAuth();
 
     const isOnSettings = pathname?.startsWith('/settings');
 
@@ -169,6 +181,8 @@ export default function Sidebar({ mobileMenuOpen, setMobileMenuOpen }: SidebarPr
 
                             <ul className="space-y-0.5">
                                 {section.items.map(item => {
+                                    if (item.action && !can(user, item.action)) return null;
+
                                     const active = isActive(item.href);
                                     const Icon = item.icon;
                                     return (
@@ -201,6 +215,8 @@ export default function Sidebar({ mobileMenuOpen, setMobileMenuOpen }: SidebarPr
                                                             </p>
                                                             <ul className="space-y-0.5">
                                                                 {sub.items.map(subItem => {
+                                                                    if (subItem.action && !can(user, subItem.action)) return null;
+
                                                                     const subActive = pathname === subItem.href || pathname.startsWith(subItem.href + '/');
                                                                     const SubIcon = subItem.icon;
                                                                     return (

@@ -3,7 +3,7 @@ Settings Routes — Phase 8A
 Handles profile, organization, and API key management.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
 import uuid
@@ -14,7 +14,9 @@ from datetime import datetime
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
 from utils.supabase_client import db
-from utils.jwt_middleware import verify_jwt_token, JWTPayload
+from utils.jwt_middleware import require_admin_or_owner, verify_jwt_token, JWTPayload
+from utils.permissions import require_permission
+
 
 
 # ── Pydantic Models ────────────────────────────────────────────────────
@@ -40,10 +42,17 @@ class ApiKeyCreate(BaseModel):
     name: str
 
 
+def _public_role(role: Optional[str]) -> str:
+    if role == "admin":
+        return "manager"
+    return role or "member"
+
+
 # ── Profile ────────────────────────────────────────────────────────────
 
 @router.get("/profile")
-async def get_profile(claims: JWTPayload = Depends(verify_jwt_token)):
+async def get_profile(claims: JWTPayload = Depends(require_permission("VIEW_SETTINGS"))):
+
     """Return current user's profile info"""
     result = db.client.table("users").select(
         "id, email, full_name, timezone, created_at"
@@ -56,7 +65,8 @@ async def get_profile(claims: JWTPayload = Depends(verify_jwt_token)):
 
 
 @router.patch("/profile")
-async def update_profile(body: ProfileUpdate, claims: JWTPayload = Depends(verify_jwt_token)):
+async def update_profile(body: ProfileUpdate, claims: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))):
+
     """Update current user's name or timezone"""
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     if not updates:
@@ -69,7 +79,8 @@ async def update_profile(body: ProfileUpdate, claims: JWTPayload = Depends(verif
 # ── Organization ───────────────────────────────────────────────────────
 
 @router.get("/organization")
-async def get_organization(claims: JWTPayload = Depends(verify_jwt_token)):
+async def get_organization(claims: JWTPayload = Depends(require_permission("VIEW_SETTINGS"))):
+
     """Return current tenant's organization info"""
     result = db.client.table("tenants").select(
         "id, email, company_name, business_address, business_city, "
@@ -83,7 +94,8 @@ async def get_organization(claims: JWTPayload = Depends(verify_jwt_token)):
 
 
 @router.patch("/organization")
-async def update_organization(body: OrganizationUpdate, claims: JWTPayload = Depends(verify_jwt_token)):
+async def update_organization(body: OrganizationUpdate, claims: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))):
+
     """Update current tenant's organization details"""
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     if not updates:
@@ -96,15 +108,16 @@ async def update_organization(body: OrganizationUpdate, claims: JWTPayload = Dep
 @router.patch("/organization/isolation-model")
 async def update_isolation_model(
     body: IsolationModelUpdate, 
-    from_utils_jwt = Depends(verify_jwt_token)
+    from_utils_jwt = Depends(require_permission("CHANGE_ISOLATION_MODEL"))
 ):
+
     """
     Update the workspace data isolation model.
     Only owners can do this.
     Returns a fresh JWT token so the owner's session isn't invalidated by the middleware.
     """
-    if from_utils_jwt.role != "owner":
-        raise HTTPException(code=403, detail="Only the workspace owner can change the isolation model.")
+    # Removed manual role check — enforced by CHANGE_ISOLATION_MODEL permission
+
         
     if body.data_isolation_model not in ["team", "agency"]:
         raise HTTPException(status_code=400, detail="Invalid isolation model. Must be 'team' or 'agency'.")
@@ -134,7 +147,8 @@ async def update_isolation_model(
 # ── API Keys ───────────────────────────────────────────────────────────
 
 @router.get("/api-keys")
-async def list_api_keys(claims: JWTPayload = Depends(verify_jwt_token)):
+async def list_api_keys(claims: JWTPayload = Depends(require_permission("VIEW_SETTINGS"))):
+
     """List all active API keys for the tenant (never return the raw secret)"""
     result = db.client.table("api_keys").select(
         "id, name, key_prefix, created_at, last_used_at"
@@ -144,7 +158,8 @@ async def list_api_keys(claims: JWTPayload = Depends(verify_jwt_token)):
 
 
 @router.post("/api-keys")
-async def create_api_key(body: ApiKeyCreate, claims: JWTPayload = Depends(verify_jwt_token)):
+async def create_api_key(body: ApiKeyCreate, claims: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))):
+
     """Generate a new API key. The raw key is shown ONCE — never stored in plain text."""
     raw_key = f"ee_{secrets.token_urlsafe(32)}"
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
@@ -168,7 +183,8 @@ async def create_api_key(body: ApiKeyCreate, claims: JWTPayload = Depends(verify
 
 
 @router.delete("/api-keys/{key_id}")
-async def revoke_api_key(key_id: str, claims: JWTPayload = Depends(verify_jwt_token)):
+async def revoke_api_key(key_id: str, claims: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))):
+
     """Revoke (soft-delete) an API key by setting revoked_at"""
     result = db.client.table("api_keys").update({
         "revoked_at": datetime.utcnow().isoformat()
@@ -180,10 +196,152 @@ async def revoke_api_key(key_id: str, claims: JWTPayload = Depends(verify_jwt_to
     return {"message": "API key revoked"}
 
 
+# ── Audit History ───────────────────────────────────────────────────────
+
+@router.get("/audit")
+async def get_audit_history(
+    limit: int = Query(50, ge=1, le=200),
+    action_prefix: Optional[str] = Query(None),
+    claims: JWTPayload = Depends(require_permission("VIEW_SETTINGS")),
+):
+
+    """Return recent audit history for workspace governance actions."""
+    query = (
+        db.client.table("audit_logs")
+        .select("id, action, user_id, resource_type, resource_id, metadata, created_at")
+        .eq("tenant_id", claims.tenant_id)
+        .order("created_at", desc=True)
+        .limit(limit)
+    )
+
+    if action_prefix:
+        query = query.ilike("action", f"{action_prefix}%")
+
+    result = query.execute()
+    entries = result.data or []
+
+    user_ids = [entry["user_id"] for entry in entries if entry.get("user_id")]
+    users_by_id = {}
+    if user_ids:
+        users_res = (
+            db.client.table("users")
+            .select("id, email, full_name")
+            .in_("id", user_ids)
+            .execute()
+        )
+        users_by_id = {user["id"]: user for user in (users_res.data or [])}
+
+    for entry in entries:
+        actor = users_by_id.get(entry.get("user_id") or "", {})
+        entry["actor"] = {
+            "user_id": entry.get("user_id"),
+            "email": actor.get("email"),
+            "full_name": actor.get("full_name"),
+            "role": _public_role(claims.role) if entry.get("user_id") == claims.user_id else None,
+        }
+
+    return {"data": entries}
+
+
+@router.get("/exports/history")
+async def get_export_history(
+    limit: int = Query(50, ge=1, le=200),
+    claims: JWTPayload = Depends(require_permission("VIEW_SETTINGS")),
+):
+
+    """Return recent export history across team exports and contact export jobs."""
+    team_export_res = (
+        db.client.table("audit_logs")
+        .select("id, action, user_id, metadata, created_at")
+        .eq("tenant_id", claims.tenant_id)
+        .eq("action", "team.export")
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    team_exports = team_export_res.data or []
+
+    contact_jobs_res = (
+        db.client.table("jobs")
+        .select("id, type, status, progress, error_log, created_at, updated_at")
+        .eq("tenant_id", claims.tenant_id)
+        .eq("type", "csv_export")
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    contact_jobs = contact_jobs_res.data or []
+
+    user_ids = [entry["user_id"] for entry in team_exports if entry.get("user_id")]
+    users_by_id = {}
+    if user_ids:
+        users_res = (
+            db.client.table("users")
+            .select("id, email, full_name")
+            .in_("id", user_ids)
+            .execute()
+        )
+        users_by_id = {user["id"]: user for user in (users_res.data or [])}
+
+    team_history = []
+    for entry in team_exports:
+        actor = users_by_id.get(entry.get("user_id") or "", {})
+        team_history.append(
+            {
+                "id": entry["id"],
+                "kind": "team_members",
+                "status": "completed",
+                "created_at": entry["created_at"],
+                "updated_at": entry["created_at"],
+                "actor": {
+                    "user_id": entry.get("user_id"),
+                    "email": actor.get("email"),
+                    "full_name": actor.get("full_name"),
+                },
+                "meta": entry.get("metadata") or {},
+            }
+        )
+
+    contact_history = []
+    for job in contact_jobs:
+        result_url = None
+        if job.get("error_log"):
+            try:
+                import json
+
+                parsed = json.loads(job["error_log"])
+                if isinstance(parsed, dict):
+                    result_url = parsed.get("result_url")
+            except Exception:
+                result_url = None
+
+        contact_history.append(
+            {
+                "id": job["id"],
+                "kind": "contacts",
+                "status": job.get("status"),
+                "progress": job.get("progress", 0),
+                "created_at": job.get("created_at"),
+                "updated_at": job.get("updated_at"),
+                "download_url": result_url,
+                "meta": {},
+            }
+        )
+
+    combined = sorted(
+        [*team_history, *contact_history],
+        key=lambda item: item.get("created_at") or "",
+        reverse=True,
+    )[:limit]
+
+    return {"data": combined}
+
+
 # ── GDPR Compliance ────────────────────────────────────────────────────
 
 @router.post("/gdpr/erase-contact/{contact_id}")
-async def gdpr_erase_contact(contact_id: str, claims: JWTPayload = Depends(verify_jwt_token)):
+async def gdpr_erase_contact(contact_id: str, claims: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))):
+
     """
     GDPR Right to Erasure — anonymize a contact.
     Does NOT delete the row (preserves analytics history).

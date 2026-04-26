@@ -23,6 +23,8 @@ import {
     ShieldOff
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { can } from "@/utils/permissions";
+
 import { Badge, Button, ConfirmModal, EmptyState, FilterBar, InlineAlert, Input, ModalShell, PageHeader, SectionCard, StatCard, TableToolbar, useToast } from "@/components/ui";
 
 // ===== API Helper =====
@@ -441,15 +443,27 @@ export default function ContactsPage() {
     
     // Optimized Polling: Only poll history if specifically on that tab
     useEffect(() => {
-        if (token && activeTab === "history") {
+        if (!token) return;
+        
+        if (user && !can(user, "VIEW_CONTACT")) {
+            router.replace("/dashboard");
+            return;
+        }
+
+        if (activeTab === "history") {
             fetchBatches();
             const interval = setInterval(fetchBatches, 8000); // Poll every 8 seconds to prevent "looping" logs
             return () => clearInterval(interval);
         }
-        if (token && activeTab === "suppression") {
+        if (activeTab === "suppression") {
             fetchSuppressionList();
         }
-    }, [token, activeTab, suppressionPage]);
+    }, [token, user, activeTab, suppressionPage]);
+
+    if (!user || (user && !can(user, "VIEW_CONTACT"))) {
+        return null;
+    }
+
 
     // ===== Selection =====
     const toggleSelect = (id: string) => {

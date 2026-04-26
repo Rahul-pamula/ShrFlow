@@ -12,7 +12,8 @@ import os
 import uuid
 import json
 
-from utils.jwt_middleware import require_active_tenant
+from utils.jwt_middleware import require_active_tenant, JWTPayload
+from utils.permissions import require_permission
 from utils.supabase_client import db
 
 router = APIRouter(prefix="/domains", tags=["Domains"])
@@ -37,7 +38,10 @@ def get_ses_client():
     )
 
 @router.get("/")
-async def list_domains(tenant_id: str = Depends(require_active_tenant)):
+async def list_domains(
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("VIEW_DOMAIN"))
+):
     """List all domains for the active tenant"""
     res = db.client.table("domains")\
         .select("id, domain_name, status, created_at")\
@@ -47,7 +51,11 @@ async def list_domains(tenant_id: str = Depends(require_active_tenant)):
     return {"data": res.data}
 
 @router.post("/")
-async def add_domain(body: AddDomainRequest, tenant_id: str = Depends(require_active_tenant)):
+async def add_domain(
+    body: AddDomainRequest, 
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("ADD_DOMAIN"))
+):
     """
     Step 1: Send domain to AWS, get 3 DKIM tokens back.
     If no AWS keys are configured in .env, generates fake tokens for UI testing.
@@ -96,7 +104,11 @@ async def add_domain(body: AddDomainRequest, tenant_id: str = Depends(require_ac
 
 
 @router.post("/{domain_id}/verify")
-async def verify_domain(domain_id: str, tenant_id: str = Depends(require_active_tenant)):
+async def verify_domain(
+    domain_id: str, 
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("ADD_DOMAIN"))
+):
     """
     Step 2: Tell AWS to check the global DNS to see if the user pasted the tokens correctly.
     """
@@ -137,7 +149,11 @@ async def verify_domain(domain_id: str, tenant_id: str = Depends(require_active_
 
 
 @router.delete("/{domain_id}")
-async def delete_domain(domain_id: str, tenant_id: str = Depends(require_active_tenant)):
+async def delete_domain(
+    domain_id: str, 
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("ADD_DOMAIN"))
+):
     """Delete domain from DB and AWS SES"""
     res = db.client.table("domains").select("domain_name").eq("id", domain_id).eq("tenant_id", tenant_id).single().execute()
     if not res.data:

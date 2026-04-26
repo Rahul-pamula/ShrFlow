@@ -12,19 +12,25 @@ class StorageProvider(ABC):
     Any new storage method (S3, Azure, Google Cloud) must implement these methods.
     """
     @abstractmethod
-    async def upload(self, file: UploadFile, key: str) -> str:
+    async def upload(self, file: UploadFile, key: str, tenant_id: str) -> str:
         """Uploads a file and returns its public URL."""
         pass
 
     @abstractmethod
-    async def upload_bytes(self, content: bytes, key: str, content_type: str) -> str:
+    async def upload_bytes(self, content: bytes, key: str, content_type: str, tenant_id: str) -> str:
         """Uploads raw bytes and returns public URL."""
         pass
 
     @abstractmethod
-    def delete(self, key: str) -> bool:
+    def delete(self, key: str, tenant_id: str) -> bool:
         """Deletes a file by its key."""
         pass
+
+    @abstractmethod
+    def list_files(self, tenant_id: str) -> List[Dict[str, str]]:
+        """Lists files scoped to a tenant."""
+        pass
+
 
     @abstractmethod
     def generate_presigned_post(self, key: str, content_type: str, expires_in: int = 3600) -> Dict:
@@ -41,39 +47,46 @@ class LocalStorageProvider(StorageProvider):
         self.base_url = base_url
         self.base_path.mkdir(parents=True, exist_ok=True)
 
-    async def upload(self, file: UploadFile, key: str) -> str:
-        file_path = self.base_path / key
+    async def upload(self, file: UploadFile, key: str, tenant_id: str) -> str:
+        scoped_dir = self.base_path / tenant_id
+        scoped_dir.mkdir(parents=True, exist_ok=True)
+        file_path = scoped_dir / key
         await file.seek(0)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-        return f"{self.base_url}/{key}"
+        return f"{self.base_url}/{tenant_id}/{key}"
 
-    async def upload_bytes(self, content: bytes, key: str, content_type: str) -> str:
-        file_path = self.base_path / key
+    async def upload_bytes(self, content: bytes, key: str, content_type: str, tenant_id: str) -> str:
+        scoped_dir = self.base_path / tenant_id
+        scoped_dir.mkdir(parents=True, exist_ok=True)
+        file_path = scoped_dir / key
         with open(file_path, "wb") as buffer:
             buffer.write(content)
-        return f"{self.base_url}/{key}"
+        return f"{self.base_url}/{tenant_id}/{key}"
 
-    def list_files(self) -> List[Dict[str, str]]:
+
+    def list_files(self, tenant_id: str) -> List[Dict[str, str]]:
         assets = []
-        if not self.base_path.exists():
+        scoped_dir = self.base_path / tenant_id
+        if not scoped_dir.exists():
             return []
             
-        for file in self.base_path.iterdir():
+        for file in scoped_dir.iterdir():
             if file.is_file() and not file.name.startswith("."):
                 assets.append({
-                    "src": f"{self.base_url}/{file.name}",
+                    "src": f"{self.base_url}/{tenant_id}/{file.name}",
                     "name": file.name,
                     "type": "image" 
                 })
         return assets
 
-    def delete(self, key: str) -> bool:
-        file_path = self.base_path / key
+    def delete(self, key: str, tenant_id: str) -> bool:
+        file_path = self.base_path / tenant_id / key
         if file_path.exists():
             os.remove(file_path)
             return True
         return False
+
 
     def generate_presigned_post(self, key: str, content_type: str, expires_in: int = 3600) -> Dict:
         """Mock implementation for local storage."""
@@ -105,55 +118,60 @@ class S3StorageProvider(StorageProvider):
         # Extract the base host from endpoint_url if provided
         self.base_url = endpoint_url.replace("/storage/v1/s3", "/storage/v1/object/public") if endpoint_url else ""
 
-    async def upload(self, file: UploadFile, key: str) -> str:
+    async def upload(self, file: UploadFile, key: str, tenant_id: str) -> str:
         try:
             await file.seek(0)
-            print(f"DEBUG: Attempting upload to S3. Bucket: {self.bucket_name}, Key: {key}")
+            scoped_key = f"{tenant_id}/{key}"
+            print(f"DEBUG: Attempting upload to S3. Bucket: {self.bucket_name}, Key: {scoped_key}")
             self.s3_client.upload_fileobj(
                 file.file,
                 self.bucket_name,
-                key,
+                scoped_key,
                 ExtraArgs={"ContentType": file.content_type}
             )
             print(f"DEBUG: Upload successful.")
             
             if self.base_url:
-                return f"{self.base_url}/{self.bucket_name}/{key}"
-            return f"https://{self.bucket_name}.s3.amazonaws.com/{key}"
+                return f"{self.base_url}/{self.bucket_name}/{scoped_key}"
+            return f"https://{self.bucket_name}.s3.amazonaws.com/{scoped_key}"
         except Exception as e:
             print(f"DEBUG: S3 upload exception: {str(e)}")
             raise e
 
-    async def upload_bytes(self, content: bytes, key: str, content_type: str) -> str:
+    async def upload_bytes(self, content: bytes, key: str, content_type: str, tenant_id: str) -> str:
         try:
-            print(f"DEBUG: Attempting bytes upload to S3. Bucket: {self.bucket_name}, Key: {key}")
+            scoped_key = f"{tenant_id}/{key}"
+            print(f"DEBUG: Attempting bytes upload to S3. Bucket: {self.bucket_name}, Key: {scoped_key}")
             self.s3_client.upload_fileobj(
                 io.BytesIO(content),
                 self.bucket_name,
-                key,
+                scoped_key,
                 ExtraArgs={"ContentType": content_type}
             )
             print(f"DEBUG: Bytes upload successful.")
             
             if self.base_url:
-                return f"{self.base_url}/{self.bucket_name}/{key}"
-            return f"https://{self.bucket_name}.s3.amazonaws.com/{key}"
+                return f"{self.base_url}/{self.bucket_name}/{scoped_key}"
+            return f"https://{self.bucket_name}.s3.amazonaws.com/{scoped_key}"
         except Exception as e:
             print(f"DEBUG: S3 bytes upload exception: {str(e)}")
             raise e
 
-    def list_files(self) -> List[Dict[str, str]]:
-        response = self.s3_client.list_objects_v2(Bucket=self.bucket_name)
+    def list_files(self, tenant_id: str) -> List[Dict[str, str]]:
+        prefix = f"{tenant_id}/"
+        response = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=prefix)
         assets = []
         for obj in response.get("Contents", []):
             key = obj["Key"]
             src = f"{self.base_url}/{self.bucket_name}/{key}" if self.base_url else f"https://{self.bucket_name}.s3.amazonaws.com/{key}"
-            assets.append({"src": src, "name": key, "type": "image"})
+            assets.append({"src": src, "name": key.replace(prefix, ""), "type": "image"})
         return assets
 
-    def delete(self, key: str) -> bool:
-        self.s3_client.delete_object(Bucket=self.bucket_name, Key=key)
+    def delete(self, key: str, tenant_id: str) -> bool:
+        scoped_key = f"{tenant_id}/{key}"
+        self.s3_client.delete_object(Bucket=self.bucket_name, Key=scoped_key)
         return True
+
 
     def generate_presigned_post(self, key: str, content_type: str, expires_in: int = 3600) -> Dict:
         """Returns a presigned POST policy for direct S3 upload."""

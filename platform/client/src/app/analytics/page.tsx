@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Activity, AlertTriangle, ArrowRight, BarChart3, Mail, MousePointer, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { can } from '@/utils/permissions';
+import { useRouter } from 'next/navigation';
 import { Badge, Button, EmptyState, InlineAlert, PageHeader, SectionCard, StatCard } from '@/components/ui';
+
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
@@ -13,7 +16,9 @@ function formatPercent(value: number) {
 }
 
 export default function AnalyticsPage() {
-    const { token } = useAuth();
+    const { token, user, isLoading: authLoading } = useAuth();
+    const router = useRouter();
+
     const [health, setHealth] = useState<any>(null);
     const [eventsSummary, setEventsSummary] = useState<any>(null);
     const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -52,8 +57,19 @@ export default function AnalyticsPage() {
     };
 
     useEffect(() => {
-        load();
-    }, [token]);
+        if (!authLoading) {
+            if (user && !can(user, 'VIEW_ANALYTICS')) {
+                router.replace('/dashboard');
+            } else if (token) {
+                load();
+            }
+        }
+    }, [authLoading, token, user]);
+
+    if (authLoading || (user && !can(user, 'VIEW_ANALYTICS'))) {
+        return null;
+    }
+
 
     const sent = Number(health?.sent || 0);
     const opens = Number(health?.opens || 0);

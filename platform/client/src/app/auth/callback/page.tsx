@@ -5,8 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui';
 import Link from 'next/link';
+import { useAuth } from '@/context/AuthContext';
 
 function CallbackContent() {
+    const { handleAuthSuccess } = useAuth();
     const searchParams = useSearchParams();
     const router = useRouter();
     const [error, setError] = useState('');
@@ -18,50 +20,36 @@ function CallbackContent() {
             return;
         }
 
-                const token = searchParams.get('token');
-                const tenantStatus = searchParams.get('tenant_status');
-                const emailVerified = searchParams.get('email_verified') || 'true';
-
-                if (token) {
-                    try {
-                        // Instantly log the user into the browser session
-                        localStorage.setItem('auth_token', token);
-                        document.cookie = `auth_token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-                        document.cookie = `email_verified=${emailVerified}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-
-                if (tenantStatus) {
-                    document.cookie = `tenant_status=${tenantStatus}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-                }
-
-                // Construct User Data
-                const email = searchParams.get('email') || '';
-                const fullName = searchParams.get('full_name') || email.split('@')[0];
-
-                const userData = {
-                    userId: searchParams.get('user_id'),
-                    email: email,
-                    fullName: fullName,
-                    tenantId: searchParams.get('tenant_id'),
-                    tenantStatus: tenantStatus,
-                    role: searchParams.get('role') || 'owner',
-                    emailVerified: emailVerified === 'true',
+        const token = searchParams.get('token');
+        if (token) {
+            try {
+                const data = {
+                    token,
+                    user_id: searchParams.get('user_id'),
+                    tenant_id: searchParams.get('tenant_id'),
+                    tenant_status: searchParams.get('tenant_status'),
+                    role: searchParams.get('role'),
+                    email: searchParams.get('email'),
+                    full_name: searchParams.get('full_name'),
+                    workspace_type: searchParams.get('workspace_type'),
+                    onboarding_required: searchParams.get('onboarding_required') === 'true'
                 };
-                localStorage.setItem('user_data', JSON.stringify(userData));
 
-                // Hard navigation to force AuthContext to pick up the new tokens naturally
-                if (tenantStatus === 'onboarding') {
-                    window.location.href = '/onboarding/workspace';
+                const userData = handleAuthSuccess(data);
+
+                if (userData.tenantStatus === 'onboarding') {
+                    router.push('/onboarding/workspace');
                 } else {
-                    window.location.href = '/dashboard';
+                    router.push('/dashboard');
                 }
             } catch (err) {
-                console.error("Failed to parse social login response", err);
+                console.error("Failed to establish session", err);
                 setError('Failed to securely establish session.');
             }
         } else {
             setError('Invalid callback response from provider');
         }
-    }, [searchParams]);
+    }, [searchParams, handleAuthSuccess, router]);
 
     if (error) {
         return (
