@@ -74,6 +74,7 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - WORKER_PREFETCH_COUNT=10
       - WORKER_MAX_RETRIES=3
+      - PYTHONUNBUFFERED=1
     command: python email_sender.py
     depends_on:
       api:
@@ -105,6 +106,7 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - IMPORT_QUEUE_NAME=import_tasks_v4
+      - PYTHONUNBUFFERED=1
     command: python import_worker.py
     depends_on:
       api:
@@ -127,6 +129,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - RABBITMQ_URL=${RABBITMQ_URL}
       - REDIS_URL=${REDIS_URL}
+      - PYTHONUNBUFFERED=1
     command: python background_worker.py
     depends_on:
       api:
@@ -153,6 +156,7 @@ services:
       - RABBITMQ_URL=${RABBITMQ_URL}
       - REDIS_URL=${REDIS_URL}
       - SCHEDULER_POLL_INTERVAL=60
+      - PYTHONUNBUFFERED=1
     command: python scheduler.py
     depends_on:
       api:
@@ -180,6 +184,7 @@ services:
       - SYSTEM_SMTP_PASSWORD=${SYSTEM_SMTP_PASSWORD}
       - SYSTEM_SMTP_FROM_EMAIL=${SYSTEM_SMTP_FROM_EMAIL}
       - SYSTEM_SMTP_FROM_NAME=${SYSTEM_SMTP_FROM_NAME}
+      - PYTHONUNBUFFERED=1
     command: python centralized_email_worker.py
     depends_on:
       api:
