@@ -49,7 +49,7 @@ export default function SenderIdentitiesPage() {
         try {
             const [sendersRes, domainsRes] = await Promise.all([
                 fetch(`${API_BASE}/senders`, { headers: { Authorization: `Bearer ${token}` } }),
-                fetch(`${API_BASE}/domains`, { headers: { Authorization: `Bearer ${token}` } }),
+                fetch(`${API_BASE}/senders/domains`, { headers: { Authorization: `Bearer ${token}` } }),
             ]);
 
             if (sendersRes.ok) {

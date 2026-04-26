@@ -41,6 +41,28 @@ async def send_verification_email(to_email: str, token: str):
         raise HTTPException(status_code=500, detail="Failed to enqueue sender verification email.")
 
 
+# ─── List Available Domains for Senders ──────────────────────────────────────
+@router.get("/domains")
+async def list_sender_domains(
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("ADD_SENDER"))
+):
+    """List domains available for creating a sender (includes parent domains for franchises)"""
+    target_tenant_id = tenant_id
+    if jwt_payload.workspace_type == "FRANCHISE":
+        t_res = db.client.table("tenants").select("parent_tenant_id").eq("id", tenant_id).single().execute()
+        if t_res.data and t_res.data.get("parent_tenant_id"):
+            target_tenant_id = t_res.data.get("parent_tenant_id")
+
+    res = db.client.table("domains")\
+        .select("id, domain_name, status, created_at")\
+        .eq("tenant_id", target_tenant_id)\
+        .eq("status", "verified")\
+        .order("created_at", desc=True)\
+        .execute()
+    return {"data": res.data}
+
+
 # ─── List Senders ──────────────────────────────────────────────────────────────
 @router.get("/")
 async def list_senders(

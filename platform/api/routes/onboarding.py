@@ -31,6 +31,7 @@ class OnboardingStatusResponse(BaseModel):
     next_stage: Optional[str]
     required_stages: List[str]
     optional_stages: List[str]
+    current_data: Optional[dict] = None
 
 
 class BasicInfoRequest(BaseModel):
@@ -147,7 +148,12 @@ async def get_onboarding_status(jwt_payload: JWTPayload = Depends(require_permis
         completed_stages=completed_stages,
         next_stage=next_stage,
         required_stages=["basic_info", "compliance"],
-        optional_stages=["intent"]
+        optional_stages=["intent"],
+        current_data={
+            "workspace_name": tenant.get("workspace_name") or tenant.get("company_name") or "",
+            "organization_name": tenant.get("organization_name") or "",
+            "user_role": tenant.get("user_role") or ""
+        }
     )
 
 

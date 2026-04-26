@@ -18,7 +18,7 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
     const { isAuthenticated, isLoading, user } = useAuth();
 
     // Public routes that should NOT show sidebar (marketing/auth pages)
-    const publicRoutes = ['/', '/login', '/signup', '/docs', '/forgot-password', '/contact', '/pricing', '/unsubscribe'];
+    const publicRoutes = ['/', '/login', '/signup', '/docs', '/forgot-password', '/reset-password', '/verify-email', '/waiting-room', '/team/join', '/contact', '/pricing', '/auth/callback', '/unsubscribe'];
     const isPublicRoute = publicRoutes.includes(pathname || '');
     const isOnboardingRoute = pathname?.startsWith('/onboarding');
     const isSettingsRoute = pathname?.startsWith('/settings');

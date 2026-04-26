@@ -40,7 +40,7 @@ export function can(user: UserContext | null | undefined, action: Action): boole
     // STRICT WORKSPACE OVERRIDE:
     // If we are in a Franchise workspace, NO ONE can access parent-level infrastructure.
     if (user.workspaceType === 'FRANCHISE') {
-        if (action === 'ADD_DOMAIN' || action === 'VIEW_DOMAIN' || 
+        if (action === 'ADD_DOMAIN' || 
             action === 'ADD_FRANCHISE' || action === 'VIEW_BILLING') {
             return false;
         }
@@ -53,7 +53,7 @@ export function can(user: UserContext | null | undefined, action: Action): boole
             return true;
 
         case 'FRANCHISE_OWNER':
-            if (action === 'ADD_DOMAIN' || action === 'VIEW_DOMAIN' || action === 'ADD_FRANCHISE' || action === 'VIEW_BILLING') return false;
+            if (action === 'ADD_DOMAIN' || action === 'ADD_FRANCHISE' || action === 'VIEW_BILLING') return false;
             return true;
 
         case 'MANAGER':

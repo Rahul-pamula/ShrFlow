@@ -22,6 +22,8 @@ export default function TeamJoinPage() {
 
     // Guard against React StrictMode double-firing
     const hasAttempted = useRef(false);
+    // Safety: don't let authLoading hang forever
+    const [authTimedOut, setAuthTimedOut] = useState(false);
 
     const [status, setStatus] = useState<Status>('validating');
     const [errorMessage, setErrorMessage] = useState('');
@@ -29,8 +31,14 @@ export default function TeamJoinPage() {
 
     const inviteToken = searchParams.get('token');
 
+    // 5-second safety timeout so authLoading never hangs the page forever
     useEffect(() => {
-        if (authLoading) return;
+        const t = setTimeout(() => setAuthTimedOut(true), 5000);
+        return () => clearTimeout(t);
+    }, []);
+
+    useEffect(() => {
+        if (authLoading && !authTimedOut) return;
         if (hasAttempted.current) return;
 
         if (!inviteToken) {
@@ -48,9 +56,12 @@ export default function TeamJoinPage() {
                 // Check the invite target email without consuming the token
                 const validateRes = await fetch(`${API_BASE}/team/invites/validate?token=${inviteToken}`);
                 if (!validateRes.ok) {
-                    const err = await validateRes.json();
+                    const err = await validateRes.json().catch(() => ({}));
                     setStatus('error');
-                    setErrorMessage(err.detail || 'Invalid or expired invitation.');
+                    setErrorMessage(
+                        err.detail ||
+                        'This invitation link is invalid or has expired. Please ask the workspace owner to resend the invitation.'
+                    );
                     return;
                 }
 
@@ -119,7 +130,7 @@ export default function TeamJoinPage() {
         };
 
         validateAndAccept();
-    }, [authLoading, isAuthenticated, inviteToken, authToken, user, router]);
+    }, [authLoading, authTimedOut, isAuthenticated, inviteToken, authToken, user, router]);
 
     const handleSwitchAccount = () => {
         logout(); // clears session

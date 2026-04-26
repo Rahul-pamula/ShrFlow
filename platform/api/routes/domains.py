@@ -42,10 +42,17 @@ async def list_domains(
     tenant_id: str = Depends(require_active_tenant),
     jwt_payload: JWTPayload = Depends(require_permission("VIEW_DOMAIN"))
 ):
-    """List all domains for the active tenant"""
+    """List all domains for the active tenant (or parent tenant if franchise)"""
+    
+    target_tenant_id = tenant_id
+    if jwt_payload.workspace_type == "FRANCHISE":
+        t_res = db.client.table("tenants").select("parent_tenant_id").eq("id", tenant_id).single().execute()
+        if t_res.data and t_res.data.get("parent_tenant_id"):
+            target_tenant_id = t_res.data.get("parent_tenant_id")
+
     res = db.client.table("domains")\
         .select("id, domain_name, status, created_at")\
-        .eq("tenant_id", tenant_id)\
+        .eq("tenant_id", target_tenant_id)\
         .order("created_at", desc=True)\
         .execute()
     return {"data": res.data}

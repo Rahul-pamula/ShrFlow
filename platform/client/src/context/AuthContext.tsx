@@ -139,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (isLoading) return;
 
-        const publicRoutes = ['/', '/login', '/signup', '/docs', '/forgot-password', '/reset-password', '/verify-email', '/waiting-room', '/team/join', '/contact', '/pricing', '/auth/callback'];
+        const publicRoutes = ['/', '/login', '/signup', '/docs', '/forgot-password', '/reset-password', '/verify-email', '/waiting-room', '/team/join', '/contact', '/pricing', '/auth/callback', '/unsubscribe'];
         const isPublicRoute = publicRoutes.includes(pathname || '');
         const isOnboardingRoute = pathname?.startsWith('/onboarding');
 

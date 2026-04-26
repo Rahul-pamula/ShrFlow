@@ -45,7 +45,7 @@ router = APIRouter(prefix="/campaigns", tags=["Campaigns"])
 
 # === JWT Middleware ===
 from fastapi import Request
-from utils.jwt_middleware import require_active_tenant
+from utils.jwt_middleware import require_active_tenant, apply_data_isolation
 from utils.permissions import require_permission, verify_jwt_token, JWTPayload
 from services.audit_service import write_log
 

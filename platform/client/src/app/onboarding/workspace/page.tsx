@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, ArrowRight } from 'lucide-react';
+import { Building2, ArrowRight, Loader2 } from 'lucide-react';
 import { OnboardingShell } from '@/components/onboarding';
 import { Button, InlineAlert, Input } from '@/components/ui';
+import { useAuth } from '@/context/AuthContext';
 
 export default function WorkspaceOnboarding() {
     const router = useRouter();
@@ -14,8 +15,36 @@ export default function WorkspaceOnboarding() {
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(false);
+    const [fetching, setFetching] = useState(true);
+    const { user } = useAuth();
 
     const roles = ['Founder', 'Developer', 'Marketer', 'Other'];
+
+    // Fetch current status to pre-fill
+    useEffect(() => {
+        async function fetchStatus() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/onboarding/status`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.current_data) {
+                        setFormData({
+                            workspaceName: data.current_data.workspace_name || '',
+                            role: data.current_data.user_role || '',
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to fetch onboarding status:", err);
+            } finally {
+                setFetching(false);
+            }
+        }
+        fetchStatus();
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -66,10 +95,18 @@ export default function WorkspaceOnboarding() {
             step={1}
             totalSteps={4}
             icon={<Building2 className="h-6 w-6" />}
-            title="Set up your workspace"
-            description="We’ll use this to shape your initial defaults and make the rest of setup much smoother."
+            title={user?.workspaceType === 'FRANCHISE' ? "Confirm your workspace" : "Set up your workspace"}
+            description={user?.workspaceType === 'FRANCHISE' 
+                ? "You've been invited to join this franchise workspace. Please confirm the details below." 
+                : "We’ll use this to shape your initial defaults and make the rest of setup much smoother."}
         >
-            <form onSubmit={handleSubmit} className="space-y-6">
+            {fetching ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                    <Loader2 className="h-8 w-8 animate-spin text-[var(--accent)]" />
+                    <p className="text-sm text-[var(--text-muted)]">Loading your workspace...</p>
+                </div>
+            ) : (
+                <form onSubmit={handleSubmit} className="space-y-6">
                 {errors.general && (
                     <InlineAlert
                         variant="danger"
@@ -116,7 +153,8 @@ export default function WorkspaceOnboarding() {
                     {loading ? 'Saving...' : 'Continue'}
                     {!loading && <ArrowRight className="h-5 w-5" />}
                 </Button>
-            </form>
+                </form>
+            )}
         </OnboardingShell>
     );
 }

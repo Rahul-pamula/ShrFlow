@@ -33,7 +33,7 @@ def can(payload: JWTPayload, action: str) -> bool:
     # Franchises CANNOT access parent infrastructure,
     # regardless of whether they are an 'owner' or 'manager'.
     if workspace_type == "FRANCHISE":
-        if action in ["ADD_DOMAIN", "VIEW_DOMAIN", "ADD_FRANCHISE", "VIEW_BILLING"]:
+        if action in ["ADD_DOMAIN", "ADD_FRANCHISE", "VIEW_BILLING"]:
             return False
 
     # --------------------------------------------------
@@ -48,7 +48,7 @@ def can(payload: JWTPayload, action: str) -> bool:
             "VIEW_SENDER", "VIEW_SETTINGS", "MANAGE_SETTINGS", "CREATE_CAMPAIGN", "VIEW_CAMPAIGN",
             "MANAGE_TEAM", "VIEW_TEAM", "MANAGE_CONTACT", "VIEW_CONTACT", "VIEW_ANALYTICS",
             "VIEW_ASSETS", "ADD_ASSETS", "VIEW_TEMPLATE", "MANAGE_TEMPLATE",
-            "CHANGE_ISOLATION_MODEL"
+            "CHANGE_ISOLATION_MODEL", "VIEW_DOMAIN"
         ]
 
 

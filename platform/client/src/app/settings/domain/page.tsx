@@ -195,10 +195,12 @@ export default function DomainSettingsPage() {
                 title="Sending Domains"
                 subtitle="Verify infrastructure once, then reuse it everywhere across campaigns, templates, and analytics."
                 action={
-                    <Button onClick={() => setShowAddModal(true)}>
-                        <Plus className="h-4 w-4" />
-                        Add Domain
-                    </Button>
+                    user?.workspaceType !== 'FRANCHISE' ? (
+                        <Button onClick={() => setShowAddModal(true)}>
+                            <Plus className="h-4 w-4" />
+                            Add Domain
+                        </Button>
+                    ) : undefined
                 }
             />
 
@@ -215,7 +217,7 @@ export default function DomainSettingsPage() {
                     icon={<Globe className="h-10 w-10" />}
                     title="No domains connected"
                     description="Add your custom domain to authenticate mail, improve inbox placement, and remove provider branding."
-                    action={<Button onClick={() => setShowAddModal(true)}>Connect a Domain</Button>}
+                    action={user?.workspaceType !== 'FRANCHISE' ? <Button onClick={() => setShowAddModal(true)}>Connect a Domain</Button> : undefined}
                 />
             ) : (
                 <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
@@ -360,19 +362,21 @@ export default function DomainSettingsPage() {
                                 </div>
                             )}
 
-                            <SectionCard tone="danger">
-                                <div className="flex items-center justify-between gap-4">
-                                    <div>
-                                        <h3 className="text-base font-semibold text-[var(--danger)]">Danger Zone</h3>
-                                        <p className="mt-1 text-sm text-[var(--text-muted)]">
-                                            Remove this domain and disable sending from it across the workspace.
-                                        </p>
+                            {user?.workspaceType !== 'FRANCHISE' && (
+                                <SectionCard tone="danger">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <div>
+                                            <h3 className="text-base font-semibold text-[var(--danger)]">Danger Zone</h3>
+                                            <p className="mt-1 text-sm text-[var(--text-muted)]">
+                                                Remove this domain and disable sending from it across the workspace.
+                                            </p>
+                                        </div>
+                                        <Button variant="danger" onClick={() => setPendingRemoveId(selectedDomain.id)}>
+                                            Remove Domain
+                                        </Button>
                                     </div>
-                                    <Button variant="danger" onClick={() => setPendingRemoveId(selectedDomain.id)}>
-                                        Remove Domain
-                                    </Button>
-                                </div>
-                            </SectionCard>
+                                </SectionCard>
+                            )}
                         </div>
                     )}
                 </div>

@@ -7,7 +7,7 @@ Endpoints:
   GET /analytics/campaigns/{id}/recipients → per-recipient event breakdown
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
-from utils.jwt_middleware import require_active_tenant, JWTPayload
+from utils.jwt_middleware import require_active_tenant, JWTPayload, apply_data_isolation
 from utils.permissions import require_permission
 from utils.supabase_client import db
 import logging
