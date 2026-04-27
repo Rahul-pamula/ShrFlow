@@ -10,17 +10,17 @@ import { Badge, Button, ConfirmModal, EmptyState, InlineAlert, PageHeader, Secti
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
 const PLAN_FEATURES: Record<string, string[]> = {
-    Free: ['500 contacts', '3,000 emails/mo', 'Shared IPs', '1 user', 'Community support'],
-    Starter: ['5,000 contacts', '10,000 emails/mo', 'Shared IPs', '3 users', 'Email support', 'Unsubscribe page'],
-    Pro: ['50,000 contacts', '100,000 emails/mo', 'Custom domain (DKIM)', 'Unlimited users', 'Priority support', 'API access', 'Advanced analytics'],
-    Enterprise: ['500,000 contacts', '1,000,000 emails/mo', 'Dedicated IPs', 'SLA 99.9%', '24/7 Support', 'Custom contracts', 'SSO / SAML'],
+    Free: ['500 contacts', '1,000 emails/mo', '1 user', '1 domain', 'Basic analytics', 'Templates'],
+    Starter: ['5,000 contacts', '25,000 emails/mo', '3 users', '3 domains', 'Basic automation', 'Segmentation', 'Email support'],
+    Pro: ['50,000 contacts', '150,000 emails/mo', 'Unlimited users', 'Unlimited domains', 'Advanced automation', 'API access', 'Priority support'],
+    Enterprise: ['500,000+ contacts', '1,000,000+ emails/mo', 'Dedicated IP', 'SLA', 'SSO/SAML', '24/7 support'],
 };
 
 const PLAN_PRICE_INR: Record<string, string> = {
     Free: '0',
-    Starter: '999',
-    Pro: '3,499',
-    Enterprise: '24,999',
+    Starter: '799',
+    Pro: '2,499',
+    Enterprise: '9,999',
 };
 
 type Plan = {
@@ -29,6 +29,8 @@ type Plan = {
     price_monthly: number;
     max_monthly_emails: number;
     max_contacts: number;
+    max_users: number;
+    max_domains: number;
     allow_custom_domain: boolean;
 };
 

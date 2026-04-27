@@ -10,10 +10,10 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 
 # ─── Static plan ordering for upgrade/downgrade direction ───────────────────
 PLAN_PRICE_ORDER = {
-    "11111111-1111-1111-1111-111111111111": 0,   # Free      $0
-    "22222222-2222-2222-2222-222222222222": 1,   # Starter   $29
-    "33333333-3333-3333-3333-333333333333": 2,   # Pro       $99
-    "44444444-4444-4444-4444-444444444444": 3,   # Enterprise $499
+    "11111111-1111-1111-1111-111111111111": 0,   # Free      ₹0
+    "22222222-2222-2222-2222-222222222222": 1,   # Starter   ₹799
+    "33333333-3333-3333-3333-333333333333": 2,   # Pro       ₹2,499
+    "44444444-4444-4444-4444-444444444444": 3,   # Enterprise ₹9,999
 }
 
 class ChangePlanRequest(BaseModel):
@@ -25,7 +25,7 @@ def _get_tenant_billing(tenant_id: str) -> dict:
     res = db.client.table("tenants").select(
         "plan_id, emails_sent_this_cycle, billing_cycle_start, billing_cycle_end, "
         "scheduled_plan_id, scheduled_plan_effective_at, "
-        "plans!tenants_plan_id_fkey(id, name, price_monthly, max_monthly_emails, max_contacts, allow_custom_domain)"
+        "plans!tenants_plan_id_fkey(id, name, price_monthly, max_monthly_emails, max_contacts, max_users, max_domains, allow_custom_domain)"
     ).eq("id", tenant_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Tenant billing profile not found")
@@ -34,7 +34,7 @@ def _get_tenant_billing(tenant_id: str) -> dict:
 
 def _get_plan(plan_id: str) -> dict:
     res = db.client.table("plans").select(
-        "id, name, price_monthly, max_monthly_emails, max_contacts, allow_custom_domain"
+        "id, name, price_monthly, max_monthly_emails, max_contacts, max_users, max_domains, allow_custom_domain"
     ).eq("id", plan_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Plan not found")
@@ -74,7 +74,7 @@ async def get_current_plan(
 
     # All plans (for pricing table)
     all_plans_res = db.client.table("plans").select(
-        "id, name, price_monthly, max_monthly_emails, max_contacts, allow_custom_domain"
+        "id, name, price_monthly, max_monthly_emails, max_contacts, max_users, max_domains, allow_custom_domain"
     ).order("price_monthly").execute()
 
     # Compute billing_cycle_end if missing

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Download, Mail, RefreshCcw, Shield, Trash2, UserCog, UserPlus, Users, X } from 'lucide-react';
+import { AlertTriangle, ArrowUp, CheckCircle2, Download, Mail, RefreshCcw, Shield, Trash2, UserCog, UserPlus, Users, X, Zap } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { can } from '@/utils/permissions';
 import { useRouter } from 'next/navigation';
@@ -62,6 +62,8 @@ export default function TeamSettingsPage() {
     const [showExportModal, setShowExportModal] = useState(false);
     const [exportRole, setExportRole] = useState<'all' | 'manager' | 'member'>('all');
     const [exportInvitedBy, setExportInvitedBy] = useState<string>('all');
+    const [validationResult, setValidationResult] = useState<any>(null);
+    const [isValidating, setIsValidating] = useState(false);
 
     const membersAbortRef = useRef<AbortController | null>(null);
     const invitesAbortRef = useRef<AbortController | null>(null);
@@ -69,11 +71,20 @@ export default function TeamSettingsPage() {
     const myRole = members.find((member) => member.user_id === user?.userId)?.role || 'member';
     const isManagerOrOwner = myRole === 'manager' || myRole === 'owner';
 
-    const metrics = useMemo(() => ([
-        { label: 'Active Members', value: members.length.toString() },
-        { label: 'Pending Invites', value: invites.length.toString() },
-        { label: 'Owners / Managers', value: members.filter((member) => member.role !== 'member').length.toString() },
-    ]), [members, invites]);
+    const metrics = useMemo(() => {
+        const baseMetrics = [
+            { label: 'Active Members', value: members.length.toString() },
+            { label: 'Pending Invites', value: invites.length.toString() },
+            { label: 'Owners / Managers', value: members.filter((member) => member.role !== 'member').length.toString() },
+        ];
+        if (validationResult && validationResult.limit !== -1) {
+            baseMetrics.push({ 
+                label: 'Seats Used', 
+                value: `${validationResult.used} / ${validationResult.limit}` 
+            });
+        }
+        return baseMetrics;
+    }, [members, invites, validationResult]);
 
     useEffect(() => {
         if (!authLoading) {
@@ -129,10 +140,66 @@ export default function TeamSettingsPage() {
         }
     };
 
+    const fetchValidation = async () => {
+        if (!token) return;
+        setIsValidating(true);
+        try {
+            const res = await fetch(`${API_BASE}/team/invites/validate`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+                setValidationResult(await res.json());
+            }
+        } catch (err) {
+            console.error('Validation fetch failed:', err);
+        } finally {
+            setIsValidating(false);
+        }
+    };
+
+    useEffect(() => {
+        if (token) fetchValidation();
+    }, [token]);
+
+    useEffect(() => {
+        // Restore pending invite if returning from an upgrade
+        const savedInvite = localStorage.getItem('pending_team_invite');
+        if (savedInvite && typeof window !== 'undefined') {
+            try {
+                const parsed = JSON.parse(savedInvite);
+                // Check TTL (30 minutes)
+                const now = Date.now();
+                if (parsed.timestamp && now - parsed.timestamp > 30 * 60 * 1000) {
+                    localStorage.removeItem('pending_team_invite');
+                } else {
+                    setInviteEmail(parsed.email || '');
+                    setInviteRole(parsed.role || 'member');
+                    setShowInviteModal(true);
+                }
+            } catch (e) {
+                console.error("Failed to parse pending invite", e);
+                localStorage.removeItem('pending_team_invite');
+            }
+        }
+    }, []);
+
+    const handleUpgradeClick = () => {
+        if (inviteEmail || inviteRole !== 'member') {
+            localStorage.setItem('pending_team_invite', JSON.stringify({ 
+                email: inviteEmail, 
+                role: inviteRole,
+                timestamp: Date.now()
+            }));
+            localStorage.setItem('upgrade_return_path', '/settings/team');
+        }
+        router.push('/settings/billing');
+    };
+
     const resetInviteForm = () => {
         setInviteEmail('');
         setInviteRole('member');
         setInviteStatus('idle');
+        localStorage.removeItem('pending_team_invite');
     };
 
     const handleSendInvite = async (e: React.FormEvent) => {
@@ -158,6 +225,7 @@ export default function TeamSettingsPage() {
                 setShowInviteModal(false);
                 resetInviteForm();
                 fetchTeam();
+                fetchValidation();
             }, 900);
         } catch (inviteError) {
             console.error(inviteError);
@@ -177,6 +245,7 @@ export default function TeamSettingsPage() {
             success(`Removed ${pendingRemoveMember.email} from the workspace.`);
             setPendingRemoveMember(null);
             fetchTeam();
+            fetchValidation();
         } catch (removeError) {
             console.error(removeError);
             error('Could not remove that member.');
@@ -348,12 +417,19 @@ export default function TeamSettingsPage() {
                         <div className="flex items-center gap-2">
                             <Button variant="outline" size="sm" onClick={() => setShowExportModal(true)}>
                                 <Download className="mr-2 h-4 w-4" />
-                                Export
+                                 Export
                             </Button>
-                            <Button size="sm" onClick={() => setShowInviteModal(true)}>
-                                <UserPlus className="mr-2 h-4 w-4" />
-                                Invite Member
-                            </Button>
+                            {validationResult?.status === 'LIMIT_EXCEEDED' ? (
+                                <Button size="sm" variant="primary" onClick={handleUpgradeClick} className="bg-gradient-to-r from-[var(--accent)] to-[#6366f1] hover:opacity-90">
+                                    <ArrowUp className="mr-2 h-4 w-4" />
+                                    Upgrade to Add Members
+                                </Button>
+                            ) : (
+                                <Button size="sm" onClick={() => setShowInviteModal(true)} isLoading={isValidating}>
+                                    <UserPlus className="mr-2 h-4 w-4" />
+                                    Invite Member
+                                </Button>
+                            )}
                         </div>
                     ) : undefined
                 }
@@ -512,60 +588,114 @@ export default function TeamSettingsPage() {
                 maxWidthClass="max-w-md"
             >
                 <form onSubmit={handleSendInvite} className="space-y-6">
-                    <Input
-                        label="Email Address"
-                        type="email"
-                        required
-                        value={inviteEmail}
-                        onChange={(e) => setInviteEmail(e.target.value)}
-                        placeholder="colleague@company.com"
-                        autoFocus
-                    />
-
-                    <div className="grid grid-cols-1 gap-6">
-                        <SectionCard title="Workspace Role" description="Controls administrative permissions inside the workspace." noPadding className="border-0 bg-transparent">
-                            <div className="grid gap-3">
-                                {(user?.role === 'MANAGER' ? ['member'] as const : ['member', 'manager'] as const).map((role) => (
-                                    <button
-                                        key={role}
-                                        type="button"
-                                        onClick={() => setInviteRole(role)}
-                                        className={`rounded-[var(--radius)] border p-4 text-left transition ${inviteRole === role ? 'border-[var(--accent)] bg-[var(--info-bg)]/40' : 'border-[var(--border)] bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)]'}`}
-                                    >
-                                        <p className="text-sm font-semibold text-[var(--text-primary)] capitalize">{role}</p>
-                                        <p className="mt-1 text-xs text-[var(--text-muted)]">{role === 'manager' ? 'Manage domains, invites, and member access.' : 'Build campaigns and work with audience data.'}</p>
-                                    </button>
-                                ))}
+                    {validationResult?.status === 'LIMIT_EXCEEDED' ? (
+                        <div className="space-y-6">
+                            <div className="rounded-[var(--radius-lg)] border border-[var(--danger-border)] bg-[var(--danger-bg)]/20 p-6">
+                                <div className="flex items-center gap-3 text-[var(--danger)]">
+                                    <AlertTriangle className="h-6 w-6" />
+                                    <h3 className="text-base font-bold">Team Limit Reached</h3>
+                                </div>
+                                <div className="mt-4 space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-[var(--text-muted)]">Your plan allows:</span>
+                                        <span className="font-semibold text-[var(--text-primary)]">{validationResult.limit} user{validationResult.limit !== 1 ? 's' : ''}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-[var(--text-muted)]">Current total:</span>
+                                        <span className="font-semibold text-[var(--text-primary)]">{validationResult.current} member{validationResult.current !== 1 ? 's' : ''}</span>
+                                    </div>
+                                    <p className="mt-3 text-xs italic text-[var(--text-muted)] border-t border-[var(--danger-border)] pt-3">
+                                        🚫 Upgrade your plan to add managers and members.
+                                    </p>
+                                </div>
                             </div>
-                        </SectionCard>
-                    </div>
 
-                    {pendingInviteError && (
-                        <InlineAlert
-                            variant="danger"
-                            title="Failed to send invite"
-                            description="The user may already exist in an isolated state or the invitation could not be created."
-                            icon={<AlertTriangle className="mt-0.5 h-4 w-4" />}
-                        />
+                            {validationResult.recommended_plan && (
+                                <div className="rounded-[var(--radius-lg)] border border-[var(--accent-border)] bg-[var(--accent)]/5 p-6">
+                                    <div className="flex items-center gap-3 text-[var(--accent)]">
+                                        <Zap className="h-5 w-5" />
+                                        <h4 className="text-sm font-bold uppercase tracking-wider">Recommended Plan</h4>
+                                    </div>
+                                    <div className="mt-3 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-lg font-bold text-[var(--text-primary)]">{validationResult.recommended_plan.name}</p>
+                                            <p className="text-xs text-[var(--text-muted)]">Allows up to {validationResult.recommended_plan.limit === -1 ? 'Unlimited' : validationResult.recommended_plan.limit} users</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-sm font-semibold text-[var(--text-primary)]">{validationResult.recommended_plan.price}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex flex-col gap-3">
+                                <Button type="button" onClick={handleUpgradeClick} fullWidth className="bg-gradient-to-r from-[var(--accent)] to-[#6366f1]">
+                                    Upgrade Plan
+                                </Button>
+                                <Button type="button" variant="ghost" onClick={() => { setShowInviteModal(false); resetInviteForm(); }} fullWidth>
+                                    Cancel
+                                </Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <Input
+                                label="Email Address"
+                                type="email"
+                                required
+                                value={inviteEmail}
+                                onChange={(e) => setInviteEmail(e.target.value)}
+                                placeholder="colleague@company.com"
+                                autoFocus
+                            />
+
+                            <div className="grid grid-cols-1 gap-6">
+                                <SectionCard title="Workspace Role" description="Controls administrative permissions inside the workspace." noPadding className="border-0 bg-transparent">
+                                    <div className="grid gap-3">
+                                        {(user?.role === 'MANAGER' ? ['member'] as const : ['member', 'manager'] as const).map((role) => (
+                                            <button
+                                                key={role}
+                                                type="button"
+                                                onClick={() => setInviteRole(role)}
+                                                disabled={validationResult?.used >= validationResult?.limit && validationResult?.limit !== -1}
+                                                className={`rounded-[var(--radius)] border p-4 text-left transition ${inviteRole === role ? 'border-[var(--accent)] bg-[var(--info-bg)]/40' : 'border-[var(--border)] bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)]'} disabled:opacity-50`}
+                                            >
+                                                <p className="text-sm font-semibold text-[var(--text-primary)] capitalize">{role}</p>
+                                                <p className="mt-1 text-xs text-[var(--text-muted)]">{role === 'manager' ? 'Manage domains, invites, and member access.' : 'Build campaigns and work with audience data.'}</p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </SectionCard>
+                            </div>
+
+                            {pendingInviteError && (
+                                <InlineAlert
+                                    variant="danger"
+                                    title="Failed to send invite"
+                                    description="The user may already exist in an isolated state or the invitation could not be created."
+                                    icon={<AlertTriangle className="mt-0.5 h-4 w-4" />}
+                                />
+                            )}
+
+                            {inviteStatus === 'success' && (
+                                <InlineAlert
+                                    variant="success"
+                                    title="Invite sent"
+                                    description="The invitation email has been issued successfully."
+                                    icon={<CheckCircle2 className="mt-0.5 h-4 w-4" />}
+                                />
+                            )}
+
+                            <div className="flex items-center justify-end gap-3">
+                                <Button type="button" variant="ghost" onClick={() => { setShowInviteModal(false); resetInviteForm(); }} disabled={inviteStatus === 'sending'}>
+                                    Cancel
+                                </Button>
+                                <Button type="submit" isLoading={inviteStatus === 'sending'} disabled={inviteStatus === 'success' || (validationResult?.used >= validationResult?.limit && validationResult?.limit !== -1)}>
+                                    Send Invitation Link
+                                </Button>
+                            </div>
+                        </>
                     )}
-
-                    {inviteStatus === 'success' && (
-                        <InlineAlert
-                            variant="success"
-                            title="Invite sent"
-                            description="The invitation email has been issued successfully."
-                            icon={<CheckCircle2 className="mt-0.5 h-4 w-4" />}
-                        />
-                    )}
-
-                    <div className="flex items-center justify-end gap-3">
-                        <Button type="button" variant="ghost" onClick={() => { setShowInviteModal(false); resetInviteForm(); }} disabled={inviteStatus === 'sending'}>
-                            Cancel
-                        </Button>
-                        <Button type="submit" isLoading={inviteStatus === 'sending'} disabled={inviteStatus === 'success'}>
-                            Send Invitation Link
-                        </Button>
-                    </div>
                 </form>
             </ModalShell>
 

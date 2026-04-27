@@ -15,6 +15,7 @@ import json
 from utils.jwt_middleware import require_active_tenant, JWTPayload
 from utils.permissions import require_permission, can
 from utils.supabase_client import db
+from services.plan_service import PlanService
 
 router = APIRouter(prefix="/domains", tags=["Domains"])
 
@@ -70,6 +71,14 @@ async def add_domain(
     # Explicit defense-in-depth security check
     if not can(jwt_payload, "ADD_DOMAIN") or jwt_payload.workspace_type == "FRANCHISE":
         raise HTTPException(status_code=403, detail="Franchise workspaces cannot manipulate domains.")
+
+    # Plan Limit Check
+    can_add, stats = PlanService.check_domain_limit(tenant_id, 1)
+    if not can_add:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Domain limit reached. Your plan allows up to {stats['limit']} domains. Please upgrade to add more domains."
+        )
 
     domain = body.domain_name.strip().lower()
     

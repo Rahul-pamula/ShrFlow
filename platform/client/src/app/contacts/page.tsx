@@ -20,7 +20,9 @@ import {
     CheckCircle2,
     XCircle,
     Tag,
-    ShieldOff
+    ShieldOff,
+    ArrowUp,
+    Zap
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { can } from "@/utils/permissions";
@@ -299,6 +301,8 @@ export default function ContactsPage() {
     const [showBatchDelete, setShowBatchDelete] = useState<Batch | null>(null);
     const [showSingleDelete, setShowSingleDelete] = useState<string | null>(null);
     const [deleteConfirmText, setDeleteConfirmText] = useState("");
+    const [validationResult, setValidationResult] = useState<any>(null);
+    const [isValidating, setIsValidating] = useState(false);
 
     // Upload state
     const [uploadStep, setUploadStep] = useState(1);
@@ -484,44 +488,69 @@ export default function ContactsPage() {
     const handleFileSelect = async (f: File) => {
         setFile(f);
         setUploading(true);
+        setIsValidating(true);
+        setValidationResult(null);
+
         try {
+            // 1. Get Row Count & Headers (Preview)
             const formData = new FormData();
             formData.append("file", f);
-            const res = await fetch(`${API_BASE}/contacts/upload/preview`, {
+            const previewRes = await fetch(`${API_BASE}/contacts/upload/preview`, {
                 method: "POST",
                 headers: apiHeaders(token!),
                 body: formData
             });
-            if (res.ok) {
-                const data = await res.json();
-                setHeaders(data.headers);
-                setRowCount(data.row_count);
-                // Auto-detect columns by name matching
-                const autoMap: Record<string, string> = {};
-                data.headers.forEach((col: string) => {
-                    const lower = col.toLowerCase().trim();
-                    if (lower === "email" || lower === "email address" || lower === "e-mail") {
-                        autoMap[col] = "email";
-                    } else if (lower === "first name" || lower === "firstname" || lower === "fname") {
-                        autoMap[col] = "first_name";
-                    } else if (lower === "last name" || lower === "lastname" || lower === "lname") {
-                        autoMap[col] = "last_name";
-                    } else {
-                        // Default to skip
-                        autoMap[col] = "skip";
-                    }
-                });
-                setColumnMappings(autoMap);
-                setUploadStep(2);
-            } else {
-                const err = await res.json();
-                error(err.detail || "Preview failed");
+
+            if (!previewRes.ok) {
+                const err = await previewRes.json();
+                throw new Error(err.detail || "Preview failed");
             }
+            const previewData = await previewRes.json();
+            setHeaders(previewData.headers);
+            setRowCount(previewData.row_count);
+
+            // 2. Validate Limit
+            const valRes = await fetch(`${API_BASE}/contacts/import/validate`, {
+                method: "POST",
+                headers: { ...apiHeaders(token!), "Content-Type": "application/json" },
+                body: JSON.stringify({ file_contact_count: previewData.row_count })
+            });
+
+            if (!valRes.ok) throw new Error("Validation failed");
+            const valData = await valRes.json();
+            setValidationResult(valData);
+
+            if (valData.status !== "OK") {
+                // If limit exceeded, we stay on Step 1 but show the error UI
+                setUploading(false);
+                setIsValidating(false);
+                return;
+            }
+
+            // 3. Auto-detect columns (if OK)
+            const autoMap: Record<string, string> = {};
+            previewData.headers.forEach((col: string) => {
+                const lower = col.toLowerCase().trim();
+                if (lower === "email" || lower === "email address" || lower === "e-mail") {
+                    autoMap[col] = "email";
+                } else if (lower === "first name" || lower === "firstname" || lower === "fname") {
+                    autoMap[col] = "first_name";
+                } else if (lower === "last name" || lower === "lastname" || lower === "lname") {
+                    autoMap[col] = "last_name";
+                } else {
+                    autoMap[col] = "skip";
+                }
+            });
+            setColumnMappings(autoMap);
+            setUploadStep(2);
+
         } catch (e: any) {
             console.error("Upload error caught:", e);
             error(`Upload failed: ${e.message || e}`);
+        } finally {
+            setUploading(false);
+            setIsValidating(false);
         }
-        setUploading(false);
     };
 
     const handleImport = async () => {
@@ -658,6 +687,7 @@ export default function ContactsPage() {
         setColumnMappings({});
         setImportResult(null);
         setJobProgress(null);
+        setValidationResult(null);
     };
 
     // ===== Delete Operations =====
@@ -1600,20 +1630,88 @@ export default function ContactsPage() {
                 maxWidthClass="max-w-2xl"
             >
 
-                        {/* Step 1: File Upload */}
-                        {uploadStep === 1 && (
+                        {/* Step 1: File Selection / Upload */}
+                        {uploadStep === 1 && !validationResult && (
                             <div>
-                                <label htmlFor="file-upload" className="flex cursor-pointer flex-col items-center justify-center rounded-[var(--radius-lg)] border-2 border-dashed border-[var(--border)] bg-[var(--bg-primary)] p-10 text-center transition hover:border-[var(--accent-border)]"
-                                    onDragOver={(e) => e.preventDefault()}
-                                    onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files[0]) handleFileSelect(e.dataTransfer.files[0]); }}
-                                >
-                                    <Upload className="mb-2 h-6 w-6 text-[var(--text-muted)]" />
-                                    <p className="mb-1 text-sm font-medium text-[var(--text-primary)]">
-                                        {uploading ? "Parsing..." : "Click to upload or drag and drop"}
-                                    </p>
-                                    <p className="text-xs text-[var(--text-muted)]">CSV or Excel files (up to 2MB)</p>
-                                    <input id="file-upload" type="file" accept=".csv,.xlsx" onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])} style={{ display: "none" }} />
-                                </label>
+                                {!file ? (
+                                    <label htmlFor="file-upload" className="flex cursor-pointer flex-col items-center justify-center rounded-[var(--radius-lg)] border-2 border-dashed border-[var(--border)] bg-[var(--bg-primary)] p-10 text-center transition hover:border-[var(--accent-border)]"
+                                        onDragOver={(e) => e.preventDefault()}
+                                        onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files[0]) handleFileSelect(e.dataTransfer.files[0]); }}
+                                    >
+                                        <Upload className="mb-2 h-6 w-6 text-[var(--text-muted)]" />
+                                        <p className="mb-1 text-sm font-medium text-[var(--text-primary)]">
+                                            {isValidating ? "Validating plan limits..." : uploading ? "Parsing file..." : "Click to upload or drag and drop"}
+                                        </p>
+                                        <p className="text-xs text-[var(--text-muted)]">CSV or Excel files (up to 2MB)</p>
+                                        <input id="file-upload" type="file" accept=".csv,.xlsx" onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])} style={{ display: "none" }} />
+                                    </label>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-10 text-center">
+                                        <FileSpreadsheet className="mb-2 h-8 w-8 text-[var(--accent)]" />
+                                        <p className="text-sm font-semibold text-[var(--text-primary)]">{file.name}</p>
+                                        <p className="mb-4 text-xs text-[var(--text-muted)]">{(file.size / 1024).toFixed(1)} KB · {rowCount} rows</p>
+                                        <div className="flex w-full gap-2">
+                                            <Button variant="outline" onClick={() => { setFile(null); setRowCount(0); setHeaders([]); }} fullWidth>Remove</Button>
+                                            <Button onClick={() => handleFileSelect(file)} fullWidth isLoading={isValidating}>Upload</Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Step 1: Limit Exceeded UI */}
+                        {uploadStep === 1 && validationResult && validationResult.status !== "OK" && (
+                            <div className="space-y-6">
+                                <div className="rounded-[var(--radius-lg)] border border-[var(--danger-border)] bg-[var(--danger-bg)]/20 p-6">
+                                    <div className="flex items-center gap-3 text-[var(--danger)]">
+                                        <AlertTriangle className="h-6 w-6" />
+                                        <h3 className="text-base font-bold">Contact Limit Reached</h3>
+                                    </div>
+                                    <div className="mt-4 space-y-2 text-sm">
+                                        <div className="flex justify-between">
+                                            <span className="text-[var(--text-muted)]">Your plan allows:</span>
+                                            <span className="font-semibold text-[var(--text-primary)]">{validationResult.limit.toLocaleString()} contacts</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-[var(--text-muted)]">You currently have:</span>
+                                            <span className="font-semibold text-[var(--text-primary)]">{validationResult.current.toLocaleString()} contacts</span>
+                                        </div>
+                                        <div className="flex justify-between border-t border-[var(--danger-border)] pt-2">
+                                            <span className="text-[var(--text-muted)]">This file contains:</span>
+                                            <span className="font-bold text-[var(--danger)]">{validationResult.attempting.toLocaleString()} contacts</span>
+                                        </div>
+                                        <p className="mt-2 text-xs italic text-[var(--text-muted)]">
+                                            👉 You can only add {validationResult.remaining.toLocaleString()} more contacts on your current plan.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {validationResult.recommended_plan && (
+                                    <div className="rounded-[var(--radius-lg)] border border-[var(--accent-border)] bg-[var(--accent)]/5 p-6">
+                                        <div className="flex items-center gap-3 text-[var(--accent)]">
+                                            <Zap className="h-5 w-5" />
+                                            <h4 className="text-sm font-bold uppercase tracking-wider">Recommended Plan</h4>
+                                        </div>
+                                        <div className="mt-3 flex items-center justify-between">
+                                            <div>
+                                                <p className="text-lg font-bold text-[var(--text-primary)]">{validationResult.recommended_plan.name}</p>
+                                                <p className="text-xs text-[var(--text-muted)]">Allows up to {validationResult.recommended_plan.limit.toLocaleString()} contacts</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-sm font-semibold text-[var(--text-primary)]">{validationResult.recommended_plan.price}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex gap-3">
+                                    <Button variant="outline" onClick={() => setValidationResult(null)} className="flex-1">
+                                        Back
+                                    </Button>
+                                    <Button onClick={() => router.push("/settings/billing")} className="flex-1 gap-2">
+                                        Upgrade Plan <ArrowUp className="h-4 w-4" />
+                                    </Button>
+                                </div>
                             </div>
                         )}
 

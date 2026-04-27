@@ -666,6 +666,7 @@ async def create_new_workspace(
     """Create a completely new, isolated workspace for the user and switch to it."""
     from utils.supabase_client import db
     from datetime import datetime, timezone
+    import uuid
     
     new_tenant_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -674,7 +675,9 @@ async def create_new_workspace(
     db.client.table("tenants").insert({
         "id": new_tenant_id,
         "company_name": body.company_name,
-        "status": "pending_onboarding",
+        "status": "onboarding", # Standardized status for new tenants
+        "workspace_type": "primary",
+        "onboarding_required": True,
         "created_at": now,
         "updated_at": now
     }).execute()
@@ -697,28 +700,32 @@ async def create_new_workspace(
     }).execute()
     
     # 4. Generate new JWT for this tenant
-    new_payload = {
+    token_data = {
         "user_id": jwt_payload.user_id,
-        "email": jwt_payload.email,
         "tenant_id": new_tenant_id,
-        "role": "owner"
+        "email": jwt_payload.email,
+        "role": "owner",
+        "isolation_model": "team"
     }
-    new_token = create_access_token(new_payload)
+    new_token = create_access_token(token_data)
     
-    # 5. Set secure HttpOnly cookie
-    response.set_cookie(
-        key="auth_token",
-        value=new_token,
-        httponly=True,
-        secure=True, 
-        samesite="lax",
-        max_age=86400 * 7 # 7 days
-    )
+    # 5. Create refresh token & set cookie (CRITICAL for session persistence)
+    refresh_token = _create_refresh_token(jwt_payload.user_id, new_tenant_id)
+    _set_refresh_cookie(response, refresh_token)
     
-    return AuthResponse(
+    # 6. Fetch user details for response contract
+    user_res = db.client.table("users").select("full_name, email_verified").eq("id", jwt_payload.user_id).execute()
+    user_data = user_res.data[0] if user_res.data else {}
+    
+    return _build_auth_response(
         user_id=jwt_payload.user_id,
         tenant_id=new_tenant_id,
-        token=new_token
+        token=new_token,
+        role="owner",
+        onboarding_required=True,
+        tenant_status="onboarding",
+        email_verified=user_data.get("email_verified", False),
+        full_name=user_data.get("full_name")
     )
 
 

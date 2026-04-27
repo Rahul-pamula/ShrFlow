@@ -284,6 +284,28 @@ async def _empty_old_exports(db: Client) -> None:
         logger.error(f"Export cleanup failed: {e}")
 
 
+async def _expire_invitations(db: Client) -> None:
+    """Find expired pending invitations and update status to 'expired'."""
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        res = (
+            db.table("team_invitations")
+            .select("id")
+            .eq("status", "pending")
+            .lt("expires_at", now)
+            .execute()
+        )
+        
+        if not res.data:
+            return
+            
+        ids = [row["id"] for row in res.data]
+        db.table("team_invitations").update({"status": "expired"}).in_("id", ids).execute()
+        logger.info(f"⌛ Expired {len(ids)} pending invitations.")
+    except Exception as e:
+        logger.error(f"Invitation expiry task failed: {e}")
+
+
 # ── Main scheduler loop ────────────────────────────────────────────────
 
 async def run_scheduler():
@@ -368,6 +390,7 @@ async def run_scheduler():
             # ── Maintenance ────────────────────────────────────────────
             await _check_monthly_summary(db, r)
             await _empty_old_exports(db)
+            await _expire_invitations(db)
 
         except Exception as e:
             logger.error(f"Scheduler poll error: {e}")

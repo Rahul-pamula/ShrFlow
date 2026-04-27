@@ -15,6 +15,10 @@ from utils.jwt_middleware import require_active_tenant, require_authenticated_us
 from utils.permissions import require_permission, can
 from utils.supabase_client import db
 from services.email_service import send_team_invite
+from services.plan_service import PlanService
+from utils.db_engine import get_conn
+from utils.redis_client import redis_client
+import json
 
 router = APIRouter(prefix="/team", tags=["Team & Workspaces"])
 
@@ -550,8 +554,31 @@ async def get_pending_invites(
     return invites
 
 
+@router.get("/invites/validate")
+async def validate_invite_limit(tenant_id: str = Depends(require_active_tenant)):
+    """Check if the workspace has space for more members."""
+    can_invite, stats = PlanService.check_user_limit(tenant_id, 1)
+    
+    if not can_invite:
+        return {
+            "status": "LIMIT_EXCEEDED",
+            "limit": stats["limit"],
+            "current": stats["current"],
+            "used": stats.get("used", stats["current"]),
+            "remaining": stats.get("remaining", 0),
+            "recommended_plan": stats.get("recommended_plan")
+        }
+        
+    return {
+        "status": "OK",
+        "limit": stats["limit"],
+        "current": stats["current"],
+        "used": stats.get("used", stats["current"]),
+        "remaining": stats.get("remaining", max(0, stats["limit"] - stats["current"]))
+    }
+
+
 @router.post("/invites")
-@limiter.limit("10/hour")
 async def send_invite(
     request: Request,
     body: InviteRequest, 
@@ -569,62 +596,104 @@ async def send_invite(
     if jwt_payload.ui_role == "MANAGER" and body.role != "member":
         raise HTTPException(status_code=403, detail="Access denied.")
 
-    # Check if they already exist in the workspace
-    # First get user id by email
-    user_res = db.client.table("users").select("id").eq("email", body.email).execute()
-    if user_res.data:
-        existing_uid = user_res.data[0]["id"]
-        tu_res = db.client.table("tenant_users").select("id").eq("tenant_id", tenant_id).eq("user_id", existing_uid).execute()
-        if tu_res.data:
-            raise HTTPException(status_code=400, detail="User is already a member of this workspace.")
+    redis = await redis_client.get_client()
+    idempotency_key = request.headers.get("Idempotency-Key")
+    cache_key = f"idempotency:{tenant_id}:{idempotency_key}" if idempotency_key else None
 
-    existing_invites_res = (
-        db.client.table("team_invitations")
-        .select("id, expires_at")
-        .eq("tenant_id", tenant_id)
-        .eq("email", body.email)
-        .execute()
-    )
-    for invite in existing_invites_res.data or []:
-        if _iso_to_dt(invite["expires_at"]) >= datetime.now(timezone.utc):
-            raise HTTPException(status_code=400, detail="An active invitation already exists for this email.")
+    if cache_key:
+        cached = await redis.get(cache_key)
+        if cached:
+            cached_data = json.loads(cached)
+            if cached_data.get("status") == "SUCCESS":
+                return cached_data["response"]
+            elif cached_data.get("status") == "FAILED":
+                return cached_data["response"]
 
-    # Generate token
-    token = secrets.token_urlsafe(32)
-    expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    # Dynamic Rate Limiting
+    plan_details = PlanService.get_tenant_plan_details(tenant_id)
+    plan_name = plan_details.get("plan", {}).get("name", "Free").lower()
+    rate_limits = {"free": 5, "starter": 20, "pro": 100, "enterprise": 1000}
+    max_invites_per_hour = rate_limits.get(plan_name, 5)
+    
+    rl_key = f"rate_limit:invites:{tenant_id}"
+    current_count = await redis.incr(rl_key)
+    if current_count == 1:
+        await redis.expire(rl_key, 3600)
+        
+    if current_count > max_invites_per_hour:
+        resp = {"status": "RATE_LIMITED", "message": f"Rate limit exceeded. ({max_invites_per_hour}/hour)"}
+        if cache_key:
+            await redis.setex(cache_key, 30, json.dumps({"status": "FAILED", "response": resp}))
+        return resp
 
-    # Insert invite
-    db.client.table("team_invitations").insert({
-        "tenant_id": tenant_id,
-        "email": body.email,
-        "role": _normalize_storage_role(body.role),
-        "isolation_model": body.isolation_model,
-        "token": token,
-        "expires_at": expires_at,
-        "inviter_id": jwt_payload.user_id
-    }).execute()
+    # Transaction-safe limit check & insert
+    now = datetime.now(timezone.utc).isoformat()
+    
+    async with get_conn(tenant_id=tenant_id) as conn:
+        async with conn.transaction():
+            # Row Lock
+            await conn.execute("SELECT id FROM tenants WHERE id = $1 FOR UPDATE", tenant_id)
+            
+            # Accurate Counts
+            current_users = await conn.fetchval("SELECT count(id) FROM tenant_users WHERE tenant_id = $1", tenant_id)
+            pending_invites = await conn.fetchval("SELECT count(id) FROM team_invitations WHERE tenant_id = $1 AND status = 'pending' AND expires_at > $2", tenant_id, now)
+            
+            total_users = current_users + pending_invites
+            max_users = plan_details.get("plan", {}).get("max_users", 1)
+            
+            if max_users != -1 and total_users >= max_users:
+                recommended_plan = PlanService.suggest_plan_for_team(total_users + 1)
+                resp = {
+                    "status": "LIMIT_EXCEEDED",
+                    "limit": max_users,
+                    "current": total_users,
+                    "recommended_plan": recommended_plan,
+                    "message": f"User limit reached. Your plan allows up to {max_users} users."
+                }
+                if cache_key:
+                    await redis.setex(cache_key, 30, json.dumps({"status": "FAILED", "response": resp}))
+                return resp
+            
+            # Duplicate check
+            existing_user = await conn.fetchrow("SELECT u.id FROM users u JOIN tenant_users tu ON u.id = tu.user_id WHERE u.email = $1 AND tu.tenant_id = $2", body.email, tenant_id)
+            if existing_user:
+                return {"status": "ALREADY_MEMBER"}
+                
+            existing_invite = await conn.fetchrow("SELECT id FROM team_invitations WHERE tenant_id = $1 AND email = $2 AND status = 'pending' AND expires_at > $3", tenant_id, body.email, now)
+            if existing_invite:
+                return {"status": "INVITE_ALREADY_SENT"}
 
-    # Get Workspace / Inviter info for email
+            # Insert invite
+            token = secrets.token_urlsafe(32)
+            expires_at = (datetime.now(timezone.utc) + timedelta(days=2)).isoformat()
+            
+            role = _normalize_storage_role(body.role)
+            await conn.execute(
+                "INSERT INTO team_invitations (tenant_id, email, role, isolation_model, token, expires_at, inviter_id, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')",
+                tenant_id, body.email, role, body.isolation_model, token, expires_at, jwt_payload.user_id
+            )
+            
+            # Audit log
+            meta = json.dumps({"isolation_model": body.isolation_model})
+            await conn.execute(
+                "INSERT INTO audit_logs (tenant_id, user_id, action, resource_type, target_email, role, metadata, source) VALUES ($1, $2, $3, $4, $5, $6, $7, 'api')",
+                tenant_id, jwt_payload.user_id, "invite_created", "team_invitation", body.email, role, meta
+            )
+
+    # Email Sending (outside transaction to avoid blocking DB)
     t_res = db.client.table("tenants").select("company_name").eq("id", tenant_id).execute()
     workspace_name = t_res.data[0].get("company_name") or "Your Team"
     
     inviter_res = db.client.table("users").select("full_name").eq("id", jwt_payload.user_id).execute()
     inviter_name = inviter_res.data[0].get("full_name") or jwt_payload.email
 
-    # Fire background email
     await send_team_invite(body.email, inviter_name, workspace_name, token)
 
-    await write_log(
-        tenant_id=tenant_id,
-        user_id=jwt_payload.user_id,
-        action="team.invite_sent",
-        resource_type="team_invitation",
-        metadata={"role": body.role, "isolation_model": body.isolation_model},
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
+    success_resp = {"message": f"Invitation sent to {body.email}"}
+    if cache_key:
+        await redis.setex(cache_key, 600, json.dumps({"status": "SUCCESS", "response": success_resp}))
 
-    return {"message": f"Invitation sent to {body.email}"}
+    return success_resp
 
 
 @router.post("/invites/{invite_id}/resend")
@@ -728,32 +797,48 @@ async def accept_invite(
     
     invite = res.data[0]
     
-    # Check expiration
-    if datetime.fromisoformat(invite["expires_at"].replace('Z', '+00:00')) < datetime.now(timezone.utc):
-        raise HTTPException(status_code=400, detail="Invitation has expired.")
+    # Check expiration and status
+    if invite.get("status") != "pending" or datetime.fromisoformat(invite["expires_at"].replace('Z', '+00:00')) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Invitation has expired or is invalid.")
 
     if jwt_payload.email.lower() != invite["email"].lower():
         raise HTTPException(status_code=403, detail="This invitation was sent to a different email address.")
 
-    # Add to tenant_users
     target_tenant_id = invite.get("franchise_tenant_id") if invite.get("invite_type") == "franchise" else invite["tenant_id"]
-    try:
-        db.client.table("tenant_users").insert({
-            "tenant_id": target_tenant_id,
-            "user_id": jwt_payload.user_id,
-            "role": invite["role"],
-            "isolation_model": invite.get("isolation_model", "team"),
-            "joined_at": datetime.now(timezone.utc).isoformat(),
-            "invited_by": invite.get("inviter_id")
-        }).execute()
-    except Exception as e:
-        if "duplicate key value" in str(e).lower():
-            pass # Already a member
-        else:
-            raise HTTPException(status_code=500, detail="Failed to add user to workspace.")
 
-    # Delete the invite
-    db.client.table("team_invitations").delete().eq("id", invite["id"]).execute()
+    # Limit check at accept time
+    can_add, stats = PlanService.check_user_limit(target_tenant_id, 1)
+    
+    # We must only block if the ACTIVE users >= max_users (not including pending since we are converting a pending)
+    # The check_user_limit function includes pending invites. We need to manually check active users only here.
+    async with get_conn(tenant_id=target_tenant_id) as conn:
+        async with conn.transaction():
+            await conn.execute("SELECT id FROM tenants WHERE id = $1 FOR UPDATE", target_tenant_id)
+            current_users = await conn.fetchval("SELECT count(id) FROM tenant_users WHERE tenant_id = $1", target_tenant_id)
+            plan_details = PlanService.get_tenant_plan_details(target_tenant_id)
+            max_users = plan_details.get("plan", {}).get("max_users", 1)
+            
+            if max_users != -1 and current_users >= max_users:
+                return Response(content=json.dumps({"status": "LIMIT_EXCEEDED", "message": "Workspace is full"}), media_type="application/json", status_code=403)
+                
+            try:
+                await conn.execute(
+                    "INSERT INTO tenant_users (tenant_id, user_id, role, isolation_model, joined_at, invited_by) VALUES ($1, $2, $3, $4, $5, $6)",
+                    target_tenant_id, jwt_payload.user_id, invite["role"], invite.get("isolation_model", "team"), datetime.now(timezone.utc).isoformat(), invite.get("inviter_id")
+                )
+            except Exception as e:
+                if "duplicate key value" not in str(e).lower():
+                    raise HTTPException(status_code=500, detail="Failed to add user to workspace.")
+
+            # Update the invite instead of deleting
+            await conn.execute("UPDATE team_invitations SET status = 'accepted' WHERE id = $1", invite["id"])
+            
+            # Audit log
+            meta = json.dumps({"role": invite["role"], "isolation_model": invite.get("isolation_model", "team")})
+            await conn.execute(
+                "INSERT INTO audit_logs (tenant_id, user_id, action, resource_type, target_email, role, metadata, source) VALUES ($1, $2, $3, $4, $5, $6, $7, 'api')",
+                target_tenant_id, jwt_payload.user_id, "invite_accepted", "team_invitation", invite["email"], invite["role"], meta
+            )
 
     if invite.get("invite_type") == "franchise" and invite.get("franchise_tenant_id"):
         (
@@ -762,21 +847,6 @@ async def accept_invite(
             .eq("id", invite["franchise_tenant_id"])
             .execute()
         )
-
-    await write_log(
-        tenant_id=target_tenant_id,
-        user_id=jwt_payload.user_id,
-        action="team.invite_accepted",
-        resource_type="team_invitation",
-        resource_id=invite["id"],
-        metadata={
-            "role": _normalize_public_role(invite["role"]),
-            "isolation_model": invite.get("isolation_model", "team"),
-            "invite_type": invite.get("invite_type", "team"),
-        },
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
 
     # Issue a FRESH JWT scoped to the TARGET workspace (franchise or team)
     # IMPORTANT: must use target_tenant_id, NOT invite["tenant_id"]

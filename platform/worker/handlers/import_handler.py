@@ -30,7 +30,7 @@ class ImportHandler:
         logger.info(f"[{job_id}] Starting Robust Contact Import pipeline")
 
         try:
-            self.db.client.table("import_jobs").update({"status": "processing"}).eq("id", job_id).execute()
+            self.db.client.table("import_jobs").update({"status": "processing"}).eq("id", job_id).eq("tenant_id", tenant_id).execute()
 
             logger.info(f"[{job_id}] Downloading file from Supabase Storage: {file_key}")
             try:
@@ -66,7 +66,7 @@ class ImportHandler:
                     failed_rows += 1
                     msg = "Missing or blank email address."
                     errors_for_ui.append({"email": "—", "reason": msg, "row": row_index})
-                    rejections_buffer.append({"job_id": job_id, "row_data": row, "error_reason": msg})
+                    rejections_buffer.append({"job_id": job_id, "tenant_id": tenant_id, "row_data": row, "error_reason": msg})
                     
                     if len(rejections_buffer) >= chunk_size:
                         self.db.client.table("import_rejected_rows").insert(rejections_buffer).execute()
@@ -105,7 +105,7 @@ class ImportHandler:
                     self.db.client.table("import_jobs").update({
                         "processed_rows": imported_rows,
                         "failed_rows": failed_rows,
-                    }).eq("id", job_id).execute()
+                    }).eq("id", job_id).eq("tenant_id", tenant_id).execute()
 
             if chunk:
                 imported, current_failed, current_errors, current_stats = await self._submit_chunk(tenant_id, chunk, job_id)
@@ -150,7 +150,7 @@ class ImportHandler:
                 "status": "completed",
                 "processed_rows": total_processed,
                 "failed_rows": failed_rows
-            }).eq("id", job_id).execute()
+            }).eq("id", job_id).eq("tenant_id", tenant_id).execute()
             
             logger.info(f"[{job_id}] Import Finished! Processed={total_processed}, Success={imported_rows}, Failed={failed_rows}")
 
@@ -165,7 +165,7 @@ class ImportHandler:
             self.db.client.table("import_jobs").update({
                 "status": "failed",
                 "error_message": f"Worker crash: {str(e)}"
-            }).eq("id", job_id).execute()
+            }).eq("id", job_id).eq("tenant_id", tenant_id).execute()
 
     async def _submit_chunk(self, tenant_id: str, chunk: list, job_id: str) -> tuple[int, int, list, dict]:
         contacts = [item[1] for item in chunk]
@@ -189,6 +189,7 @@ class ImportHandler:
 
                     rejection_records.append({
                         "job_id": job_id,
+                        "tenant_id": tenant_id,
                         "row_data": err if isinstance(err, dict) else {"raw": str(err)},
                         "error_reason": reason
                     })
@@ -209,6 +210,7 @@ class ImportHandler:
                 })
                 error_records.append({
                     "job_id": job_id,
+                    "tenant_id": tenant_id,
                     "row_data": raw if isinstance(raw, dict) else {"raw": str(raw)},
                     "error_reason": msg
                 })

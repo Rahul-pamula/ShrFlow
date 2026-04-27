@@ -60,6 +60,19 @@ class ImportInitializeRequest(BaseModel):
     estimated_rows: int = 0
 
 
+class ImportValidateRequest(BaseModel):
+    file_contact_count: int
+
+
+class ImportValidateResponse(BaseModel):
+    status: str
+    current: int
+    limit: int
+    attempting: int
+    remaining: int
+    recommended_plan: Optional[Dict] = None
+
+
 class ImportInitializeResponse(BaseModel):
     job_id: str
     upload_url: str
@@ -176,11 +189,21 @@ async def initialize_import(
     """
     try:
         # 1. Verify plan limits (pessimistic check)
+        # Hard Safety Check & Anti-Abuse
         can_add, stats = ContactService.check_plan_limits(tenant_id, request.estimated_rows)
+        max_contacts = stats["limit"]
+        
+        if request.estimated_rows > (max_contacts * 5):
+            logger.warning(f"[ANTI_ABUSE_INITIALIZE] tenant={tenant_id} limit={max_contacts} attempting={request.estimated_rows}")
+            raise HTTPException(
+                status_code=403,
+                detail="Extreme upload volume detected. Please contact support for high-capacity limits."
+            )
+
         if not can_add:
             raise HTTPException(
                 status_code=403, 
-                detail=f"Plan limit reached. You can only add {stats['available']} more contacts."
+                detail=f"Plan limit reached. Your current plan limit is {max_contacts}. You can only add {stats['available']} more contacts."
             )
 
         # 2. Generate unique file key
@@ -192,6 +215,7 @@ async def initialize_import(
         # We need BOTH for the foreign key constraints to pass in the worker.
         job_data = {
             "id": job_id,
+            "tenant_id": tenant_id,
             "file_key": file_key,
             "status": "initializing",
             "total_rows": request.estimated_rows
@@ -234,6 +258,70 @@ async def initialize_import(
     except Exception as e:
         logger.error(f"Failed to initialize import job: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to initialize import.")
+
+
+@router.post("/import/validate", response_model=ImportValidateResponse)
+async def validate_import_limit(
+    request: ImportValidateRequest,
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("MANAGE_CONTACT"))
+):
+    """
+    Check if the user has enough space in their plan for the incoming file.
+    Suggests an upgrade if they are over the limit.
+    """
+    # 1. Get current stats
+    can_add, stats = ContactService.check_plan_limits(tenant_id, request.file_contact_count)
+    
+    current_contacts = stats["current"]
+    max_contacts = stats["limit"]
+    attempting = request.file_contact_count
+    remaining = stats["available"]
+
+    # 2. Anti-Abuse Rule: Block if attempting > 5x the plan limit
+    if attempting > (max_contacts * 5):
+        logger.warning(f"[ANTI_ABUSE] tenant={tenant_id} limit={max_contacts} attempting={attempting}")
+        return ImportValidateResponse(
+            status="SUSPICIOUS_VOLUME",
+            current=current_contacts,
+            limit=max_contacts,
+            attempting=attempting,
+            remaining=remaining,
+            recommended_plan={"name": "Enterprise", "reason": "Extremely high volume detected."}
+        )
+
+    # 3. Validation Logic
+    if not can_add:
+        # Suggest Plan
+        recommended = suggest_plan_for_volume(current_contacts + attempting)
+        return ImportValidateResponse(
+            status="LIMIT_EXCEEDED",
+            current=current_contacts,
+            limit=max_contacts,
+            attempting=attempting,
+            remaining=remaining,
+            recommended_plan=recommended
+        )
+
+    return ImportValidateResponse(
+        status="OK",
+        current=current_contacts,
+        limit=max_contacts,
+        attempting=attempting,
+        remaining=remaining
+    )
+
+
+def suggest_plan_for_volume(total_expected: int) -> Dict:
+    """Helper to recommend the next best plan based on total contact volume."""
+    if total_expected <= 500:
+        return {"name": "Free", "limit": 500, "price": "₹0"}
+    elif total_expected <= 5000:
+        return {"name": "Starter", "limit": 5000, "price": "₹799/mo"}
+    elif total_expected <= 50000:
+        return {"name": "Pro", "limit": 50000, "price": "₹2,499/mo"}
+    else:
+        return {"name": "Enterprise", "limit": 500000, "price": "₹9,999/mo"}
 
 
 @router.post("/import/process/{job_id}", response_model=ImportProcessResponse)
