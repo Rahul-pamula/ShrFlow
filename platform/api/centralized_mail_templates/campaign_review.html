@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<!-- Header Badge -->
+<div style="text-align: center; margin-bottom: 28px;">
+  <span style="display: inline-block; background: linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(234,88,12,0.15) 100%); border: 1px solid rgba(245,158,11,0.3); color: #d97706; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; padding: 6px 16px; border-radius: 20px;">
+    Action Required
+  </span>
+</div>
+
+<!-- Main Heading -->
+<h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 700; color: #f9fafb; text-align: center; letter-spacing: -0.5px;">
+  Campaign Ready for Review
+</h1>
+<p style="margin: 0 0 32px; font-size: 14px; color: #9ca3af; text-align: center;">
+  A team member has submitted a campaign for your approval in <strong style="color: #e5e7eb;">{{ workspace_name }}</strong>.
+</p>
+
+<!-- Divider -->
+<div style="height: 1px; background: linear-gradient(90deg, transparent, rgba(99,102,241,0.4), transparent); margin-bottom: 28px;"></div>
+
+<!-- Creator Card -->
+<div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 20px 24px; margin-bottom: 20px;">
+  <div style="display: flex; align-items: center; gap: 14px;">
+    <!-- Avatar initials -->
+    <div style="width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; color: #fff; flex-shrink: 0; text-align: center; line-height: 44px;">
+      {{ creator_name[0] | upper if creator_name else 'T' }}
+    </div>
+    <div>
+      <p style="margin: 0 0 2px; font-size: 15px; font-weight: 600; color: #f3f4f6;">{{ creator_name }}</p>
+      <p style="margin: 0; font-size: 12px; color: #9ca3af;">
+        <span style="background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); color: #a5b4fc; padding: 2px 8px; border-radius: 10px; font-weight: 600; font-size: 11px;">{{ creator_role }}</span>
+      </p>
+    </div>
+    <div style="margin-left: auto; text-align: right;">
+      <p style="margin: 0; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.8px;">Submitted</p>
+      <p style="margin: 0; font-size: 12px; color: #9ca3af; font-weight: 500;">Just now</p>
+    </div>
+  </div>
+</div>
+
+<!-- Campaign Details Card -->
+<div style="background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.2); border-radius: 14px; padding: 20px 24px; margin-bottom: 28px;">
+  <p style="margin: 0 0 6px; font-size: 11px; font-weight: 700; color: #6366f1; text-transform: uppercase; letter-spacing: 1px;">Campaign Name</p>
+  <p style="margin: 0; font-size: 18px; font-weight: 700; color: #f9fafb; letter-spacing: -0.3px;">{{ campaign_name }}</p>
+</div>
+
+<!-- Message -->
+<p style="margin: 0 0 28px; font-size: 14px; line-height: 1.7; color: #d1d5db; text-align: center; padding: 0 12px;">
+  As a workspace administrator, you have the authority to <strong style="color: #f9fafb;">review, approve, and send</strong> this campaign — or request changes from the creator.
+</p>
+
+<!-- CTA Button -->
+<div style="text-align: center; margin-bottom: 28px;">
+  <a href="{{ review_url }}" style="display: inline-block; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 40px; border-radius: 10px; letter-spacing: 0.3px; box-shadow: 0 4px 24px rgba(99,102,241,0.4);">
+    Review Campaign &rarr;
+  </a>
+</div>
+
+<!-- Secondary Link -->
+<p style="margin: 0 0 28px; text-align: center; font-size: 12px; color: #6b7280;">
+  Or copy this link: <a href="{{ review_url }}" style="color: #6366f1; text-decoration: underline; word-break: break-all;">{{ review_url }}</a>
+</p>
+
+<!-- Info Box -->
+<div style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.2); border-radius: 10px; padding: 14px 18px; margin-bottom: 8px;">
+  <p style="margin: 0; font-size: 12px; color: #6ee7b7; line-height: 1.6;">
+    <strong>&#10003; What you can do:</strong><br>
+    Open the campaign → review content and audience → click <strong>Approve &amp; Send</strong> to dispatch, or leave a comment for the creator.
+  </p>
+</div>
+
+{% endblock %}

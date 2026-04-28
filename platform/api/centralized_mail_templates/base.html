@@ -1,8 +1,33 @@
 <!DOCTYPE html>
 <html>
-<body style="font-family: Inter, sans-serif; background: #0F172A; color: #F1F5F9; padding: 40px;">
-  <div style="max-width: 480px; margin: 0 auto; background: #1E293B; border-radius: 12px; padding: 32px; border: 1px solid #334155;">
-    {% block content %}{% endblock %}
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    body { margin: 0; padding: 0; background-color: #050505; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    .container { width: 100%; max-width: 600px; margin: 0 auto; background-color: #050505; padding: 40px 20px; }
+    .content-card { background-color: #121212; border: 1px solid #262626; border-radius: 20px; padding: 48px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+    .footer { padding: 32px; text-align: center; color: #525252; font-size: 13px; line-height: 1.6; }
+    .logo { color: #8B5CF6; font-size: 24px; font-weight: 700; text-decoration: none; display: block; margin-bottom: 32px; text-align: center; letter-spacing: -0.5px; }
+    .button { display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%); color: #ffffff !important; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 15px rgba(124, 58, 246, 0.3); transition: transform 0.2s; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="{{ APP_URL }}" class="logo">
+      <span style="color: #ffffff;">Shr</span><span style="color: #8B5CF6;">Mail</span>
+    </a>
+    <div class="content-card">
+      {% block content %}{% endblock %}
+    </div>
+    <div class="footer">
+      <p>&copy; 2026 ShrMail Inc. <br> Built for high-velocity teams.</p>
+      <div style="margin-top: 16px;">
+        <a href="#" style="color: #737373; text-decoration: none; margin: 0 8px;">Twitter</a> &bull;
+        <a href="#" style="color: #737373; text-decoration: none; margin: 0 8px;">LinkedIn</a> &bull;
+        <a href="#" style="color: #737373; text-decoration: none; margin: 0 8px;">GitHub</a>
+      </div>
+    </div>
   </div>
 </body>
 </html>
