@@ -13,7 +13,7 @@ import hmac
 import hashlib
 import base64
 import re
-
+from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -22,7 +22,30 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'api'))
 from services.notification_service import notify_campaign_completed, notify_bounce_alert
 
+# Database engine for raw SQL (FOR UPDATE SKIP LOCKED)
+from utils.db_engine import get_conn, execute
+
 logger = logging.getLogger(__name__)
+
+def process_spintax(text: str) -> str:
+    if not text:
+        return ""
+    pattern = r"\{([^{}]+)\}"
+    def replace_spintax(match):
+        return random.choice(match.group(1).split("|"))
+    while re.search(pattern, text):
+        text = re.sub(pattern, replace_spintax, text)
+    return text
+
+def process_merge_tags(text: str, contact: dict) -> str:
+    if not text:
+        return ""
+    pattern = r"\{\{(\w+)(?:\|([^}]+))?\}\}"
+    def replace_tag(match):
+        field = match.group(1)
+        fallback = match.group(2) or ""
+        return str(contact.get(field, fallback) or fallback)
+    return re.sub(pattern, replace_tag, text)
 
 def _get_api_base() -> str:
     load_dotenv(override=True)
@@ -85,13 +108,11 @@ class EmailHandler:
         self.unsub_secret = unsub_secret
         self.tracking_secret = tracking_secret
         self.smtp_client = None
+        self._smtp_lock = asyncio.Lock()
 
-        # ── Fix 7: Batch dispatch update buffer ──────────────────────
-        # Instead of 1 HTTP call per sent email (100k emails = 100k calls),
-        # we buffer updates and flush every DISPATCH_BATCH_SIZE messages.
-        # This reduces DB round-trips by ~99% for large campaigns.
+        # Batch dispatch update buffer
         self._dispatch_buffer: list[dict] = []
-        self._dispatch_batch_size = int(os.getenv("DISPATCH_BATCH_SIZE", "100"))
+        self._dispatch_batch_size = int(os.getenv("DISPATCH_BATCH_SIZE", "20"))
         self._buffer_lock = asyncio.Lock()
 
     @staticmethod
@@ -103,30 +124,35 @@ class EmailHandler:
         )
 
     async def _buffer_dispatch_update(self, dispatch_id: str, campaign_id: str, recipient_id: str, message_id: str | None) -> None:
-        """Add a DISPATCHED row to the buffer; flush when batch is full."""
-        async with self._buffer_lock:
-            self._dispatch_buffer.append({
-                "id": dispatch_id,
-                "campaign_id": campaign_id,
-                "subscriber_id": recipient_id,
-                "status": "DISPATCHED",
-                "ses_message_id": message_id,
-                "external_msg_id": message_id,
-            })
-            if len(self._dispatch_buffer) >= self._dispatch_batch_size:
-                await self._flush_dispatch_buffer()
+        """Immediately update the campaign_dispatch row after a successful send."""
+        try:
+            self.db.table("campaign_dispatch").upsert(
+                [{
+                    "id": dispatch_id,
+                    "campaign_id": campaign_id,
+                    "subscriber_id": recipient_id,
+                    "status": "DISPATCHED",
+                    "ses_message_id": message_id,
+                    "external_msg_id": message_id,
+                    "sent_at": "now()",
+                    "updated_at": "now()",
+                }],
+                on_conflict="id",
+            ).execute()
+            logger.info(f"[DISPATCH] Updated dispatch row {dispatch_id} → DISPATCHED")
+            # Check if this was the last task for the campaign
+            await self._check_campaign_completion(campaign_id)
+        except Exception as e:
+            logger.error(f"[DISPATCH] Failed to update dispatch row {dispatch_id}: {e}")
+
 
     async def _flush_dispatch_buffer(self) -> None:
-        """
-        Flush buffered dispatch updates to Supabase in a single upsert.
-        Must be called under self._buffer_lock.
-        """
+        """Flush buffered dispatch updates to Supabase in a single upsert."""
         if not self._dispatch_buffer:
             return
         batch = self._dispatch_buffer[:]
         self._dispatch_buffer.clear()
         try:
-            # upsert on id — sets status, message IDs, and timestamps for all rows at once
             self.db.table("campaign_dispatch").upsert(
                 [{**row, "sent_at": "now()", "updated_at": "now()"} for row in batch],
                 on_conflict="id",
@@ -150,251 +176,259 @@ class EmailHandler:
         smtp_pass = os.getenv("SMTP_PASSWORD")
 
         if not (smtp_host and smtp_user and smtp_pass):
+            logger.warning("SMTP credentials missing in environment.")
             return None
 
-        self.smtp_client = aiosmtplib.SMTP(hostname=smtp_host, port=smtp_port, start_tls=True)
-        await self.smtp_client.connect()
-        await self.smtp_client.login(smtp_user, smtp_pass)
-        return self.smtp_client
+        try:
+            logger.info(f"Connecting to SMTP {smtp_host}:{smtp_port}...")
+            self.smtp_client = aiosmtplib.SMTP(
+                hostname=smtp_host, 
+                port=smtp_port, 
+                use_tls=(smtp_port == 465),
+                start_tls=(smtp_port == 587)
+            )
+            await asyncio.wait_for(self.smtp_client.connect(), timeout=10)
+            
+            logger.info(f"Logging in as {smtp_user}...")
+            await asyncio.wait_for(self.smtp_client.login(smtp_user, smtp_pass), timeout=10)
+            logger.info("SMTP persistent connection established.")
+            return self.smtp_client
+        except Exception as e:
+            logger.error(f"Failed to establish SMTP connection: {e}")
+            self.smtp_client = None
+            return None
 
-    async def process_message(self, message: aio_pika.abc.AbstractIncomingMessage, holding_exchange: aio_pika.robust_exchange.RobustExchange):
+    async def process_message(self, message: aio_pika.abc.AbstractIncomingMessage, holding_exchange, dlq_exchange):
         async with message.process(ignore_processed=True):
+            task_id = None
+            task_row = None   # Must be initialized — exception handler references it
+            jitter = 0.1
             try:
                 payload = json.loads(message.body.decode())
-                campaign_id = payload.get("campaign_id")
-                dispatch_id = payload.get("dispatch_id")
-                recipient_email = payload.get("recipient_email")
-                
-                # 1. Immediate State Check via Redis
-                state_key = f"campaign:{campaign_id}:status"
-                state = await self.redis_client.get(state_key)
-                
-                if state == "CANCELLED":
-                    logger.info(f"[{dispatch_id}] Campaign CANCELLED. Silently discarding message for {recipient_email}.")
-                    await message.ack()
-                    return
-                    
-                if state == "PAUSED":
-                    logger.info(f"[{dispatch_id}] Campaign PAUSED. Routing to parking queue.")
-                    new_msg = aio_pika.Message(
-                        body=message.body,
-                        delivery_mode=aio_pika.DeliveryMode.PERSISTENT
-                    )
-                    await holding_exchange.publish(new_msg, routing_key="campaign.paused")
+                task_id = payload.get("task_id")
+                attempt = payload.get("attempt", 1)
+
+                if not task_id:
                     await message.ack()
                     return
 
-                # 1.5 Bounce Rate Circuit Breaker
-                tenant_key_opt = await self.redis_client.get(f"campaign:{campaign_id}:tenant_id")
-                if tenant_key_opt:
-                    bounce_rate_opt = await self.redis_client.get(f"tenant:{tenant_key_opt}:metrics:rolling_bounce_rate")
-                    if bounce_rate_opt:
-                        try:
-                            bounce_rate = float(bounce_rate_opt)
-                            if bounce_rate > 0.05:
-                                logger.error(f"[{campaign_id}] 🛑 CIRCUIT BREAKER: Rolling bounce rate is {bounce_rate*100:.1f}%. Auto-pausing campaign.")
-                                await self.redis_client.set(state_key, "PAUSED")
-                                self.db.table("campaigns").update({"status": "paused"}).eq("id", campaign_id).execute()
-                                
-                                try:
-                                    camp_info = self.db.table("campaigns").select("name, tenant_id").eq("id", campaign_id).execute()
-                                    if camp_info.data:
-                                        t_id = camp_info.data[0]["tenant_id"]
-                                        c_name = camp_info.data[0].get("name", "Unnamed")
-                                        t_info = self.db.table("tenants").select("email").eq("id", t_id).execute()
-                                        if t_info.data and t_info.data[0].get("email"):
-                                            await notify_bounce_alert(t_info.data[0]["email"], bounce_rate, c_name, campaign_id)
-                                except Exception as ne:
-                                    logger.warning(f"[{campaign_id}] Bounce notification failed: {ne}")
-                                
-                                new_msg = aio_pika.Message(body=message.body, delivery_mode=aio_pika.DeliveryMode.PERSISTENT)
-                                await holding_exchange.publish(new_msg, routing_key="campaign.paused")
-                                await message.ack()
-                                return
-                        except ValueError:
-                            pass
+                # Convert to UUID once — all asyncpg queries use this typed object
+                task_uuid = uuid.UUID(task_id)
 
-                # 2. Database Intent Claim
-                worker_uuid = str(uuid.uuid4())
-                update_res = self.db.table("campaign_dispatch")\
-                    .update({"status": "PROCESSING", "updated_at": "now()", "locked_by": worker_uuid})\
-                    .eq("id", dispatch_id)\
-                    .eq("status", "PENDING")\
-                    .execute()
-                    
-                if not update_res.data:
-                    logger.warning(f"[{dispatch_id}] Skipping: Could not claim row (already processing or processed).")
-                    await message.ack()
-                    return
+                # 1. Atomic Fetch & Lock
+                async with get_conn() as conn:
+                    async with conn.transaction():
+                        task_row = await conn.fetchrow("""
+                            SELECT
+                                t.id, t.campaign_id, t.snapshot_id, t.dispatch_id,
+                                t.tenant_id, t.contact_id, t.recipient_email, t.recipient_domain,
+                                t.status, t.retry_count,
+                                c.id         AS c_id,
+                                c.email      AS c_email,
+                                c.first_name AS c_first_name,
+                                c.last_name  AS c_last_name,
+                                tn.company_name, tn.business_address
+                            FROM email_tasks t
+                            JOIN contacts c  ON t.contact_id      = c.id
+                            JOIN tenants  tn ON t.tenant_id::uuid  = tn.id
+                            WHERE t.id = $1
+                              AND t.status NOT IN ('sent', 'processing', 'failed')
+                            FOR UPDATE SKIP LOCKED
+                        """, task_uuid)
 
-                logger.info(f"[{dispatch_id}] Claimed row. Sending to {recipient_email}...")
+                        if not task_row:
+                            await message.ack()
+                            return
 
-                # 3. Inject mandatory footer + tracking
-                recipient_id = payload.get("recipient_id", "")
-                body_html = payload.get("body_html", "")
-                
-                if body_html and recipient_id:
-                    tenant_footer_text = None
+                        await conn.execute("""
+                            UPDATE email_tasks
+                            SET status = 'processing', retry_count = $2
+                            WHERE id = $1
+                        """, task_uuid, attempt - 1)
+
+                campaign_id     = task_row["campaign_id"]    # uuid.UUID from asyncpg
+                tenant_id       = task_row["tenant_id"]      # str  (text column)
+                dispatch_id     = task_row["dispatch_id"]    # uuid.UUID from asyncpg
+                recipient_email = task_row["recipient_email"]
+                domain_name     = recipient_email.split("@")[-1].lower()
+
+                # 2. Kill Switch Check
+                pause_mode = "NONE"
+                try:
+                    pause_mode = await self.redis_client.get("control:global:mode") or "NONE"
+                except Exception:
                     try:
-                        camp_info = self.db.table("campaigns").select("tenant_id").eq("id", campaign_id).execute()
-                        if camp_info.data:
-                            t_id = camp_info.data[0]["tenant_id"]
-                            t_info = self.db.table("tenants").select("company_name, business_address, business_city, business_state, business_zip, business_country").eq("id", t_id).execute()
-                            if t_info.data:
-                                td = t_info.data[0]
-                                parts = []
-                                if td.get("company_name"): parts.append(td["company_name"])
-                                if td.get("business_address"): parts.append(td["business_address"])
-                                city_data = list(filter(bool, [td.get("business_city"), td.get("business_state"), td.get("business_zip")]))
-                                city_str = " ".join(city_data)
-                                if city_str: parts.append(city_str)
-                                if td.get("business_country"): parts.append(td["business_country"])
-                                if parts:
-                                    tenant_footer_text = " &bull; ".join(parts)
-                    except Exception as e:
-                        logger.warning(f"[{dispatch_id}] Failed to load dynamic footer formatting: {e}")
-                
-                    body_html = _inject_email_footer(body_html, recipient_id, campaign_id, self.unsub_secret, tenant_footer_text=tenant_footer_text)
-                    body_html = _inject_tracking_pixel(body_html, dispatch_id, self.tracking_secret)
-                    body_html = _wrap_links(body_html, dispatch_id)
-                    body_html = _inject_honeypot(body_html, dispatch_id, self.tracking_secret)
-                    logger.info(f"[{dispatch_id}] Footer + tracking injected for {recipient_email}")
+                        res = self.db.table("delivery_controls").select("pause_mode").eq("id", "global").execute()
+                        pause_mode = res.data[0]["pause_mode"] if res.data else "NONE"
+                    except Exception:
+                        pause_mode = "NONE"
 
-                # 4. Real SMTP Send via AWS SES (or fallback)
-                smtp_host     = os.getenv("SMTP_HOST")
-                smtp_port     = int(os.getenv("SMTP_PORT", 587))
-                smtp_user     = os.getenv("SMTP_USERNAME")
-                smtp_pass     = os.getenv("SMTP_PASSWORD")
-                smtp_from     = payload.get("from_email") or os.getenv("SMTP_FROM_EMAIL", "noreply@emailengine.app")
-                smtp_from_name = payload.get("from_name") or os.getenv("SMTP_FROM_NAME", "Email Engine")
-                subject       = payload.get("subject", "(No Subject)")
+                if pause_mode == "HARD":
+                    logger.warning(f"[{task_id}] HARD KILL SWITCH ACTIVE. Requeueing.")
+                    await execute("UPDATE email_tasks SET status = 'pending' WHERE id = $1", task_uuid)
+                    await message.nack(requeue=True)
+                    return
 
-                message_id = None
+                # 3. Adaptive Throttling & Jitter
+                from services.reputation_engine import ReputationEngine
+                rep_engine = ReputationEngine(self.redis_client, self.db)
+                throttle = await rep_engine.get_throttle_limit(task_row["recipient_domain"])
+                base_delay = 0.2 / max(throttle.get("factor", 1.0), 0.01)
+                if domain_name == "gmail.com":
+                    base_delay *= 1.5
+                jitter = random.gauss(base_delay, base_delay * 0.4)
+                await asyncio.sleep(max(0.01, jitter))
 
-                if smtp_host and smtp_user and smtp_pass:
-                    msg = MIMEMultipart("alternative")
-                    msg["Subject"] = subject
-                    msg["From"]    = f"{smtp_from_name} <{smtp_from}>"
-                    msg["To"]      = recipient_email
-                    msg["Message-ID"] = f"<{dispatch_id}@emailengine.app>"
+                # 4. Routing
+                from services.reputation_engine import RoutingEngine
+                router = RoutingEngine(self.db, self.redis_client)
+                provider = await router.get_best_provider(str(campaign_id), domain_name)
 
-                    plain = re.sub(r'<[^>]+>', '', body_html or subject)
-                    plain = _wrap_links_text(plain, dispatch_id)
-                    msg.attach(MIMEText(plain, "plain"))
-                    msg.attach(MIMEText(body_html or f"<p>{subject}</p>", "html"))
+                # 5. Pre-Send Kill Switch Re-check
+                try:
+                    final_pause = await self.redis_client.get("control:global:mode") or "NONE"
+                    if final_pause == "HARD":
+                        await execute("UPDATE email_tasks SET status = 'pending' WHERE id = $1", task_uuid)
+                        await message.nack(requeue=True)
+                        return
+                except Exception:
+                    pass
 
-                    client = await self._get_smtp_client()
-                    if client:
-                        await client.send_message(msg)
-                    else:
-                        # Fallback to ephemeral connection just in case
-                        await aiosmtplib.send(
-                            msg,
-                            hostname=smtp_host,
-                            port=smtp_port,
-                            username=smtp_user,
-                            password=smtp_pass,
-                            start_tls=True,
-                        )
-                    message_id = msg["Message-ID"]
-                    logger.info(f"[{dispatch_id}] SMTP sent → {recipient_email} via {smtp_host}")
+                # 6. ISP Rate Cap (10/sec per domain)
+                try:
+                    isp_key = f"rl:isp:{domain_name}:marketing"
+                    current_isp_rate = await self.redis_client.incr(isp_key)
+                    if current_isp_rate == 1:
+                        await self.redis_client.expire(isp_key, 1)
+                    if current_isp_rate > 10:
+                        await execute("UPDATE email_tasks SET status = 'pending' WHERE id = $1", task_uuid)
+                        await message.nack(requeue=True)
+                        return
+                except Exception:
+                    pass  # Redis failure → proceed without rate cap
+
+                # 7. Render Content from Snapshot
+                snap_res = self.db.table("campaign_snapshots") \
+                    .select("body_snapshot, subject_snapshot") \
+                    .eq("id", str(task_row["snapshot_id"])) \
+                    .execute()
+                if not snap_res.data:
+                    raise ValueError("Snapshot not found")
+
+                contact_data = {
+                    "id":         str(task_row["c_id"]),
+                    "email":      task_row["c_email"],
+                    "first_name": task_row["c_first_name"],
+                    "last_name":  task_row["c_last_name"],
+                }
+                body_html = process_merge_tags(process_spintax(snap_res.data[0]["body_snapshot"]), contact_data)
+                subject   = process_merge_tags(process_spintax(snap_res.data[0]["subject_snapshot"]), contact_data)
+
+                body_html = _inject_email_footer(body_html, contact_data["id"], str(campaign_id), self.unsub_secret)
+                body_html = _inject_tracking_pixel(body_html, str(dispatch_id), self.tracking_secret)
+
+                # 8. Build From Address from Campaign Sender Identity (not recipient domain!)
+                smtp_host = os.getenv("SMTP_HOST", "email-smtp.ap-southeast-2.amazonaws.com")
+                smtp_port = int(os.getenv("SMTP_PORT", "587"))
+                smtp_user = os.getenv("SMTP_USERNAME")
+                smtp_pass = os.getenv("SMTP_PASSWORD")
+
+                from_display = f"Email Engine <noreply@{domain_name}>"
+                try:
+                    camp_res = self.db.table("campaigns") \
+                        .select("from_name, from_prefix, domain_id") \
+                        .eq("id", str(campaign_id)) \
+                        .execute()
+                    if camp_res.data:
+                        camp = camp_res.data[0]
+                        dom_res = self.db.table("domains") \
+                            .select("domain_name") \
+                            .eq("id", str(camp["domain_id"])) \
+                            .execute()
+                        sender_domain = dom_res.data[0]["domain_name"] if dom_res.data else "mail.example.com"
+                        from_display = f"{camp['from_name']} <{camp['from_prefix']}@{sender_domain}>"
+                except Exception as fe:
+                    logger.warning(f"[{task_id}] Could not fetch sender identity: {fe}")
+
+                # 9. Build MIME Message
+                msg = MIMEMultipart("alternative")
+                msg["Subject"]    = subject
+                msg["From"]       = from_display
+                msg["To"]         = recipient_email
+                msg["Message-ID"] = f"<{dispatch_id}@emailengine.app>"
+                msg.attach(MIMEText(re.sub(r'<[^>]+>', '', body_html), "plain"))
+                msg.attach(MIMEText(body_html, "html"))
+
+                # 10. Send via persistent SMTP connection (reuse TLS session → ~1s per email)
+                if not smtp_host or not smtp_user or not smtp_pass:
+                    logger.warning(f"[{task_id}] SMTP not configured — simulating send to {recipient_email}")
                 else:
-                    logger.warning(f"[{dispatch_id}] No SMTP creds — simulating send to {recipient_email}")
-                    await asyncio.sleep(random.uniform(0.1, 0.3))
-                    message_id = f"sim-{random.randint(100000, 999999)}"
+                    async with self._smtp_lock:  # Serialize sends on shared connection
+                        client = await self._get_smtp_client()
+                        if client:
+                            await client.send_message(msg)
+                        else:
+                            # Fallback to one-shot if persistent connect fails
+                            await aiosmtplib.send(
+                                msg,
+                                hostname=smtp_host,
+                                port=smtp_port,
+                                start_tls=True,
+                                username=smtp_user,
+                                password=smtp_pass,
+                            )
 
-                # 5. Buffer DISPATCHED update and flush before completion check so
-                # the campaign does not remain "sending" while successful rows are
-                # still only held in worker memory.
-                await self._buffer_dispatch_update(dispatch_id, campaign_id, recipient_id, message_id)
-                await self.flush_all()
-                logger.info(f"[{dispatch_id}] Buffered DISPATCHED (msg_id={message_id})")
+                # 11. Atomic Success Update
+                async with get_conn() as conn:
+                    async with conn.transaction():
+                        await conn.execute(
+                            "UPDATE email_tasks SET status = 'sent', is_sent = TRUE, sent_at = $2 WHERE id = $1",
+                            task_uuid,
+                            datetime.now(timezone.utc),   # asyncpg needs datetime object, not ISO string
+                        )
 
-                # 6. Auto-complete campaign
-                await self._check_campaign_completion(campaign_id)
-
-                
+                await self._buffer_dispatch_update(str(dispatch_id), str(campaign_id), str(task_row["c_id"]), None)
                 await message.ack()
+                logger.info(f"[{task_id}] ✅ Sent to {recipient_email} via {smtp_host} (jitter: {jitter:.2f}s)")
 
             except Exception as e:
-                attempts = int(message.headers.get("attempts", 0) if message.headers else 0)
-                logger.error(f"Worker Error processing message (attempt {attempts + 1}/{self.max_retries}): {e}")
-
-                is_sandbox_verification_error = self._is_ses_recipient_verification_error(e)
-
-                if attempts + 1 < self.max_retries and not is_sandbox_verification_error:
-                    try:
-                        delay = min(2 ** attempts, 30)
-                        if delay > 0:
-                            await asyncio.sleep(delay)
-                        new_msg = aio_pika.Message(
-                            body=message.body,
-                            headers={"attempts": attempts + 1},
-                            delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
-                        )
-                        await message.channel.default_exchange.publish(new_msg, routing_key=self.queue_name)
-                        await message.ack()
-                        return
-                    except Exception as requeue_err:
-                        logger.error(f"Retry publish failed: {requeue_err}")
-
+                err_str = str(e)
+                logger.error(f"[{task_id}] ❌ Error: {err_str}")
                 try:
-                    decoded = json.loads(message.body.decode())
-                    dispatch_id = decoded.get("dispatch_id")
-                    recipient_id = decoded.get("recipient_id")
-                    if dispatch_id:
-                        self.db.table("campaign_dispatch")\
-                            .update({"status": "FAILED", "error_log": str(e), "updated_at": "now()"})\
-                            .eq("id", dispatch_id)\
-                            .execute()
-                    if recipient_id and not is_sandbox_verification_error:
-                        self.db.table("contacts")\
-                            .update({"status": "bounced", "bounce_reason": str(e)})\
-                            .eq("id", recipient_id)\
-                            .execute()
-                        logger.warning(f"[{dispatch_id}] Contact {recipient_id} marked as bounced")
-                    elif recipient_id and is_sandbox_verification_error:
-                        logger.warning(
-                            f"[{dispatch_id}] SES sandbox recipient verification failure for contact {recipient_id}; "
-                            "dispatch marked failed without changing contact status"
+                    if task_id and task_row:
+                        task_uuid_err = uuid.UUID(task_id)
+                        # Mark email_task as failed
+                        await execute(
+                            "UPDATE email_tasks SET status = 'failed', last_error = $2 WHERE id = $1",
+                            task_uuid_err, err_str[:500],
                         )
-                    
-                    # Auto-complete check after failure
-                    if campaign_id:
-                        await self._check_campaign_completion(campaign_id)
-                except Exception as inner_e:
-                    logger.error(f"Failed to mark failure in DB: {inner_e}")
-                
-                if not message.processed:
-                    await message.nack(requeue=False)
+                        # Also mark campaign_dispatch as FAILED so dashboard shows it
+                        self.db.table("campaign_dispatch").upsert([{
+                            "id": str(task_row["dispatch_id"]),
+                            "campaign_id": str(task_row["campaign_id"]),
+                            "subscriber_id": str(task_row["c_id"]),
+                            "status": "FAILED",
+                            "error_log": err_str[:500],
+                            "updated_at": "now()",
+                        }], on_conflict="id").execute()
+                        # Check if this was the last task — mark campaign as 'sent' if so
+                        await self._check_campaign_completion(str(task_row["campaign_id"]))
+                except Exception as db_err:
+                    logger.warning(f"[{task_id}] Could not mark task as failed in DB: {db_err}")
+                await message.ack()
 
     async def _check_campaign_completion(self, campaign_id: str):
         try:
-            remaining = self.db.table("campaign_dispatch")\
-                .select("id", count="exact")\
-                .eq("campaign_id", campaign_id)\
-                .in_("status", ["PENDING", "PROCESSING"])\
-                .execute()
+            remaining = self.db.table("campaign_dispatch").select("id", count="exact").eq("campaign_id", campaign_id).in_("status", ["PENDING", "PROCESSING"]).execute()
             if (remaining.count or 0) == 0:
-                self.db.table("campaigns")\
-                    .update({"status": "sent"})\
-                    .eq("id", campaign_id)\
-                    .execute()
-                logger.info(f"[{campaign_id}] All dispatches complete → Campaign marked as SENT")
-                
-                try:
-                    camp_info = self.db.table("campaigns").select("name, tenant_id").eq("id", campaign_id).execute()
-                    if camp_info.data:
-                        t_id = camp_info.data[0]["tenant_id"]
-                        c_name = camp_info.data[0].get("name", "Unnamed")
-                        sent_count = self.db.table("campaign_dispatch").select("id", count="exact").eq("campaign_id", campaign_id).eq("status", "DISPATCHED").execute()
-                        fail_count = self.db.table("campaign_dispatch").select("id", count="exact").eq("campaign_id", campaign_id).eq("status", "FAILED").execute()
-                        total_sent = sent_count.count or 0
-                        total_failed = fail_count.count or 0
-                        t_info = self.db.table("tenants").select("email").eq("id", t_id).execute()
-                        if t_info.data and t_info.data[0].get("email"):
-                            await notify_campaign_completed(t_info.data[0]["email"], c_name, total_sent, total_failed, campaign_id)
-                except Exception as ne:
-                    logger.warning(f"[{campaign_id}] Completion notification failed: {ne}")
+                self.db.table("campaigns").update({"status": "sent"}).eq("id", campaign_id).execute()
+                camp_info = self.db.table("campaigns").select("name, tenant_id").eq("id", campaign_id).execute()
+                if camp_info.data:
+                    t_id = camp_info.data[0]["tenant_id"]
+                    sent = self.db.table("campaign_dispatch").select("id", count="exact").eq("campaign_id", campaign_id).eq("status", "DISPATCHED").execute()
+                    failed = self.db.table("campaign_dispatch").select("id", count="exact").eq("campaign_id", campaign_id).eq("status", "FAILED").execute()
+                    t_info = self.db.table("tenants").select("email").eq("id", t_id).execute()
+                    if t_info.data and t_info.data[0].get("email"):
+                        await notify_campaign_completed(t_info.data[0]["email"], camp_info.data[0].get("name"), sent.count or 0, failed.count or 0, campaign_id)
         except Exception as e:
-            logger.warning(f"[{campaign_id}] Auto-complete check failed: {e}")
+            logger.warning(f"[{campaign_id}] Completion check failed: {e}")

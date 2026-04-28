@@ -306,6 +306,37 @@ async def _expire_invitations(db: Client) -> None:
         logger.error(f"Invitation expiry task failed: {e}")
 
 
+async def _recover_zombie_tasks(db: Client) -> None:
+    """Reclaim tasks stuck in PROCESSING for more than 15 minutes."""
+    try:
+        from datetime import timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=15)).isoformat()
+        res = (
+            db.table("campaign_dispatch")
+            .update({"status": "PENDING", "locked_by": None})
+            .eq("status", "PROCESSING")
+            .lt("updated_at", cutoff)
+            .execute()
+        )
+        if res.data:
+            logger.info(f"🧟 Zombie Recovery: Reclaimed {len(res.data)} stuck dispatches.")
+            
+        # FIX 2: Reclaim Campaigns stuck in SENDING for more than 1 hour (Fix 2)
+        # This handles worker crashes during the queue_campaign_dispatch phase.
+        campaign_cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        stuck_campaigns = (
+            db.table("campaigns")
+            .update({"status": "draft"})
+            .eq("status", "sending")
+            .lt("updated_at", campaign_cutoff)
+            .execute()
+        )
+        if stuck_campaigns.data:
+            logger.warning(f"🔄 Campaign Recovery: Reclaimed {len(stuck_campaigns.data)} campaigns from 'sending' state.")
+    except Exception as e:
+        logger.error(f"Zombie recovery failed: {e}")
+
+
 # ── Main scheduler loop ────────────────────────────────────────────────
 
 async def run_scheduler():
@@ -391,6 +422,7 @@ async def run_scheduler():
             await _check_monthly_summary(db, r)
             await _empty_old_exports(db)
             await _expire_invitations(db)
+            await _recover_zombie_tasks(db)
 
         except Exception as e:
             logger.error(f"Scheduler poll error: {e}")
