@@ -23,16 +23,31 @@ class AuthRepository:
         self.db.table("tenants").insert(tenant_data).execute()
 
     def get_tenant_user_link(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """Return the primary (oldest) workspace a user belongs to."""
+        """Return the priority workspace a user belongs to (Active > Onboarding)."""
+        # We fetch all memberships and sort in Python to handle the status priority
         result = (
             self.db.table("tenant_users")
-            .select("tenant_id, role, isolation_model")
+            .select("tenant_id, role, isolation_model, joined_at, tenants!inner(status)")
             .eq("user_id", user_id)
-            .order("joined_at")
-            .limit(1)
             .execute()
         )
-        return result.data[0] if result.data else None
+        
+        memberships = result.data or []
+        if not memberships:
+            return None
+            
+        # Priority: Active (status='active') > everything else
+        # Within status, newest first (joined_at)
+        def sort_key(m):
+            t_data = m.get("tenants")
+            if isinstance(t_data, list): t_data = t_data[0] if t_data else {}
+            status_val = 1 if t_data.get("status") == "active" else 0
+            joined_val = m.get("joined_at") or ""
+            return (status_val, joined_val)
+
+        memberships.sort(key=sort_key, reverse=True)
+        
+        return memberships[0]
 
     def get_tenant_user_by_tenant(self, user_id: str, tenant_id: str) -> Optional[Dict[str, Any]]:
         result = (

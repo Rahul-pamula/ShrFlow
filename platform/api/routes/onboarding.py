@@ -75,7 +75,7 @@ class OnboardingResponse(BaseModel):
 # === Routes ===
 
 @router.get("/status", response_model=OnboardingStatusResponse)
-async def get_onboarding_status(jwt_payload: JWTPayload = Depends(require_permission("VIEW_SETTINGS"))):
+async def get_onboarding_status(jwt_payload: JWTPayload = Depends(require_permission("analytics:view"))):
 
     """
     Get current onboarding progress for a tenant.
@@ -142,6 +142,27 @@ async def get_onboarding_status(jwt_payload: JWTPayload = Depends(require_permis
     else:
         next_stage = "complete"
     
+    # Check for pending invites for this user's email
+    invite_data = None
+    try:
+        inv_res = db.client.table("team_invitations")\
+            .select("*, tenants(company_name)")\
+            .eq("email", jwt_payload.email)\
+            .eq("status", "pending")\
+            .execute()
+        
+        if inv_res.data:
+            invite = inv_res.data[0]
+            invite_data = {
+                "id": invite["id"],
+                "token": invite["token"],
+                "role": invite["role"],
+                "workspace_name": invite.get("tenants", {}).get("company_name") or "Your Team",
+                "inviter_id": invite.get("inviter_id")
+            }
+    except Exception as e:
+        print(f"DEBUG: Failed to check invites during onboarding status: {e}")
+
     return OnboardingStatusResponse(
         tenant_id=tenant_id,
         status=tenant["status"],
@@ -152,7 +173,8 @@ async def get_onboarding_status(jwt_payload: JWTPayload = Depends(require_permis
         current_data={
             "workspace_name": tenant.get("workspace_name") or tenant.get("company_name") or "",
             "organization_name": tenant.get("organization_name") or "",
-            "user_role": tenant.get("user_role") or ""
+            "user_role": tenant.get("user_role") or "",
+            "pending_invite": invite_data
         }
     )
 
@@ -160,7 +182,7 @@ async def get_onboarding_status(jwt_payload: JWTPayload = Depends(require_permis
 @router.put("/basic-info", response_model=OnboardingResponse)
 async def update_basic_info(
     request: BasicInfoRequest,
-    jwt_payload: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))
+    jwt_payload: JWTPayload = Depends(require_permission("settings:update"))
 ):
 
     """
@@ -207,7 +229,7 @@ async def update_basic_info(
 @router.put("/compliance", response_model=OnboardingResponse)
 async def update_compliance(
     request: ComplianceRequest,
-    jwt_payload: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))
+    jwt_payload: JWTPayload = Depends(require_permission("settings:update"))
 ):
 
     """
@@ -256,7 +278,7 @@ async def update_compliance(
 @router.put("/intent", response_model=OnboardingResponse)
 async def update_intent(
     request: IntentRequest,
-    jwt_payload: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))
+    jwt_payload: JWTPayload = Depends(require_permission("settings:update"))
 ):
 
     """
@@ -315,7 +337,7 @@ async def update_intent(
 
 
 @router.post("/complete", response_model=OnboardingResponse)
-async def complete_onboarding(jwt_payload: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))):
+async def complete_onboarding(jwt_payload: JWTPayload = Depends(require_permission("settings:update"))):
 
     """
     Complete onboarding and activate tenant.
@@ -415,7 +437,7 @@ class ScaleRequest(BaseModel):
 @router.post("/workspace")
 async def save_workspace(
     request: WorkspaceRequest,
-    user: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))
+    user: JWTPayload = Depends(require_permission("settings:update"))
 ):
 
     """Save workspace name and user role"""
@@ -443,7 +465,7 @@ async def save_workspace(
 @router.post("/use-case")
 async def save_use_case(
     request: UseCaseRequest,
-    user: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))
+    user: JWTPayload = Depends(require_permission("settings:update"))
 ):
 
     """Save primary use case"""
@@ -467,7 +489,7 @@ async def save_use_case(
 @router.post("/integrations")
 async def save_integrations(
     request: IntegrationsRequest,
-    user: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))
+    user: JWTPayload = Depends(require_permission("settings:update"))
 ):
 
     """Save integration sources"""
@@ -491,7 +513,7 @@ async def save_integrations(
 @router.post("/scale")
 async def save_scale(
     request: ScaleRequest,
-    user: JWTPayload = Depends(require_permission("MANAGE_SETTINGS"))
+    user: JWTPayload = Depends(require_permission("settings:update"))
 ):
 
     """Save expected scale"""
