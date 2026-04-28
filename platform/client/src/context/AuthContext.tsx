@@ -10,7 +10,7 @@ interface User {
     fullName: string;
     tenantId: string;
     tenantStatus: 'onboarding' | 'active' | 'pending_join';
-    role: 'OWNER' | 'MANAGER' | 'MEMBER';
+    role: 'OWNER' | 'ADMIN' | 'CREATOR' | 'VIEWER';
     workspaceType: 'MAIN' | 'FRANCHISE';
     workspaceName: string;
     onboardingRequired?: boolean;
@@ -38,6 +38,8 @@ interface AuthContextType {
     silentRefresh: () => Promise<string | null>;
     /** Immediately updates the UI theme and debounces the backend save */
     setThemePref: (theme: 'light' | 'dark' | 'system') => void;
+    /** Leave (or delete) the current workspace based on user role */
+    leaveWorkspace: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,8 +62,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isRefreshing = useRef<boolean>(false);
 
     const handleAuthSuccess = useCallback((data: any, emailOverride?: string): User => {
-        const role = (data.role || 'MEMBER').toUpperCase();
-        const validRoles = ['OWNER', 'MANAGER', 'MEMBER'];
+        let role = (data.role || 'CREATOR').toUpperCase();
+        // Production Hardening: Map backend 'MANAGER' normalization to frontend 'ADMIN' 
+        // to prevent unintentional fallback to 'VIEWER' during session hydration.
+        if (role === 'MANAGER') role = 'ADMIN';
+
+        const validRoles = ['OWNER', 'ADMIN', 'CREATOR', 'VIEWER'];
         
         const userData: User = {
             userId: data.user_id || '',
@@ -72,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             onboardingRequired: data.onboarding_required === true || data.onboarding_required === 'true',
             workspaceType: (data.workspace_type || 'MAIN').toUpperCase() as 'MAIN' | 'FRANCHISE',
             workspaceName: data.workspace_name || 'Workspace',
-            role: (validRoles.includes(role) ? role : 'MEMBER') as User['role'],
+            role: (validRoles.includes(role) ? role : 'VIEWER') as User['role'],
         };
 
         const workspaceData: WorkspaceState = {
@@ -181,17 +187,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const isPublicRoute = publicRoutes.includes(pathname || '');
         const isOnboardingRoute = pathname?.startsWith('/onboarding');
 
-        if (isOnboardingRoute && isAuthenticated) return;
-
         if (!isAuthenticated && !isPublicRoute && !isOnboardingRoute) {
             if (pathname !== '/login') router.push('/login');
             return;
         }
 
-        if (isAuthenticated && user?.tenantStatus === 'onboarding' && !isOnboardingRoute && !isPublicRoute) {
-            if (pathname !== '/onboarding/workspace') router.push('/onboarding/workspace');
-            return;
+        // Production Hardening: Check if the user has an active alternative to avoid the "Onboarding Trap"
+        // We do this BEFORE the isOnboardingRoute return to allow escaping even if already on the onboarding page.
+        if (isAuthenticated && user?.tenantStatus === 'onboarding' && !isPublicRoute) {
+            const checkEscape = async () => {
+                try {
+                    const wsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/workspaces`, {
+                        headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
+                    });
+                    if (wsRes.ok) {
+                        const workspaces = await wsRes.json();
+                        const activeWs = workspaces.find((w: any) => w.status === 'active');
+                        if (activeWs) {
+                            console.log("Onboarding Trap Detected: Switching to active workspace", activeWs.tenant_id);
+                            await switchWorkspace(activeWs.tenant_id);
+                            return true;
+                        }
+                    }
+                } catch (err) {
+                    console.warn("Failed to check alternative workspaces during onboarding guard", err);
+                }
+                return false;
+            };
+
+            checkEscape().then(escaped => {
+                if (!escaped && !isOnboardingRoute && pathname !== '/onboarding/workspace') {
+                    router.push('/onboarding/workspace');
+                }
+            });
+            
+            // If already on onboarding route, we still want to return early to prevent further logic
+            if (isOnboardingRoute) return;
         }
+
+        if (isOnboardingRoute && isAuthenticated) return;
 
         if (isAuthenticated && user?.tenantStatus === 'pending_join' && pathname !== '/waiting-room' && !isPublicRoute) {
             router.push('/waiting-room');
@@ -344,8 +378,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Safety normalization
         if (updatedUser.role) {
             const role = updatedUser.role.toUpperCase();
-            if (!['OWNER', 'MANAGER', 'MEMBER'].includes(role)) {
-                updatedUser.role = 'MEMBER'; // Safe fallback
+            if (!['OWNER', 'ADMIN', 'CREATOR', 'VIEWER'].includes(role)) {
+                updatedUser.role = 'VIEWER'; // Safe fallback
             } else {
                 updatedUser.role = role as User['role'];
             }
@@ -374,10 +408,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             const data = await response.json();
             handleAuthSuccess(data);
-            router.push('/dashboard');
+            
+            // Full redirect to clear any state/guards
+            window.location.href = '/dashboard';
         } catch (error) {
             console.error('Workspace switch error:', error);
             throw error;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const leaveWorkspace = async () => {
+        const token = localStorage.getItem('auth_token');
+        const tenantId = user?.tenantId;
+        if (!token || !tenantId) return;
+        
+        setIsLoading(true);
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/settings/workspace/${tenantId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || 'Failed to remove workspace');
+            }
+            
+            // Find the next available workspace and switch, or logout
+            const wsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/workspaces`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const workspaces = await wsRes.json();
+            const nextWs = workspaces.find((w: any) => w.tenant_id !== tenantId && w.status === 'active') || workspaces[0];
+            
+            if (nextWs) {
+                await switchWorkspace(nextWs.tenant_id);
+            } else {
+                await logout();
+            }
+        } catch (err) {
+            console.error("Leave workspace error:", err);
+            throw err;
         } finally {
             setIsLoading(false);
         }
@@ -400,6 +473,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 switchWorkspace,
                 setThemePref,
                 silentRefresh,
+                leaveWorkspace,
             }}
         >
             {children}
