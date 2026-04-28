@@ -221,6 +221,29 @@ graph TD
 
 ---
 
+---
+
+---
+
+### 🚀 Newly Discovered (From Codebase)
+- `AuthContext.tsx` handles complex global state and route guards.
+- Extensive use of Lucide React icons.
+
+---
+
+### 🧱 Architecture
+- Planned: Basic UI components.
+- Actual: Fully integrated hybrid app shell with persistent sidebar and complex layout wrappers.
+- Impact: Highly robust frontend foundation.
+
+---
+
+### 🎨 UI / UX
+- Pages/components implemented: Dashboard, Contacts, Settings, Campaigns, Templates.
+- Missing flows: None in base UI.
+- Inconsistent patterns: Some older forms might not use the latest `Input` or `SectionCard` wrapper, but mostly uniform.
+- RBAC visibility issues in UI: `can()` utility actively used to hide elements.
+
 ## Phase 1 — Foundation, Auth, Tenant Identity & Onboarding
 **WHY:** Before any email can be sent, we need a secure multi-tenant foundation. Every query, row, and action must be strictly isolated by `tenant_id`.
 
@@ -340,6 +363,48 @@ graph TD
 
 ---
 
+---
+
+---
+
+### 🚀 Newly Discovered (From Codebase)
+- "Onboarding Escape" mechanism in `AuthContext` to rescue users trapped in ghost workspaces.
+
+---
+
+### 🔐 RBAC System
+- Roles involved: Owner, Admin, Member, Viewer.
+- What is enforced in backend: `require_authenticated_user` checks valid JWT. Role enforcement exists in other modules via `require_permission`.
+- What is enforced in frontend: `AuthContext` guards prevent unauthenticated access and route users through onboarding.
+- Missing enforcement: None at auth level.
+
+---
+
+### 🧱 Architecture
+- Planned: Standard JWT.
+- Actual: Custom JWT with `tenant_id`, `role`, and `user_id` injected for stateless authorization.
+
+---
+
+### 🎨 UI / UX
+- Pages implemented: Login, Signup, Onboarding Workspace/Use Case flows.
+- Missing flows: None.
+
+---
+
+### 🚀 Features (From Real System)
+- **Onboarding Escape Guard**
+  - **What it does:** Automatically rescues users trapped in an uncompleted "ghost" workspace by redirecting them to their active workspace.
+  - **Where it exists:** `platform/client/src/context/AuthContext.tsx`
+  - **Why it belongs here:** Auth and Tenant Routing foundation.
+  - **Classification:** Core Feature
+
+### 🎨 UI / UX
+- **What UI exists:** Complete onboarding wizard and login flows.
+- **RBAC visibility mismatches:** None detected.
+
+- **Plan vs actual mismatch:** The original plan did not account for edge cases where a user could have multiple workspaces in differing states of completion, requiring the newly added Escape Guard.
+
 ## Phase 1.5 — Auth Hardening & Audit Logging
 **WHY:** Secures the core authentication layer and introduces deep observability for crucial tenant actions.
 
@@ -383,6 +448,15 @@ graph TD
 
 ---
 
+---
+
+---
+
+### 🔐 RBAC System
+- Roles involved: System.
+- What is enforced in backend: Audit logs are append-only.
+- What is enforced in frontend: Audit viewer UI available in settings.
+
 ## Phase 1.6 — GDPR & Legal Compliance
 **WHY:** Ensures the system complies with EU data regulations securely before enterprise deployment.
 
@@ -411,6 +485,18 @@ graph TD
 - Privacy policy / Terms page linked from footer
 
 ---
+
+---
+
+### 🚀 Features (From Real System)
+- **GDPR Erasure Endpoint**
+  - **What it does:** Anonymizes user PII to comply with GDPR Right to be Forgotten without destroying aggregate analytics.
+  - **Where it exists:** `platform/api/routes/settings.py` (`gdpr_erase_contact`)
+  - **Why it belongs here:** GDPR Compliance block.
+  - **Classification:** Partial Feature (Backend only, UI missing)
+
+### 🎨 UI / UX
+- **Missing flows:** The Data Export and GDPR Erasure triggers are not fully wired into the user-facing Settings UI. Restore modal for soft-deleted contacts is incomplete.
 
 ## Phase 1.7 — Enterprise Workspace Lifecycle & Data Isolation
 **WHY:** Ensures data stays with the company, not the individual, and provides a professional invite-only onboarding for team members. Also locks the data isolation layer at the database level so no application bug can ever leak cross-tenant data.
@@ -455,6 +541,22 @@ graph TD
 - [WORKSPACE FRONTEND] Workspace Switcher dropdown in global header
 
 ---
+
+---
+
+---
+
+### 🔐 RBAC System
+- Roles involved: Owner, Admin, Creator, Viewer.
+- What is enforced in backend: Endpoint `DELETE /settings/workspace/{tenant_id}` explicitly checks `tenant_users.role`. Only Owners can delete (if solo), others only leave.
+- What is enforced in frontend: Organization Settings UI conditionally renders "Delete Workspace" vs "Leave Workspace" based on role.
+- Risk: None, strict enforcement at DB and API layer.
+
+---
+
+### 🧱 Architecture
+- Planned: RLS.
+- Actual: RLS heavily enforced. Migration from Supabase PostgREST to `asyncpg` connection pool to allow `SET LOCAL app.current_tenant_id` for true transaction-level data isolation.
 
 ## Phase 2 — Contacts Engine
 **WHY:** Contacts are the core dataset. This phase creates a stable, scalable lifecycle for importing, managing, suppressing, and tagging audiences.
@@ -557,7 +659,6 @@ To support gigabyte-scale datasets without memory exhaustion, the import process
 | **Fault Tolerance** | If API restarts, upload is lost | RabbitMQ ensures worker finishes tasks |
 | **Data Integrity** | Silently skips errors | Precision Audit Logs for every rejected row |
 
-
 **[BACKEND]**
 - High-performance, streaming CSV/XLSX ingestion running asynchronously via RabbitMQ to support gigabyte-scale datasets.
 - Real-time single contact insertion REST API designed for external CRM or web-form integrations.
@@ -622,6 +723,21 @@ To support gigabyte-scale datasets without memory exhaustion, the import process
 - [FRIEND AUDIT FIX 18] Streaming CSV Uploads — Replace pandas in-memory parser with async chunked byte stream parsing
 
 ---
+
+---
+
+---
+
+### 🔐 RBAC System
+- Roles involved: Admin, Creator.
+- What is enforced in backend: `require_permission("contacts:import")` and `require_permission("contacts:view")` used across all endpoints.
+- What is enforced in frontend: Hidden buttons for viewers.
+
+---
+
+### 🧱 Architecture
+- Planned: Async CSV import.
+- Actual: Highly robust S3-first upload -> RabbitMQ task -> Streaming chunked worker architecture. Eliminates API memory exhaustion.
 
 ## Phase 3 — Template Engine & AI Content Creation
 **WHY:** Email content must be responsive, dynamic, and perfectly rendered across extreme client environments (Outlook, Gmail, Apple).
@@ -731,6 +847,14 @@ graph TD
 - Inbox preview simulation (Gmail, Outlook, Apple Mail rendering)
 
 ---
+
+---
+
+---
+
+### 🔐 RBAC System
+- Roles involved: Creator, Admin.
+- What is enforced in backend: `require_permission("template:manage")` and `require_permission("template:view")` actively used.
 
 ## Phase 3.5 — Testing & Validation Gateway
 **WHY:** The "Pre-Send" gateway ensures that every token resolves and every layout works before the "Send" button is enabled.
@@ -872,6 +996,38 @@ graph TD
 - Normalize frontend API base URLs
 
 ---
+
+---
+
+---
+
+### 🚀 Newly Discovered (From Codebase)
+- Versioning (Optimistic Locking) added to Campaigns to prevent Approval Race Conditions.
+
+---
+
+### 🔐 RBAC System
+- Roles involved: Owner, Admin (approvers), Creator (requesters).
+- What is enforced in backend: `require_permission("campaign:manage")`, `"campaign:send"`, `"campaign:create"`.
+- What is enforced in frontend: Approval flow UI enforces role separation.
+- Security risks: None, version matching prevents outdated approvals.
+
+---
+
+### 🧱 Architecture
+- Planned: Sync dispatch.
+- Actual: `aio-pika` RabbitMQ publisher in API, asynchronous consumer in worker pulling contacts directly via `asyncpg` and pushing to email delivery providers. Redis used for distributed locks to prevent double-sends.
+
+---
+
+### 🚀 Features (From Real System)
+- **Campaign Versioning (Optimistic Locking)**
+  - **What it does:** Uses an integer increment on the campaign record to prevent race conditions where an Admin approves an outdated draft modified by a Creator.
+  - **Where it exists:** `platform/api/routes/campaigns.py`
+  - **Why it belongs here:** Campaign Orchestration & State Machine integrity.
+  - **Classification:** Core Feature
+
+- **Plan vs actual mismatch:** The plan lacked concurrency control specifications. Optimistic locking was retrofitted to secure the approval workflow.
 
 ## Phase 5 — Delivery Engine
 **WHY:** Connects the system to the internet via SMTP, automatically responding to bounces, spam complaints, and user unsubscriptions securely.
@@ -1058,7 +1214,6 @@ graph TD
 **[FRONTEND]**
 - **Escalate Button**: UI in the Feedback Inbox to notify the platform owners.
 - **Status Tracker**: Tenant view of "Support Pending/Resolved" for escalated items.
-
 
 ## Phase 5.8 — Event Data Archival Strategy (Gap 4)
 **WHY:** A 100k-recipient campaign instantly creates 100k+ rows. Over 1 year, the `email_events` table will grow to 100M+ rows, catastrophically degrading query performance. We must construct a tiered database isolation model immediately after launch.
@@ -1404,50 +1559,34 @@ A --> B[Workspace / Tenant]
 B --> C[User Management]
 
 C --> C1[Owner 👑]
-C --> C2[Manager 🧑💼]
-C --> C3[Member 👨💻]
+C --> C2[Admin 🧑💼]
+C --> C3[Creator 🎨]
+C --> C4[Viewer 👁️]
 
 %% OWNER POWERS
 C1 --> O1[Invite Users]
-C1 --> O2[Assign Roles]
-C1 --> O3[Remove Users]
-C1 --> O4[Transfer Ownership 🔁]
-C1 --> O5[Billing Control]
-C1 --> O6[Approve Requests]
-C1 --> O7[Approve Franchise]
+C1 --> O2[Manage Roles & Transfer]
+C1 --> O3[Billing Control]
+C1 --> O4[Approve Workspace Requests]
 
-%% MANAGER CREATION FLOW
-O1 --> MAdd[Owner invites user]
-MAdd --> MRole[Assign as Manager]
+%% ADMIN POWERS
+C2 --> M1[Invite Users]
+C2 --> M2[Approve & Send Campaigns]
+C2 --> M3[Manage Contacts/Templates]
+C2 --> M4[Submit Workspace Requests]
 
-%% MEMBER CREATION FLOW
-O1 --> MbAdd[Owner/Manager invites user]
-MbAdd --> MbRole[Assign as Member]
+%% CREATOR POWERS
+C3 --> CM1[Create & Edit Campaigns]
+C3 --> CM2[Import Contacts]
+C3 --> CM3[Manage Templates]
 
-%% OWNERSHIP TRANSFER
-O4 --> T1[Select Existing Member]
-O4 --> T2[Or Invite New User]
-T1 --> T3[Make New Owner]
-T2 --> T3
-T3 --> T4[Old Owner becomes Manager (optional)]
+%% CAMPAIGN WORKFLOW (STRICT RBAC)
+CM1 -.->|Awaiting Review| M2
+M2 -.->|Approved| Send[Execute Campaign Send]
+O4 -.->|Approves| M4
 
-%% MANAGER PERMISSIONS
-C2 --> M1[Create Campaigns]
-C2 --> M2[Send Emails]
-C2 --> M3[Manage Contacts]
-C2 --> M4[View Analytics]
-C2 --> M5[View Billing]
-C2 --> M6[Invite Members]
-C2 --> M7[Request Actions]
-
-M7 --> MR1[Request Billing Change]
-M7 --> MR2[Request Franchise]
-
-%% MEMBER PERMISSIONS
-C3 --> MB1[Create Campaigns]
-C3 --> MB2[Send Emails]
-C3 --> MB3[View Analytics]
-C3 --> MB4[View Billing]
+%% VIEWER POWERS
+C4 --> V1[View Analytics & Content]
 
 %% CORE SYSTEMS
 B --> D[Core Systems]
@@ -1464,23 +1603,21 @@ D --> D9[Activity Logs]
 
 %% BILLING RULES
 D4 --> BR1[Only Owner can Change Plan]
-D4 --> BR2[Manager/Member View Only]
-D4 --> BR3[Usage Shared Across Workspace]
+D4 --> BR2[Usage Shared Across Workspace]
 
 %% REQUEST FLOW
-D7 --> R1[Manager Creates Request]
+D7 --> R1[Admin Creates Request]
 R1 --> R2[Owner Reviews]
 R2 --> R3[Approve or Reject]
-R3 --> R4[Execute if Approved]
 
 %% SENDER RULES
-D5 --> S1[Owner Verifies Sender]
-S1 --> S2[All Members Use Sender]
+D5 --> S1[Owner/Admin Verifies Sender]
+S1 --> S2[Whole Workspace Uses Sender]
 
 %% FRANCHISE SYSTEM
 B --> E[Franchise System]
 
-E --> E1[Manager/Owner Request Franchise]
+E --> E1[Admin/Owner Requests Franchise]
 E1 --> E2[Owner Approval Required]
 E2 --> E3[Create New Workspace]
 
@@ -1488,8 +1625,8 @@ E2 --> E3[Create New Workspace]
 E3 --> F[Franchise Workspace]
 
 F --> F1[Franchise Owner]
-F --> F2[Franchise Managers]
-F --> F3[Franchise Members]
+F --> F2[Franchise Admins]
+F --> F3[Franchise Creators]
 
 F --> F4[Own Campaigns]
 F --> F5[Own Contacts]
@@ -1505,15 +1642,15 @@ B --> G[Global Rules]
 
 G --> G1[Tenant = Container]
 G --> G2[Owner = Highest Authority]
-G --> G3[Manager Cannot Change Billing]
-G --> G4[Manager Cannot Create Franchise Directly]
-G --> G5[Members Have Limited Access]
+G --> G3[Admin Cannot Change Billing]
+G --> G4[Admin Cannot Create Franchise Directly]
+G --> G5[Creators Have Limited Access]
 G --> G6[Franchise is Separate Workspace]
 ```
 
 ### Phase 8 Scope Summary
 - `Phase 8.1` establishes the workspace admin foundation, roles, settings baseline, and shared data model.
-- `Phase 8.2` implements team management for Owners, Managers, and Members.
+- `Phase 8.2` implements team management across the full role hierarchy (Owners, Admins, Creators, Viewers).
 - `Phase 8.3` extends that model into franchise workspaces with parent-child governance.
 - `Phase 8.4` delivers member export and reporting controls on top of the team model.
 - `Phase 8.5` hardens the whole phase with audit, lifecycle rules, deletion policy, compliance, and operational safeguards.
@@ -1525,7 +1662,7 @@ G --> G6[Franchise is Separate Workspace]
 - Finalize the core workspace administration schema:
   `workspaces`, `workspace_members`, `invitations`, `audit_logs`, `exports_log`, and the parent-child `parent_workspace_id` relationship for franchise support.
 - Normalize role definitions at the workspace level:
-  `OWNER`, `MANAGER`, `MEMBER`, with optional `FRANCHISE_OWNER` represented as `OWNER` of a child workspace rather than a special role inside the parent workspace.
+  `OWNER`, `ADMIN`, `CREATOR`, `VIEWER`, with optional `FRANCHISE_OWNER` represented as `OWNER` of a child workspace rather than a special role inside the parent workspace.
 - Ensure all administrative writes are tenant-scoped and role-checked before execution.
 - Keep data sovereignty explicit:
   content belongs to the workspace, not the individual user; removing a user must never silently delete workspace campaigns, contacts, templates, or analytics history.
@@ -1537,7 +1674,7 @@ G --> G6[Franchise is Separate Workspace]
 **[FRONTEND]**
 - Create a single workspace administration shell under settings for:
   Profile, Organization, Team Members, Franchise Accounts, Domains, Senders, API Keys, Compliance, and Exports.
-- Add a clear role-aware navigation model so Owners see full administration controls, Managers see operational controls, and Members see limited self-service only.
+- Add a clear role-aware navigation model so Owners see full administration controls, Admins see operational controls, and Creators/Viewers see limited self-service only.
 - Make the Team Members and Franchise Accounts sections first-class admin pages, not secondary modals hidden inside generic settings.
 - Standardize empty states, confirmation dialogs, success toasts, destructive warnings, and audit-friendly labels across the whole admin area.
 
@@ -1557,7 +1694,7 @@ erDiagram
 
 **📋 Planned Tasks — Phase 8.1**
 - Workspace administration IA finalized in documentation and navigation.
-- Role matrix defined for Owner, Manager, and Member actions.
+- Role matrix defined for Owner, Admin, Creator, and Viewer actions.
 - `workspaces` model updated for parent-child franchise support.
 - `workspace_members` model includes `role`, `joined_at`, `invited_by`, `removed_at`, `removed_by`.
 - `invitations` model includes token, expiry, role, status, invited_by, accepted_at.
@@ -1577,9 +1714,9 @@ erDiagram
 - Implement invitation lifecycle for workspace members:
   send invite, validate token, accept invite, resend invite, cancel invite, expire invite automatically.
 - Enforce role-based behavior:
-  Owners can invite Managers and Members, remove members, and transfer ownership;
-  Managers can invite Members only if product policy allows it, and can only manage the Members they are allowed to control;
-  Members cannot invite or remove others.
+  Owners can invite Admins, Creators and Viewers, remove members, and transfer ownership;
+  Admins can invite other users, but cannot manage roles or transfer ownership;
+  Creators and Viewers cannot invite or remove others.
 - Support removal flows with history preserved:
   removing a member revokes workspace access but keeps authored records tied to the workspace.
 - Implement voluntary leave flow:
@@ -1590,9 +1727,9 @@ erDiagram
 
 **[FRONTEND]**
 - Build a dedicated Team Members dashboard with:
-  segmented lists or filtered table views for Owners, Managers, Members, pending invites, and recently removed users.
+  segmented lists or filtered table views for Owners, Admins, Creators, Viewers, pending invites, and recently removed users.
 - Add invite dialogs for:
-  Add Manager, Add Member, Resend Invite, Cancel Invite.
+  Add Admin, Add Creator, Resend Invite, Cancel Invite.
 - Provide clear row actions:
   change role, remove access, resend invite, view joined date, view inviter, and export list.
 - Show policy-aware UI:
@@ -1604,8 +1741,8 @@ erDiagram
 ```mermaid
 flowchart TD
     A[Owner opens Team Members] --> B[Select action]
-    B --> C[Invite Manager]
-    B --> D[Invite Member]
+    B --> C[Invite Admin]
+    B --> D[Invite Creator]
     B --> E[Transfer Ownership]
     B --> F[Remove User]
     C --> G[Create invitation + role]
@@ -1625,9 +1762,9 @@ flowchart TD
 
 **📋 Planned Tasks — Phase 8.2**
 - Team Members page with table UI and role filters.
-- Owner list, Manager list, Member list, Pending Invites view.
-- Invite Manager flow.
-- Invite Member flow.
+- Owner, Admin, Creator, and Viewer lists, Pending Invites view.
+- Invite Admin flow.
+- Invite Creator flow.
 - Invite cancellation flow.
 - Invite resend flow.
 - Invitation acceptance landing page.
@@ -1638,7 +1775,7 @@ flowchart TD
 - Ownership Transfer flow with strong warnings and audit event.
 - Prevent last-owner exit or deletion.
 - Show inviter, join date, status, and role in the member table.
-- Document exact behavior for Manager-managed members.
+- Document exact behavior for Admin-managed team members.
 - Define export button entry point on the Team Members page for the next subphase.
 
 ### Phase 8.3 — Franchise Workspace Management
@@ -1661,7 +1798,7 @@ flowchart TD
 - Add a Franchise Accounts page for parent Owners showing:
   pending invites, active franchises, franchise owner, status, creation date, and action menu.
 - Provide an "Add Franchise Owner" workflow that clearly explains a new workspace will be created.
-- Make child workspace boundaries obvious in the UI so users never confuse parent members with franchise members.
+- Make child workspace boundaries obvious in the UI so users never confuse parent team members with franchise team members.
 - Show destructive warnings for franchise deletion:
   all users, campaigns, contacts, templates, and operational data inside that franchise will be removed or archived based on retention policy.
 
@@ -1697,7 +1834,7 @@ flowchart LR
 **WHY:** Once team membership is modeled correctly, admins need a safe way to export it. Export is not a standalone feature; it sits on top of the team model, permission layer, audit logs, and async job system.
 
 **[BACKEND]**
-- Support filtered user exports for Owners and eligible Managers.
+- Support filtered user exports for Owners and eligible Admins.
 - Allow export filters such as:
   role, invited_by, status, workspace, franchise, joined date range, and output format.
 - Implement dual-mode export behavior:
@@ -1719,7 +1856,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A[Owner or eligible Manager opens Team Members] --> B[Apply filters]
+    A[Owner or eligible Admin opens Team Members] --> B[Apply filters]
     B --> C[Click Export Users]
     C --> D{Estimated size}
     D -->|Small| E[Generate file immediately]
@@ -1744,7 +1881,7 @@ flowchart TD
 - CSV schema documented:
   first name, last name, email, joined date, role, inviter, status.
 - Optional XLSX format documented.
-- Export permission rules documented for Owner vs Manager.
+- Export permission rules documented for Owner vs Admin.
 - Export rate-limit and concurrency rules documented.
 - Export-ready email notification documented.
 
@@ -1808,7 +1945,7 @@ flowchart TD
 - Team Members management dashboard.
 - Invitation system:
   send, resend, cancel, accept.
-- Role-aware Owner, Manager, Member permissions.
+- Role-aware Owner, Admin, Creator, and Viewer permissions.
 - Revoke access flow.
 - Voluntary leave flow.
 - Ownership transfer flow.
@@ -1821,6 +1958,29 @@ flowchart TD
 - Full documentation for UI, API, data, lifecycle, and governance behavior.
 
 ---
+
+---
+
+---
+
+### 🔐 RBAC System
+- Roles involved: Owner, Admin.
+- What is enforced in backend: `require_permission("settings:manage")` and `"settings:view"`.
+- What is enforced in frontend: Granular UI element toggling via `can()` utility.
+
+---
+
+### 🚀 Features (From Real System)
+- **Franchise Governance Engine**
+  - **What it does:** Enables parent workspaces to spawn, suspend, reactivate, and govern child workspaces while maintaining absolute data isolation.
+  - **Where it exists:** `platform/api/routes/team.py` and `platform/client/src/app/settings/franchises/`
+  - **Why it belongs here:** Ultimate enterprise team management.
+  - **Classification:** Core Feature
+
+- **Workspace Request Workflow**
+  - **What it does:** Bi-directional approval system for Admins to request billing or franchise changes, requiring Owner approval.
+  - **Where it exists:** `platform/client/src/app/settings/requests/page.tsx`
+  - **Classification:** Core Feature
 
 ## Phase 9 — Security, Compliance & Deliverability Infrastructure
 **WHY:** Ensures emails reach the inbox natively without landing in spam, maintaining strict data compliance and backup integrity.
@@ -2051,7 +2211,6 @@ graph TD
 - **Segment / Filter Generator**: Natural language input box on the Contacts page that auto-configures complex dropdown filters based on AI interpretation.
 - **Deliverability Explainer Modal**: "Explain this" button next to raw SMTP bounce codes that opens an AI-generated, plain-English summary of the exact fix needed.
 - **Multi-Language "Smart Translation"**: Allow user to draft a template and instantly generate localized copies for international scaling.
-
 
 ---
 
@@ -2414,3 +2573,52 @@ graph TD
 - `audit_logs(tenant_id, timestamp)` — Fast compliance fetching.
 - `email_events(campaign_id, contact_id)` — Fast analytical aggregations.
 - `sender_identities(verification_token)` — Secure fast-lookups during identity validation.
+
+## 🔐 Global RBAC Audit Report
+
+1. **Roles defined in system:**
+   - `owner`, `admin`, `creator`, `viewer`.
+
+2. **Where roles are enforced:**
+   - **Backend:** `utils/permissions.py` provides `require_permission()` dependency, which decodes the JWT and validates against a hardcoded RBAC dictionary mapping roles to actions (e.g., `campaign:send`).
+   - **Frontend:** `AuthContext.tsx` maintains session state. The `can(user, action)` utility function is used globally to conditionally render UI components.
+   - **Middleware:** `utils/jwt_middleware.py` provides base authentication (`require_authenticated_user`) and legacy strict checks (`require_admin_or_owner`).
+
+3. **Critical gaps:**
+   - The backend enforcement is surprisingly thorough. Most core entities (`campaigns`, `contacts`, `templates`, `settings`, `domains`, `team`) use `require_permission` consistently.
+   - **Risk:** Some older helper routes or webhooks might bypass RBAC, but they are protected by signature verification (e.g., SNS webhooks).
+
+4. **Recommendations:**
+   - Consolidate legacy `require_admin_or_owner` into the `require_permission` dictionary system for uniformity.
+
+---
+
+## 🧱 Architecture Evolution Summary
+
+- **Major shifts detected:**
+  - **Database Access:** Shifted from purely using Supabase PostgREST (via `supabase-py`) to integrating `asyncpg` for direct, high-performance Postgres connection pooling. This was required for setting transaction-level RLS context (`SET LOCAL app.current_tenant_id`) during background worker execution.
+  - **Messaging:** Heavy reliance on RabbitMQ (`aio-pika`) for all heavy lifting (CSV processing, Email dispatch).
+  - **Caching/State:** Redis is critical infrastructure, handling rate-limiting (`slowapi`), distributed locking for idempotency, and WebSockets Pub/Sub for real-time import progress.
+
+- **Current architecture (real):**
+  - FastAPI (Gateway) -> Supabase (Auth/DB) -> RabbitMQ (Message Broker) -> Standalone Python Workers -> AWS SES / Gmail.
+
+- **Risk areas:**
+  - The embedded scheduler in `platform/api/main.py` will cause double-dispatch if multiple API replicas are deployed. It must be disabled in production in favor of the standalone worker with Redis locks.
+
+- **Scalability readiness:**
+  - High. The streaming chunk parser and worker queues mean the API node memory footprint remains small regardless of tenant data size.
+
+---
+
+## 🎨 UI System Audit
+
+- **Design system vs actual usage:**
+  - The `shadcn/ui` system is implemented successfully. Complex components like DataTables and Modals adhere strictly to the design system.
+- **UX inconsistencies:**
+  - Minor. The onboarding flow was recently refactored to resolve a "ghost workspace" trap, improving multi-tenant navigation significantly.
+- **Missing critical states:**
+  - Overall excellent coverage of empty states (`EmptyState` component) and loading spinners across primary entities.
+
+---
+
