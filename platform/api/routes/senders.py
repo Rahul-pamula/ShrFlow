@@ -45,7 +45,7 @@ async def send_verification_email(to_email: str, token: str):
 @router.get("/domains")
 async def list_sender_domains(
     tenant_id: str = Depends(require_active_tenant),
-    jwt_payload: JWTPayload = Depends(require_permission("VIEW_DOMAIN"))
+    jwt_payload: JWTPayload = Depends(require_permission("domains:view"))
 ):
     """
     List domains available for creating a sender.
@@ -86,7 +86,7 @@ async def list_sender_domains(
 @router.get("/")
 async def list_senders(
     tenant_id: str = Depends(require_active_tenant), 
-    jwt_payload: JWTPayload = Depends(require_permission("VIEW_SENDER"))
+    jwt_payload: JWTPayload = Depends(require_permission("domains:view"))
 ):
     """
     List sender identities. 
@@ -95,7 +95,7 @@ async def list_senders(
     """
     query = db.client.table("sender_identities").select("*").eq("tenant_id", tenant_id)
     
-    if jwt_payload.role == "member" and getattr(jwt_payload, "isolation_model", "team") == "agency":
+    if jwt_payload.role == "creator" and getattr(jwt_payload, "isolation_model", "team") == "agency":
         query = query.eq("user_id", jwt_payload.user_id)
         
     res = query.order("created_at", desc=True).execute()
@@ -109,7 +109,7 @@ async def add_sender_identity(
     request: Request,
     body: AddSenderRequest, 
     tenant_id: str = Depends(require_active_tenant), 
-    jwt_payload: JWTPayload = Depends(require_permission("ADD_SENDER"))
+    jwt_payload: JWTPayload = Depends(require_permission("sender:manage"))
 ):
     """
     Request verification for a sender email address.
@@ -238,7 +238,7 @@ async def confirm_sender_token(token: str):
 async def resend_verification(
     sender_id: str, 
     tenant_id: str = Depends(require_active_tenant), 
-    jwt_payload: JWTPayload = Depends(require_permission("ADD_SENDER"))
+    jwt_payload: JWTPayload = Depends(require_permission("sender:manage"))
 ):
     """Resend the verification email with a fresh token."""
     res = db.client.table("sender_identities").select("*").eq("id", sender_id).eq("tenant_id", tenant_id).execute()
@@ -268,14 +268,14 @@ async def resend_verification(
 async def delete_sender(
     sender_id: str, 
     tenant_id: str = Depends(require_active_tenant), 
-    jwt_payload: JWTPayload = Depends(require_permission("ADD_SENDER"))
+    jwt_payload: JWTPayload = Depends(require_permission("sender:manage"))
 ):
     """Delete sender identity from DB."""
     res = db.client.table("sender_identities").select("*").eq("id", sender_id).eq("tenant_id", tenant_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Sender not found")
         
-    if jwt_payload.role == "member" and getattr(jwt_payload, "isolation_model", "team") == "agency" and res.data[0]["user_id"] != jwt_payload.user_id:
+    if jwt_payload.role == "creator" and getattr(jwt_payload, "isolation_model", "team") == "agency" and res.data[0]["user_id"] != jwt_payload.user_id:
         raise HTTPException(status_code=403, detail="You can only delete your own sender identities.")
             
     db.client.table("sender_identities").delete().eq("id", sender_id).execute()
