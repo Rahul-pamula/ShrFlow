@@ -240,7 +240,7 @@ export default function DashboardPage() {
                             <div>
                                 <p className="text-sm font-medium text-[var(--text-primary)]">Launch readiness</p>
                                 <p className="mt-1 text-sm text-[var(--text-muted)]">
-                                    The first five steps create the minimum viable operating posture for Sh_R_Mail.
+                                    The first five steps create the minimum viable operating posture for ShrFlow.
                                 </p>
                             </div>
                             <div className="min-w-[120px]">

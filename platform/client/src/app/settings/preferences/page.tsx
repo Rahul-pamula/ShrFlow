@@ -109,7 +109,7 @@ export default function PreferencesPage() {
                     <InlineAlert
                         variant="info"
                         title="System theme only"
-                        description="Sh_R_Mail follows the OS theme right now. There is no separate in-app light or dark mode selection yet."
+                        description="ShrFlow follows the OS theme right now. There is no separate in-app light or dark mode selection yet."
                     />
                 </SectionCard>
             </div>

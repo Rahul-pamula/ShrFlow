@@ -13,7 +13,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-    title: "Sh_R_Mail",
+    title: "ShrFlow",
     description: "B2B email marketing and infrastructure platform",
 };
 

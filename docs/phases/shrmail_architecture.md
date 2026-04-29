@@ -1,6 +1,6 @@
-# Sh_R_Mail (Email Engine) — Complete Architectural Overview
+# ShrFlow (Email Engine) — Complete Architectural Overview
 
-This document serves as the high-level, definitive blueprint of the entire Sh_R_Mail infrastructure. It synthesizes all technical decisions spanning Frontend UX, Backend microservices, Asynchronous Message Queues, Data Stores, API gateways, Artificial Intelligence (RAG), and dual SMTP Delivery pipelines into a single cohesive ecosystem.
+This document serves as the high-level, definitive blueprint of the entire ShrFlow infrastructure. It synthesizes all technical decisions spanning Frontend UX, Backend microservices, Asynchronous Message Queues, Data Stores, API gateways, Artificial Intelligence (RAG), and dual SMTP Delivery pipelines into a single cohesive ecosystem.
 
 ---
 

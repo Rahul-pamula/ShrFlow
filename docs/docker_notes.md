@@ -1,6 +1,6 @@
-# Sh_R_Mail — Docker Cheat Sheet
+# ShrFlow — Docker Cheat Sheet
 
-This document contains everything you need to know to run the Sh_R_Mail platform locally using Docker, without needing to manually start multiple terminal windows.
+This document contains everything you need to know to run the ShrFlow platform locally using Docker, without needing to manually start multiple terminal windows.
 
 ---
 
@@ -13,7 +13,7 @@ If you run commands without Docker open, you will receive an error like: `Cannot
 ## 2. Starting & Stopping the Servers
 
 > [!IMPORTANT]
-> **Always run these commands from the root directory of your project folder (`/Users/pamula/Desktop/Sh_R_Mail`).**
+> **Always run these commands from the root directory of your project folder (`/Users/pamula/Desktop/ShrFlow`).**
 > If you run them from a subfolder (like `/platform/api`), Docker will not be able to find all your project files!
 ### ▶️ Start Everything
 To bake the images and spin up all of your databases, APIs, workers, and frontend clients into the background:
@@ -76,4 +76,4 @@ docker-compose logs -f background_worker
 
 ## 4. Troubleshooting
 - If a container crashes on boot (e.g., `dependency failed to start`), check the logs of the `api` container first, because all other workers depend on the API being healthy before they will start.
-- You can always open the visual **Docker Desktop UI**, navigate to the `Containers` tab, click on `Sh_R_Mail`, and view the colors/logs visually if you don't want to use the terminal!
+- You can always open the visual **Docker Desktop UI**, navigate to the `Containers` tab, click on `ShrFlow`, and view the colors/logs visually if you don't want to use the terminal!

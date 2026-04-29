@@ -30,7 +30,7 @@ SMTP_PORT = int(os.getenv("SYSTEM_SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("SYSTEM_SMTP_USERNAME", "shrmail.app@gmail.com")
 SMTP_PASSWORD = os.getenv("SYSTEM_SMTP_PASSWORD", "")
 FROM_EMAIL = os.getenv("SYSTEM_SMTP_FROM_EMAIL", "shrmail.app@gmail.com")
-FROM_NAME = os.getenv("SYSTEM_SMTP_FROM_NAME", "ShrMail")
+FROM_NAME = os.getenv("SYSTEM_SMTP_FROM_NAME", "ShrFlow")
 
 # Jinja2 environment setup
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "api" / "centralized_mail_templates"
@@ -41,11 +41,11 @@ jinja_env = Environment(
 
 # Subjects mapping based on task type
 SUBJECTS = {
-    "reset_password": "Reset your ShrMail password",
-    "verify_email": "Verify your ShrMail account",
+    "reset_password": "Reset your ShrFlow password",
+    "verify_email": "Verify your ShrFlow account",
     "team_invite": "You've been invited to join a Workspace!",
     "access_request": "Action Required: New Workspace Access Request",
-    "sender_verification": "Verify your sender address — ShrMail",
+    "sender_verification": "Verify your sender address — ShrFlow",
     "campaign_review": "📋 Campaign Review Requested — Action Required",
 }
 

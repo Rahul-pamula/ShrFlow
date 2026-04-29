@@ -3,10 +3,10 @@
 ==============================================================
 
 NOTE: The Python virtual environment lives at the root:
-  /Users/rahul/Desktop/Sh_R_Mail/.venv
+  /Users/rahul/Desktop/ShrFlow/.venv
 
   If it doesn't exist yet, create it once:
-    cd /Users/rahul/Desktop/Sh_R_Mail
+    cd /Users/rahul/Desktop/ShrFlow
     python3 -m venv .venv
     source .venv/bin/activate
     pip install -r platform/api/requirements.txt
@@ -16,27 +16,27 @@ STEP 0: START ALL SERVICES
 --------------------------------------------------------------
 
 Terminal 1 — API
-  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate && cd platform/api
+  cd /Users/rahul/Desktop/ShrFlow && source .venv/bin/activate && cd platform/api
   uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 Terminal 2 — Email Sender Worker
-  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+  cd /Users/rahul/Desktop/ShrFlow && source .venv/bin/activate
   WORKER_PREFETCH_COUNT=10 WORKER_MAX_RETRIES=3 python platform/worker/email_sender.py
 
 Terminal 3 — Import Worker
-  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+  cd /Users/rahul/Desktop/ShrFlow && source .venv/bin/activate
   python platform/worker/import_worker.py
 
 Terminal 4 — Scheduler
-  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+  cd /Users/rahul/Desktop/ShrFlow && source .venv/bin/activate
   python platform/worker/scheduler.py
 
 Terminal 5 — Frontend
-  cd /Users/rahul/Desktop/Sh_R_Mail/platform/client
+  cd /Users/rahul/Desktop/ShrFlow/platform/client
   npm run dev
 
 Terminal 6 — System Email Worker
-  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+  cd /Users/rahul/Desktop/ShrFlow && source .venv/bin/activate
   python platform/worker/centralized_email_worker.py
 
 Open browser → http://localhost:3000
@@ -57,10 +57,10 @@ KNOWN ISSUES / GOTCHAS
 
 [NEW 2026-04-09] Next.js 16 proxy rename + clean build
   - The framework renamed middleware → proxy. Keep the file at:
-      /Users/rahul/Desktop/Sh_R_Mail/platform/client/src/proxy.ts
+      /Users/rahul/Desktop/ShrFlow/platform/client/src/proxy.ts
   - If you still see the "middleware deprecated" warning, nuke the cache once:
-      rm -rf /Users/rahul/Desktop/Sh_R_Mail/platform/client/.next
-      cd /Users/rahul/Desktop/Sh_R_Mail/platform/client && npm run dev
+      rm -rf /Users/rahul/Desktop/ShrFlow/platform/client/.next
+      cd /Users/rahul/Desktop/ShrFlow/platform/client && npm run dev
 
 [NEW 2026-04-09] Contacts page data sources
   - The Contacts UI now lazy-loads and cancels in-flight requests to avoid
@@ -134,27 +134,27 @@ STARTUP COMMANDS
 --------------------------------------------------------------
 
 Terminal 1 — API
-  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate && cd platform/api
+  cd /Users/rahul/Desktop/ShrFlow && source .venv/bin/activate && cd platform/api
   uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 Terminal 2 — Email Sender Worker
-  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+  cd /Users/rahul/Desktop/ShrFlow && source .venv/bin/activate
   WORKER_PREFETCH_COUNT=10 WORKER_MAX_RETRIES=3 python platform/worker/email_sender.py
 
 Terminal 3 — Import Worker
-  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+  cd /Users/rahul/Desktop/ShrFlow && source .venv/bin/activate
   python platform/worker/import_worker.py
 
 Terminal 4 — Scheduler
-  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+  cd /Users/rahul/Desktop/ShrFlow && source .venv/bin/activate
   python platform/worker/scheduler.py
 
 Terminal 5 — Frontend
-  cd /Users/rahul/Desktop/Sh_R_Mail/platform/client
+  cd /Users/rahul/Desktop/ShrFlow/platform/client
   npm run dev
 
 Terminal 6 — System Email Worker
-  cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+  cd /Users/rahul/Desktop/ShrFlow && source .venv/bin/activate
   python platform/worker/centralized_email_worker.py
 
 Open browser → http://localhost:3000

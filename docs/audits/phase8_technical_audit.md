@@ -27,11 +27,11 @@
 - Negative tests: rate limit OTP spam, deny cross-tenant access via RLS, ensure unauthenticated access blocked; soft-deleted keys/senders/domains hidden from lists.
 
 ## File Pointers
-- Settings pages: `/Users/pamula/Desktop/Sh_R_Mail/platform/client/src/app/settings/*`
-- Deliverability: `/Users/pamula/Desktop/Sh_R_Mail/platform/api/routes/senders.py`, `/domains.py`
-- Compliance: `/Users/pamula/Desktop/Sh_R_Mail/platform/api/routes/compliance.py`
-- API keys: `/Users/pamula/Desktop/Sh_R_Mail/platform/api/routes/api_keys.py`
-- RLS policies: Supabase SQL files under `/Users/pamula/Desktop/Sh_R_Mail/platform/database` (verify tenant-scoped policies for domains/senders/api_keys).
+- Settings pages: `/Users/pamula/Desktop/ShrFlow/platform/client/src/app/settings/*`
+- Deliverability: `/Users/pamula/Desktop/ShrFlow/platform/api/routes/senders.py`, `/domains.py`
+- Compliance: `/Users/pamula/Desktop/ShrFlow/platform/api/routes/compliance.py`
+- API keys: `/Users/pamula/Desktop/ShrFlow/platform/api/routes/api_keys.py`
+- RLS policies: Supabase SQL files under `/Users/pamula/Desktop/ShrFlow/platform/database` (verify tenant-scoped policies for domains/senders/api_keys).
 
 ---
 ## Technical Appendix (Engineering view)

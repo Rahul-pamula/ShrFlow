@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class ReputationEngine:
     """
-    Elite Reputation Engine for ShrMail.
+    Elite Reputation Engine for ShrFlow.
     - Controlled Recovery: Max +5 score per minute.
     - Vol. Normalization: Guard only triggers if volume > 200.
     """

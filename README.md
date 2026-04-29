@@ -1,4 +1,4 @@
-# 📧 Sh_R_Mail — Enterprise Email Engine
+# 📧 ShrFlow — Enterprise Email Engine
 
 > A high-performance, self-hosted, multi-tenant email marketing platform.  
 > Built strictly on modern containerized architecture: **FastAPI · Next.js · RabbitMQ · AWS SES · Supabase · Docker**.
@@ -7,7 +7,7 @@
 
 ## 🌟 What This Project Does
 
-Sh_R_Mail is a **full-scale, self-hosted email marketing platform** — designed as a high-performance, open-source alternative to platforms like Mailchimp or SendGrid. 
+ShrFlow is a **full-scale, self-hosted email marketing platform** — designed as a high-performance, open-source alternative to platforms like Mailchimp or SendGrid. 
 
 **Core Capabilities:**
 *   **Multi-tenant Architecture:** Secure workspace isolation spanning Teams and Agencies.
@@ -32,9 +32,9 @@ Sh_R_Mail is a **full-scale, self-hosted email marketing platform** — designed
 
 ## 🏗 Architecture & Design Documents
 
-Sh_R_Mail uses a complex asynchronous dual-pipeline architecture. Instead of cluttering the README, all technical deep-dives, RAG design patterns, and network graphs are strictly maintained in our dedicated documentation directory:
+ShrFlow uses a complex asynchronous dual-pipeline architecture. Instead of cluttering the README, all technical deep-dives, RAG design patterns, and network graphs are strictly maintained in our dedicated documentation directory:
 
-*   📘 **[Complete Architectural Overview (with diagrams)](docs/phases/shrmail_architecture.md)**
+*   📘 **[Complete Architectural Overview (with diagrams)](docs/phases/shrflow_architecture.md)**
 *   📋 **[Phase-by-Phase Roadmap & Execution Plan](docs/phases/phase_wise_plan.md)**
 
 ---
@@ -42,7 +42,7 @@ Sh_R_Mail uses a complex asynchronous dual-pipeline architecture. Instead of clu
 ## 📊 Live Project Tracker
 
 You can monitor our granular, task-by-task engineering progress directly at our hosted tracker:  
-🌍 **[Open Live Phase Tracker](https://rahul-pamula.github.io/Sh_R_Mail/progress.html)**
+🌍 **[Open Live Phase Tracker](https://rahul-pamula.github.io/ShrFlow/progress.html)**
 
 The platform has been architected across **14 phases (Phase 0 — Phase 13)**, covering everything from UI/UX foundations, multi-tenant auth, contacts ingestion, campaign orchestration, delivery pipelines, analytics, GDPR compliance, AI integrations, and full enterprise scale. See the full breakdown in the tracker above.
 
@@ -62,7 +62,7 @@ You only need exactly two things installed on your computer to run this entire p
 ### Step 2 — Clone the Repository
 ```bash
 git clone <your-repo-url>
-cd Sh_R_Mail
+cd ShrFlow
 ```
 
 ### Step 3 — Environment Variables
@@ -88,10 +88,10 @@ SMTP_PASSWORD=your_ses_password
 # ── 4. Centralized System Mailer (Gmail SMTP) ────────────────
 # NOTE: We currently use Gmail SMTP for all system/transactional emails
 # (welcome emails, OTPs, password resets, team invites) because we do not
-# yet own a dedicated domain for Sh_R_Mail. Gmail SMTP provides reliable
+# yet own a dedicated domain for ShrFlow. Gmail SMTP provides reliable
 # inbox delivery in the interim.
 #
-# FUTURE MIGRATION: Once we acquire our own domain (e.g. shrmail.app),
+# FUTURE MIGRATION: Once we acquire our own domain (e.g. shrflow.app),
 # this will be replaced with a dedicated transactional mail provider
 # (e.g. AWS SES via mail.shrmail.app) for full production-grade delivery.
 SYSTEM_SMTP_HOST=smtp.gmail.com
@@ -150,7 +150,7 @@ docker-compose up -d
 
 ## 🤝 Open Source Contributions
 
-**Sh_R_Mail is fully open source, and we actively welcome contributions!** 
+**ShrFlow is fully open source, and we actively welcome contributions!** 
 
 Whether you're fixing a bug, hardening security, or building out a massive new feature (like our upcoming Stripe integration or advanced analytics), we want your Pull Requests.
 

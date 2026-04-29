@@ -295,7 +295,7 @@ export default function FranchiseSettingsPage() {
                         label="Franchise Workspace Name"
                         value={workspaceName}
                         onChange={(e) => setWorkspaceName(e.target.value)}
-                        placeholder="ShrMail Dallas"
+                        placeholder="ShrFlow Dallas"
                         required
                         autoFocus
                     />

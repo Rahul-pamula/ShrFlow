@@ -3,7 +3,7 @@
 > This document is the **strategic planning guide** for the Email Engine platform.
 > It describes what each phase is, why it exists, what it covers, and the technical architecture behind it.
 > Progress tracking (what is done vs. pending) lives in the **interactive HTML tracker** (`docs/progress.html`).
-> Live URL: https://rahul-pamula.github.io/Sh_R_Mail/progress.html (redirect available at https://rahulpamula.me/Sh_R_Mail/)
+> Live URL: https://rahul-pamula.github.io/ShrFlow/progress.html (redirect available at https://rahulpamula.me/ShrFlow/)
 
 Each phase is divided into TWO parts:
   [BACKEND] — API, database, worker logic
@@ -33,7 +33,7 @@ graph TD
     classDef provider fill:#ef4444,stroke:#b91c1c,stroke-width:2px,color:#fff,font-weight:bold,rx:10px,ry:10px;
     classDef db fill:#64748b,stroke:#475569,stroke-width:2px,color:#fff,rx:5px,ry:5px;
     
-    User([Platform User / Tenant]) --> |Interacts with| App[Sh_R_Mail Platform]
+    User([Platform User / Tenant]) --> |Interacts with| App[ShrFlow Platform]
     class User userNode;
     class App coreApp;
     
@@ -1623,7 +1623,7 @@ graph TD
     classDef workspace fill:#f8fafc,stroke:#cbd5e1,stroke-width:2px,stroke-dasharray: 5 5;
 
     %% ROOT
-A[ShrMail Platform]
+A[ShrFlow Platform]
 
 %% WORKSPACE
 A --> B[Workspace / Tenant]
@@ -1861,7 +1861,7 @@ flowchart TD
 - Define export button entry point on the Team Members page for the next subphase.
 
 ### Phase 8.3 — Franchise Workspace Management
-**WHY:** ShrMail needs a clean way for one master workspace Owner to create and govern child franchise workspaces without breaking isolation. A franchise is not just another user role; it is a separate workspace with its own owner, members, campaigns, settings, and data.
+**WHY:** ShrFlow needs a clean way for one master workspace Owner to create and govern child franchise workspaces without breaking isolation. A franchise is not just another user role; it is a separate workspace with its own owner, members, campaigns, settings, and data.
 
 **[BACKEND]**
 - Model each franchise as a child workspace using `parent_workspace_id`.

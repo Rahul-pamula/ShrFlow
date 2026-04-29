@@ -82,7 +82,7 @@ export default function Sidebar({ mobileMenuOpen, setMobileMenuOpen }: SidebarPr
                                 <Mail className="w-3.5 h-3.5 text-white" />
                             </div>
                             <span className="font-bold text-[14px] text-[var(--text-primary)] tracking-tight">
-                                Sh_R_Mail
+                                ShrFlow
                             </span>
                         </div>
                     )}

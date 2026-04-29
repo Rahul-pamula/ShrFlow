@@ -61,7 +61,7 @@ export default function UseCaseOnboarding() {
             step={2}
             totalSteps={4}
             icon={<Target className="h-6 w-6" />}
-            title="How will you use Sh_R_Mail first?"
+            title="How will you use ShrFlow first?"
             description="We’ll tailor your starting views and recommendations around the kind of sending you care about most."
         >
             <form onSubmit={handleSubmit} className="space-y-4">

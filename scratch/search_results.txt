@@ -1,0 +1,120 @@
+/Users/akshaypurane/Desktop/Sh_R_Mail/pyproject.toml:2:name = "sh_r_mail_platform"
+/Users/akshaypurane/Desktop/Sh_R_Mail/pyproject.toml:4:description = "Sh_R_Mail Email Engine Platform"
+/Users/akshaypurane/Desktop/Sh_R_Mail/README.md:1:# 📧 Sh_R_Mail — Enterprise Email Engine
+/Users/akshaypurane/Desktop/Sh_R_Mail/README.md:10:Sh_R_Mail is a **full-scale, self-hosted email marketing platform** — designed as a high-performance, open-source alternative to platforms like Mailchimp or SendGrid.
+/Users/akshaypurane/Desktop/Sh_R_Mail/README.md:35:Sh_R_Mail uses a complex asynchronous dual-pipeline architecture. Instead of cluttering the README, all technical deep-dives, RAG design patterns, and network graphs are strictly maintained in our dedicated documentation directory:
+/Users/akshaypurane/Desktop/Sh_R_Mail/README.md:37:*   📘 **[Complete Architectural Overview (with diagrams)](docs/phases/shrmail_architecture.md)**
+/Users/akshaypurane/Desktop/Sh_R_Mail/README.md:45:🌍 **[Open Live Phase Tracker](https://rahul-pamula.github.io/Sh_R_Mail/progress.html)**
+/Users/akshaypurane/Desktop/Sh_R_Mail/README.md:65:cd Sh_R_Mail
+/Users/akshaypurane/Desktop/Sh_R_Mail/README.md:91:# yet own a dedicated domain for Sh_R_Mail. Gmail SMTP provides reliable
+/Users/akshaypurane/Desktop/Sh_R_Mail/README.md:94:# FUTURE MIGRATION: Once we acquire our own domain (e.g. shrmail.app),
+/Users/akshaypurane/Desktop/Sh_R_Mail/README.md:96:# (e.g. AWS SES via mail.shrmail.app) for full production-grade delivery.
+/Users/akshaypurane/Desktop/Sh_R_Mail/README.md:99:SYSTEM_SMTP_USERNAME=shrmail.app@gmail.com
+/Users/akshaypurane/Desktop/Sh_R_Mail/README.md:101:SYSTEM_SMTP_FROM_EMAIL=shrmail.app@gmail.com
+/Users/akshaypurane/Desktop/Sh_R_Mail/README.md:153:**Sh_R_Mail is fully open source, and we actively welcome contributions!**
+/Users/akshaypurane/Desktop/Sh_R_Mail/.env:28:SYSTEM_SMTP_USERNAME=shrmail.app@gmail.com
+/Users/akshaypurane/Desktop/Sh_R_Mail/.env:30:SYSTEM_SMTP_FROM_EMAIL=shrmail.app@gmail.com
+/Users/akshaypurane/Desktop/Sh_R_Mail/migrations/028_sender_verification_token.sql:3:-- a custom verification link via our centralized SMTP (shrmail.app@gmail.com)
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/api/centralized_mail_templates/verify_email.html:5:Welcome to ShrMail! To get started and secure your account, please verify your email address by clicking the button below.
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/api/centralized_mail_templates/base.html:24:<p>&copy; 2026 ShrMail Inc. <br> Built for high-velocity teams.</p>
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/api/centralized_mail_templates/reset_password.html:5:We received a request to reset the password for your ShrMail account. If this was you, click the button below to secure your account with a new password.
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/api/routes/senders.py:116:Sends a custom verification email FROM our centralized SMTP (shrmail.app@gmail.com)
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/api/services/reputation_engine.py:12:Elite Reputation Engine for ShrMail.
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/worker/centralized_email_worker.py:30:SMTP_USERNAME = os.getenv("SYSTEM_SMTP_USERNAME", "shrmail.app@gmail.com")
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/worker/centralized_email_worker.py:32:FROM_EMAIL = os.getenv("SYSTEM_SMTP_FROM_EMAIL", "shrmail.app@gmail.com")
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/worker/centralized_email_worker.py:33:FROM_NAME = os.getenv("SYSTEM_SMTP_FROM_NAME", "ShrMail")
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/worker/centralized_email_worker.py:44:"reset_password": "Reset your ShrMail password",
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/worker/centralized_email_worker.py:45:"verify_email": "Verify your ShrMail account",
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/worker/centralized_email_worker.py:48:"sender_verification": "Verify your sender address — ShrMail",
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/layout.tsx:16:title: "Sh_R_Mail",
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/page.tsx:51:'Sh_R_Mail is designed as a connected system, so the next action is always close to the signal that triggered it.',
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/page.tsx:146:<span className="text-base font-semibold tracking-tight text-[var(--text-primary)]">Sh_R_Mail</span>
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/page.tsx:180:Sh_R_Mail gives modern teams one premium workspace for contacts, templates, campaign orchestration,
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/page.tsx:385:<span className="text-base font-semibold text-[var(--text-primary)]">Sh_R_Mail</span>
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/page.tsx:424:<p>© 2026 Sh_R_Mail. All rights reserved.</p>
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/settings/preferences/page.tsx:112:description="Sh_R_Mail follows the OS theme right now. There is no separate in-app light or dark mode selection yet."
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/settings/franchises/page.tsx:298:placeholder="ShrMail Dallas"
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/settings/domain/help/page.tsx:15:body: 'Namecheap appends your base domain automatically, so only paste the prefix shown in Sh_R_Mail into the host field.',
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/settings/domain/help/page.tsx:20:'Paste the exact DKIM target value from Sh_R_Mail.',
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/settings/domain/help/page.tsx:30:'Paste the SPF value exactly as provided by Sh_R_Mail.',
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/settings/domain/help/page.tsx:54:'Select the type shown in Sh_R_Mail: CNAME, TXT, or MX.',
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/settings/domain/help/page.tsx:56:'Paste the value from Sh_R_Mail exactly and save.',
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/signup/page.tsx:66:asideDescription="From sending domains to analytics and compliance, Sh_R_Mail is designed to make sophisticated email operations feel organized."
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/dashboard/page.tsx:243:The first five steps create the minimum viable operating posture for Sh_R_Mail.
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/account/security/page.tsx:247:description="These controls affect how you sign in to Sh_R_Mail itself, regardless of which workspace you enter."
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/login/page.tsx:47:asideDescription="Sh_R_Mail gives your team one place to run campaigns, debug deliverability, and keep infrastructure healthy without context switching."
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/app/onboarding/use-case/page.tsx:64:title="How will you use Sh_R_Mail first?"
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/components/ui/ThemeProvider.tsx:19:storageKey="shrmail-theme"
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/components/auth/AuthShell.tsx:40:Sh_R_Mail
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/components/auth/AuthShell.tsx:76:<span className="text-lg font-semibold tracking-tight">Sh_R_Mail</span>
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/components/layout/AccountShell.tsx:29:<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Sh_R_Mail</p>
+/Users/akshaypurane/Desktop/Sh_R_Mail/platform/client/src/components/layout/Sidebar.tsx:85:Sh_R_Mail
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/rebuild_tracker.py:91:{"text": "[FRONTEND] Configure Supabase Auth SMTP to use shrmail.app@gmail.com", "done": True},
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/rebuild_tracker.py:351:{"text": "[API] Official JS SDK (shrmail-js) with typed methods + auto-retry", "done": False},
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/rebuild_tracker.py:352:{"text": "[API] Official Python SDK (shrmail-python) with typed methods + auto-retry", "done": False},
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/rebuild_tracker.py:434:const savedState = JSON.parse(localStorage.getItem('shrmail_phases_tracker') || '{}');
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/rebuild_tracker.py:484:localStorage.setItem('shrmail_phases_tracker', JSON.stringify(savedState));
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/progress.html:19:<a class="glass px-4 py-2 rounded-xl border border-zinc-700/70 text-indigo-300 hover:border-indigo-400/80 hover:text-indigo-200 transition" href="https://github.com/Rahul-pamula/Sh_R_Mail/blob/main/docs/phases/phase_wise_plan.md">Phase-wise Plan</a>
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/progress.html:20:<a class="glass px-4 py-2 rounded-xl border border-zinc-700/70 text-emerald-300 hover:border-emerald-400/80 hover:text-emerald-200 transition" href="https://github.com/Rahul-pamula/Sh_R_Mail/tree/main/docs">Docs Folder</a>
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/progress.html:21:<a class="glass px-4 py-2 rounded-xl border border-zinc-700/70 text-sky-300 hover:border-sky-400/80 hover:text-sky-200 transition" href="https://github.com/Rahul-pamula/Sh_R_Mail/blob/main/README.md">Repository README</a>
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/progress.html:669:"text": "[FRONTEND] Configure Supabase Auth SMTP to use shrmail.app@gmail.com",
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/progress.html:2367:"text": "[GAP 2] Worker: conditionally wraps links via `https://trk.shrmail.app/c/{hmac_signed_token}` in MJML compile step when `click_tracking_enabled=True`",
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/progress.html:2471:"desc": "The background worker can send system emails (campaign complete, quota warning, bounce alert) through shrmail.app@gmail.com."
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/progress.html:3627:"text": "[GAP 1 \u2014 System Email Migration] Register and verify `mail.shrmail.app` via AWS SES",
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/progress.html:3633:"text": "[GAP 1] Migrate all system emails (OTP, audit alerts, notifications) off Gmail MVP onto `mail.shrmail.app`",
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/progress.html:4648:const savedState = JSON.parse(localStorage.getItem('shrmail_phases_tracker') || '{}');
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/progress.html:4698:localStorage.setItem('shrmail_phases_tracker', JSON.stringify(savedState));
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/docker_notes.md:1:# Sh_R_Mail — Docker Cheat Sheet
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/docker_notes.md:3:This document contains everything you need to know to run the Sh_R_Mail platform locally using Docker, without needing to manually start multiple terminal windows.
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/docker_notes.md:16:> **Always run these commands from the root directory of your project folder (`/Users/pamula/Desktop/Sh_R_Mail`).**
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/docker_notes.md:79:- You can always open the visual **Docker Desktop UI**, navigate to the `Containers` tab, click on `Sh_R_Mail`, and view the colors/logs visually if you don't want to use the terminal!
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:6:/Users/rahul/Desktop/Sh_R_Mail/.venv
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:9:cd /Users/rahul/Desktop/Sh_R_Mail
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:19:cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate && cd platform/api
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:23:cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:27:cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:31:cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:35:cd /Users/rahul/Desktop/Sh_R_Mail/platform/client
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:39:cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:60:/Users/rahul/Desktop/Sh_R_Mail/platform/client/src/proxy.ts
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:62:rm -rf /Users/rahul/Desktop/Sh_R_Mail/platform/client/.next
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:63:cd /Users/rahul/Desktop/Sh_R_Mail/platform/client && npm run dev
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:137:cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate && cd platform/api
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:141:cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:145:cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:149:cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:153:cd /Users/rahul/Desktop/Sh_R_Mail/platform/client
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/startup_testing_guide.txt:157:cd /Users/rahul/Desktop/Sh_R_Mail && source .venv/bin/activate
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/build_tracker.py:81:const savedState = JSON.parse(localStorage.getItem('shrmail_phases_tracker') || '{}');
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/build_tracker.py:133:localStorage.setItem('shrmail_phases_tracker', JSON.stringify(savedState));
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/task_descriptions.py:82:"Configure Supabase Auth SMTP to use shrmail.app@gmail.com": "Supabase's auth emails (verification, password reset) are routed through your own Gmail account instead of Supabase's generic sender.",
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/task_descriptions.py:245:"Worker-triggered email notifications via Centralized System Emailer": "The background worker can send system emails (campaign complete, quota warning, bounce alert) through shrmail.app@gmail.com.",
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/audits/phase8_technical_audit.md:30:- Settings pages: `/Users/pamula/Desktop/Sh_R_Mail/platform/client/src/app/settings/*`
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/audits/phase8_technical_audit.md:31:- Deliverability: `/Users/pamula/Desktop/Sh_R_Mail/platform/api/routes/senders.py`, `/domains.py`
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/audits/phase8_technical_audit.md:32:- Compliance: `/Users/pamula/Desktop/Sh_R_Mail/platform/api/routes/compliance.py`
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/audits/phase8_technical_audit.md:33:- API keys: `/Users/pamula/Desktop/Sh_R_Mail/platform/api/routes/api_keys.py`
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/audits/phase8_technical_audit.md:34:- RLS policies: Supabase SQL files under `/Users/pamula/Desktop/Sh_R_Mail/platform/database` (verify tenant-scoped policies for domains/senders/api_keys).
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/audits/phase10_technical_audit.md:36:- DB: migrations under `/Users/pamula/Desktop/Sh_R_Mail/migrations` and `/platform/database/migrations`.
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/phase_wise_plan.md:6:> Live URL: https://rahul-pamula.github.io/Sh_R_Mail/progress.html (redirect available at https://rahulpamula.me/Sh_R_Mail/)
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/phase_wise_plan.md:20:1. **System Emails** — OTPs, welcome emails, team invites, password reset → sent via `shrmail.app@gmail.com` (Gmail SMTP) — almost always lands in the inbox because Gmail has a trusted reputation.
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/phase_wise_plan.md:36:User([Platform User / Tenant]) --> |Interacts with| App[Sh_R_Mail Platform]
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/phase_wise_plan.md:68:SysWorker --> |"shrmail.app@gmail.com"| Gmail
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/phase_wise_plan.md:429:- Configure Supabase Auth SMTP to use shrmail.app@gmail.com
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/phase_wise_plan.md:447:> ⚠️ **Gmail Risk Note:** `shrmail.app@gmail.com` is capped at ~2,000 emails/day on Workspace. At moderate signup volume (200 users/day triggering welcome + verification = 400 emails/day), this limit will be hit within months. **Migration target: Phase 9 — `mail.shrmail.app` via AWS SES.** See Phase 9 for full plan.
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/phase_wise_plan.md:1399:- [GAP 2] Worker: conditionally wraps links via `https://trk.shrmail.app/c/{hmac_signed_token}` in MJML compile step when `click_tracking_enabled=True`
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/phase_wise_plan.md:1626:A[ShrMail Platform]
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/phase_wise_plan.md:1864:**WHY:** ShrMail needs a clean way for one master workspace Owner to create and govern child franchise workspaces without breaking isolation. A franchise is not just another user role; it is a separate workspace with its own owner, members, campaigns, settings, and data.
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/phase_wise_plan.md:2163:- [GAP 1 — System Email Migration] Register and verify `mail.shrmail.app` via AWS SES
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/phase_wise_plan.md:2164:- [GAP 1] Migrate all system emails (OTP, audit alerts, notifications) off Gmail MVP onto `mail.shrmail.app`
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/shrmail_architecture.md:1:# Sh_R_Mail (Email Engine) — Complete Architectural Overview
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/shrmail_architecture.md:3:This document serves as the high-level, definitive blueprint of the entire Sh_R_Mail infrastructure. It synthesizes all technical decisions spanning Frontend UX, Backend microservices, Asynchronous Message Queues, Data Stores, API gateways, Artificial Intelligence (RAG), and dual SMTP Delivery pipelines into a single cohesive ecosystem.
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/shrmail_architecture.md:125:Worker_System --> |"shrmail.app@gmail.com"| SMTP_Gmail
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/phase_8.md:4:Phase 8 transforms ShrMail from a single-user marketing tool into a collaborative, enterprise-ready platform. It introduces advanced administrative controls, a multi-tenant franchise model, and strict governance protocols to ensure data isolation, security, and operational scaling.
+/Users/akshaypurane/Desktop/Sh_R_Mail/docs/phases/phase_8.md:17:ShrMail uses a strictly enforced RBAC system where a user's permissions are derived from their role within a specific workspace.
+/Users/akshaypurane/Desktop/Sh_R_Mail/scratch/sync_tracker.py:4:filepath = '/Users/rahul/Desktop/Sh_R_Mail/docs/progress.html'
+/Users/akshaypurane/Desktop/Sh_R_Mail/scratch/test_smtp.py:14:user = os.getenv("SYSTEM_SMTP_USERNAME", "shrmail.app@gmail.com")
+/Users/akshaypurane/Desktop/Sh_R_Mail/scratch/test_smtp.py:16:from_email = os.getenv("SYSTEM_SMTP_FROM_EMAIL", "shrmail.app@gmail.com")
+/Users/akshaypurane/Desktop/Sh_R_Mail/scratch/gather_replacements.py:5:ROOT = '/Users/akshaypurane/Desktop/Sh_R_Mail'
+/Users/akshaypurane/Desktop/Sh_R_Mail/scratch/gather_replacements.py:8:re.compile(r'(shrmail)', re.IGNORECASE),
+/Users/akshaypurane/Desktop/Sh_R_Mail/scratch/gather_replacements.py:9:re.compile(r'(sh_r_mail)', re.IGNORECASE)
+/Users/akshaypurane/Desktop/Sh_R_Mail/scratch/sync_all_phases.py:4:filepath = '/Users/rahul/Desktop/Sh_R_Mail/docs/progress.html'

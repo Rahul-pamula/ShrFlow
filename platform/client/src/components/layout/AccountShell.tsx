@@ -26,7 +26,7 @@ export default function AccountShell({ children }: AccountShellProps) {
                 <div className="mx-auto flex min-h-[72px] w-full max-w-[1280px] items-center justify-between gap-4 px-5 py-4 md:px-8">
                     <div className="flex min-w-0 items-center gap-4">
                         <div>
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Sh_R_Mail</p>
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">ShrFlow</p>
                             <p className="text-lg font-semibold text-[var(--text-primary)]">Account</p>
                         </div>
 

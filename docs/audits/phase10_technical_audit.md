@@ -33,7 +33,7 @@
 ## Files to touch (future work)
 - API: `/platform/api/routes/campaigns.py`, new `/routes/sequences.py` (or extend campaigns).
 - Worker: `/platform/worker/email_sender.py`, scheduler logic for sequences.
-- DB: migrations under `/Users/pamula/Desktop/Sh_R_Mail/migrations` and `/platform/database/migrations`.
+- DB: migrations under `/Users/pamula/Desktop/ShrFlow/migrations` and `/platform/database/migrations`.
 - UI: `/platform/client/src/app/campaigns/*` for variant editor, winner view, sequence builder.
 
 ---

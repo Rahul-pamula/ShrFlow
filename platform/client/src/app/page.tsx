@@ -48,7 +48,7 @@ const featureCards = [
   {
     title: 'One surface for contacts, templates, campaigns, and analytics',
     description:
-      'Sh_R_Mail is designed as a connected system, so the next action is always close to the signal that triggered it.',
+      'ShrFlow is designed as a connected system, so the next action is always close to the signal that triggered it.',
     icon: Zap,
     accent: 'text-[var(--warning)]',
     tint: 'bg-[var(--warning)]/10 border-[var(--warning)]/20',
@@ -143,7 +143,7 @@ export default function LandingPage() {
             <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--accent-gradient)] text-white shadow-[var(--shadow-lg)]">
               <Mail className="h-5 w-5" />
             </span>
-            <span className="text-base font-semibold tracking-tight text-[var(--text-primary)]">Sh_R_Mail</span>
+            <span className="text-base font-semibold tracking-tight text-[var(--text-primary)]">ShrFlow</span>
           </Link>
 
           <nav className="hidden items-center gap-8 md:flex">
@@ -177,7 +177,7 @@ export default function LandingPage() {
                   Email infrastructure with the calm of a product, not the chaos of a toolkit.
                 </h1>
                 <p className="max-w-2xl text-base leading-8 text-[var(--text-muted)] sm:text-lg">
-                  Sh_R_Mail gives modern teams one premium workspace for contacts, templates, campaign orchestration,
+                  ShrFlow gives modern teams one premium workspace for contacts, templates, campaign orchestration,
                   analytics, and tenant-level infrastructure. It is built to feel elegant in daily use and dependable when volume rises.
                 </p>
               </div>
@@ -382,7 +382,7 @@ export default function LandingPage() {
               <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--accent-gradient)] text-white">
                 <Mail className="h-4 w-4" />
               </span>
-              <span className="text-base font-semibold text-[var(--text-primary)]">Sh_R_Mail</span>
+              <span className="text-base font-semibold text-[var(--text-primary)]">ShrFlow</span>
             </div>
             <p className="text-sm leading-7 text-[var(--text-muted)]">
               Premium email marketing and infrastructure for modern B2B teams.
@@ -421,7 +421,7 @@ export default function LandingPage() {
         </div>
 
         <div className="mx-auto mt-14 flex max-w-7xl flex-col gap-4 border-t border-[var(--border)] px-4 pt-8 text-sm text-[var(--text-muted)] sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-          <p>© 2026 Sh_R_Mail. All rights reserved.</p>
+          <p>© 2026 ShrFlow. All rights reserved.</p>
           <div className="flex gap-6">
             <Link href="/login" className="transition-colors hover:text-[var(--text-primary)]">Privacy</Link>
             <Link href="/login" className="transition-colors hover:text-[var(--text-primary)]">Terms</Link>

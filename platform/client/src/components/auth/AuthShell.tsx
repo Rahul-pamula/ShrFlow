@@ -37,7 +37,7 @@ function AuthShell({
 
                         <div className="space-y-4">
                             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                                Sh_R_Mail
+                                ShrFlow
                             </p>
                             <h1 className="text-4xl font-semibold tracking-tight text-[var(--text-primary)] xl:text-5xl">
                                 {asideTitle}
@@ -73,7 +73,7 @@ function AuthShell({
                                 <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--accent)] text-white shadow-[var(--shadow-md)]">
                                     <Mail className="h-5 w-5" />
                                 </span>
-                                <span className="text-lg font-semibold tracking-tight">Sh_R_Mail</span>
+                                <span className="text-lg font-semibold tracking-tight">ShrFlow</span>
                             </Link>
                             <h2 className="text-3xl font-semibold tracking-tight text-[var(--text-primary)]">
                                 {title}

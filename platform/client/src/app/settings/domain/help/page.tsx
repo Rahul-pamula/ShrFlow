@@ -12,12 +12,12 @@ const providers = [
         sections: [
             {
                 title: 'DKIM records (3 CNAME records)',
-                body: 'Namecheap appends your base domain automatically, so only paste the prefix shown in Sh_R_Mail into the host field.',
+                body: 'Namecheap appends your base domain automatically, so only paste the prefix shown in ShrFlow into the host field.',
                 steps: [
                     'Open the Namecheap dashboard and click Manage for your domain.',
                     'Go to Advanced DNS and choose Add New Record.',
                     'Create a CNAME record and paste only the host prefix, such as xxx._domainkey.',
-                    'Paste the exact DKIM target value from Sh_R_Mail.',
+                    'Paste the exact DKIM target value from ShrFlow.',
                     'Repeat the process for all three DKIM records.',
                 ],
             },
@@ -27,7 +27,7 @@ const providers = [
                 steps: [
                     'Add a TXT record in the same DNS area.',
                     'Set Host to @.',
-                    'Paste the SPF value exactly as provided by Sh_R_Mail.',
+                    'Paste the SPF value exactly as provided by ShrFlow.',
                 ],
             },
             {
@@ -51,9 +51,9 @@ const providers = [
                 steps: [
                     'Open your domain in the GoDaddy control center.',
                     'Choose Manage DNS and then Add New Record.',
-                    'Select the type shown in Sh_R_Mail: CNAME, TXT, or MX.',
+                    'Select the type shown in ShrFlow: CNAME, TXT, or MX.',
                     'Paste only the host prefix such as bounces or xxx._domainkey.',
-                    'Paste the value from Sh_R_Mail exactly and save.',
+                    'Paste the value from ShrFlow exactly and save.',
                 ],
             },
         ],

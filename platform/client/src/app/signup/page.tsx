@@ -63,7 +63,7 @@ export default function SignupPage() {
             title={isInviteFlow ? 'Create your member account' : 'Create your account'}
             description={isInviteFlow ? 'Join the workspace you were invited to and finish your setup.' : 'Start with a calm, production-ready email workspace from day one.'}
             asideTitle="Build with infrastructure you can trust"
-            asideDescription="From sending domains to analytics and compliance, Sh_R_Mail is designed to make sophisticated email operations feel organized."
+            asideDescription="From sending domains to analytics and compliance, ShrFlow is designed to make sophisticated email operations feel organized."
         >
             <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-3">

@@ -244,7 +244,7 @@ export default function AccountSecurityPage() {
 
             <SectionCard
                 title="Identity Access"
-                description="These controls affect how you sign in to Sh_R_Mail itself, regardless of which workspace you enter."
+                description="These controls affect how you sign in to ShrFlow itself, regardless of which workspace you enter."
             >
                 <KeyValueList
                     columns={2}

@@ -1,7 +1,7 @@
 # Phase 8: Workspace Administration, Team Governance & Scaling
 
 ## 1. Executive Summary
-Phase 8 transforms ShrMail from a single-user marketing tool into a collaborative, enterprise-ready platform. It introduces advanced administrative controls, a multi-tenant franchise model, and strict governance protocols to ensure data isolation, security, and operational scaling.
+Phase 8 transforms ShrFlow from a single-user marketing tool into a collaborative, enterprise-ready platform. It introduces advanced administrative controls, a multi-tenant franchise model, and strict governance protocols to ensure data isolation, security, and operational scaling.
 
 ### Core Objectives
 *   **Decoupled Governance**: Separation of platform administration from workspace marketing operations.
@@ -14,7 +14,7 @@ Phase 8 transforms ShrMail from a single-user marketing tool into a collaborativ
 ## 2. Core Operating Model
 
 ### 2.1 Role-Based Access Control (RBAC)
-ShrMail uses a strictly enforced RBAC system where a user's permissions are derived from their role within a specific workspace.
+ShrFlow uses a strictly enforced RBAC system where a user's permissions are derived from their role within a specific workspace.
 
 | Role | Description | Key Permissions |
 | :--- | :--- | :--- |

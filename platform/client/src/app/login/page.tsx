@@ -44,7 +44,7 @@ export default function LoginPage() {
             title="Welcome back"
             description="Sign in to keep working across campaigns, contacts, analytics, and infrastructure."
             asideTitle="Operate email like a real product"
-            asideDescription="Sh_R_Mail gives your team one place to run campaigns, debug deliverability, and keep infrastructure healthy without context switching."
+            asideDescription="ShrFlow gives your team one place to run campaigns, debug deliverability, and keep infrastructure healthy without context switching."
         >
             <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-3">
