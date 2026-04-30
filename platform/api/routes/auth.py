@@ -674,16 +674,20 @@ async def update_theme_preference(
 @router.get("/workspaces")
 async def get_user_workspaces(jwt_payload: JWTPayload = Depends(require_authenticated_user)):
     """Get all workspaces the authenticated user belongs to."""
-    workspaces = AccountService.list_workspaces(jwt_payload.user_id)
-    return [
-        {
-            "tenant_id": workspace["tenant_id"],
-            "company_name": workspace["workspace_name"],
-            "role": normalize_public_role(workspace["role"]),
-            "status": workspace["status"],
-        }
-        for workspace in workspaces
-    ]
+    try:
+        workspaces = AccountService.list_workspaces(jwt_payload.user_id)
+        return [
+            {
+                "tenant_id": workspace["tenant_id"],
+                "company_name": workspace["workspace_name"],
+                "role": normalize_public_role(workspace["role"]),
+                "status": workspace["status"],
+            }
+            for workspace in workspaces
+        ]
+    except Exception as e:
+        print(f"[Auth API Error] Failed to list legacy workspaces: {e}")
+        return []
 
 class CreateWorkspaceRequest(BaseModel):
     company_name: str = Field(..., min_length=2, max_length=100)

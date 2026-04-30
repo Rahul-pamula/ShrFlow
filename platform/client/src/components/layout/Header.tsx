@@ -2,12 +2,13 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Search, Bell, Menu, User, Settings, CreditCard, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { Search, Bell, Menu, User, Settings, CreditCard, ChevronDown, CheckCircle2, UserCircle2, Shield, LogOut, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { CommandPalette } from '@/components/ui/CommandPalette';
 import NotificationPopover from './NotificationPopover';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
+import { UserAvatar } from '@/components/ui';
 
 interface HeaderProps {
     setMobileMenuOpen?: () => void;
@@ -20,8 +21,7 @@ export default function Header({ setMobileMenuOpen, settingsMode }: HeaderProps)
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
     const dropdownRef = useRef<HTMLDivElement>(null);
-
-    const workspaceName = currentWorkspace?.name || 'Workspace';
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
 
     // Fetch pending workspace requests count for owners
     useEffect(() => {
@@ -57,7 +57,6 @@ export default function Header({ setMobileMenuOpen, settingsMode }: HeaderProps)
     }, []);
 
     // Command K shortcut
-    const [isSearchOpen, setIsSearchOpen] = useState(false);
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
@@ -71,29 +70,20 @@ export default function Header({ setMobileMenuOpen, settingsMode }: HeaderProps)
 
     if (!user) return null;
 
-    // Get initials for avatar
-    const initials = (user.fullName || user.email || 'U').charAt(0).toUpperCase();
-
-    // Map the internal role to a friendly label (UI ONLY)
-    const roleLabel = 
-        user.role === 'OWNER' 
-            ? (user.workspaceType === 'MAIN' ? 'Main Owner' : 'Franchise Owner')
-            : user.role === 'ADMIN' 
-                ? 'Admin' 
-                : 'Creator';
-
-
-
     return (
-        <header className="h-[64px] bg-[var(--bg-primary)] px-6 flex items-center justify-between sticky top-0 z-50 border-b border-[var(--border)] shrink-0">
-            {/* Left side: Mobile menu toggle only */}
-            <div className="flex items-center gap-4 flex-1">
+        <header className="h-[64px] bg-[var(--bg-primary)] px-6 flex items-center justify-between sticky top-0 z-50 border-b border-[var(--border)] shrink-0 gap-6">
+            {/* Left side: Mobile menu toggle + Workspace Switcher */}
+            <div className="flex items-center gap-4">
                 <button 
                     onClick={() => setMobileMenuOpen?.()}
                     className="md:hidden text-[var(--text-muted)] hover:text-[var(--text-primary)] p-2 -ml-2 rounded-lg hover:bg-[var(--bg-secondary)]"
                 >
                     <Menu className="w-5 h-5" />
                 </button>
+
+                <div className="hidden md:flex items-center">
+                    <WorkspaceSwitcher variant="header" />
+                </div>
 
                 {settingsMode && (
                     <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--accent)]/5 border border-[var(--accent)]/20 animate-in fade-in zoom-in duration-300">
@@ -121,11 +111,8 @@ export default function Header({ setMobileMenuOpen, settingsMode }: HeaderProps)
             </div>
 
             {/* Right side: Notifications & Profile */}
-            <div className="flex items-center gap-3 flex-1 justify-end relative" ref={dropdownRef}>
-                <div className="hidden lg:block">
-                    <WorkspaceSwitcher variant="header" />
-                </div>
-
+            <div className="flex items-center gap-3 justify-end relative" ref={dropdownRef}>
+                
                 {/* Notifications Button */}
                 <NotificationPopover />
 
@@ -148,12 +135,10 @@ export default function Header({ setMobileMenuOpen, settingsMode }: HeaderProps)
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
                     className="flex items-center gap-3 p-1 pr-2 rounded-full border border-transparent hover:border-[var(--border)] hover:bg-[var(--bg-secondary)] transition-all"
                 >
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--accent)] to-[var(--ai-accent)] flex items-center justify-center text-white font-bold text-xs shadow-sm shadow-[var(--accent)]/20">
-                        {initials}
-                    </div>
+                    <UserAvatar email={user.email} name={user.fullName} size="sm" />
                     <div className="hidden sm:flex flex-col items-start text-left">
                         <span className="text-sm font-semibold text-[var(--text-primary)] leading-none mb-0.5">
-                            {user.fullName || user.email.split('@')[0]}
+                            {user.fullName}
                         </span>
                     </div>
                     <ChevronDown className={`w-3 h-3 text-[var(--text-muted)] transition-transform duration-200 hidden sm:block ${isProfileOpen ? 'rotate-180' : ''}`} />
@@ -161,55 +146,48 @@ export default function Header({ setMobileMenuOpen, settingsMode }: HeaderProps)
 
                 {/* Profile Dropdown Menu */}
                 {isProfileOpen && (
-                    <div className="absolute top-full right-0 mt-2 w-64 bg-[var(--bg-primary)] border border-[var(--border)] rounded-xl shadow-2xl py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="absolute top-full right-0 mt-2 w-72 bg-[var(--bg-primary)] border border-[var(--border)] rounded-xl shadow-2xl py-2 animate-in fade-in slide-in-from-top-2 duration-200">
                         
                         {/* Header Info */}
-                        <div className="px-4 py-3 border-b border-[var(--border)] mb-2">
-                            <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{user.fullName || 'User'}</p>
-                            <p className="text-xs text-[var(--text-muted)] truncate mb-2">{user.email}</p>
-                            
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                                    user.role === 'OWNER' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 
-                                    user.role === 'ADMIN' ? 'bg-[var(--accent)]/10 text-[var(--accent)] border-[var(--accent)]/20' : 
-                                    'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
-                                }`}>
-                                    {roleLabel}
-                                </span>
-                                {user.tenantStatus === 'active' && (
-                                    <span className="text-xs text-[var(--success)] flex items-center gap-1 truncate" title={workspaceName || 'Active Workspace'}>
-                                        <CheckCircle2 className="w-3 h-3 flex-shrink-0" /> {workspaceName || 'Active Workspace'}
-                                    </span>
-                                )}
+                        <div className="px-4 py-3 flex items-center gap-3 border-b border-[var(--border)] mb-1">
+                            <UserAvatar email={user.email} name={user.fullName} size="md" />
+                            <div className="min-w-0">
+                                <p className="text-sm font-bold text-[var(--text-primary)] truncate">{user.fullName}</p>
+                                <p className="text-xs text-[var(--text-muted)] truncate">{user.email}</p>
                             </div>
                         </div>
 
                         {/* Navigation Links */}
+                        <div className="px-2 space-y-0.5">
+                            <Link 
+                                href="/account/profile" 
+                                onClick={() => setIsProfileOpen(false)}
+                                className="flex items-center gap-3 px-3 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] rounded-lg transition-colors"
+                            >
+                                <User className="w-4 h-4" /> Personal Details
+                            </Link>
+
+                            <Link 
+                                href="/account/security" 
+                                onClick={() => setIsProfileOpen(false)}
+                                className="flex items-center gap-3 px-3 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] rounded-lg transition-colors"
+                            >
+                                <Shield className="w-4 h-4" /> Security
+                            </Link>
+                        </div>
+
+                        <div className="border-t border-[var(--border)] my-1"></div>
+
                         <div className="px-2">
-                            <Link 
-                                href="/account" 
-                                onClick={() => setIsProfileOpen(false)}
-                                className="flex items-center gap-3 px-3 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] rounded-lg transition-colors"
+                            <button
+                                onClick={() => {
+                                    setIsProfileOpen(false);
+                                    void logout();
+                                }}
+                                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-500 hover:bg-red-500/10 rounded-lg transition-colors text-left font-medium"
                             >
-                                <User className="w-4 h-4" /> Account
-                            </Link>
-
-                            <Link 
-                                href="/settings/organization" 
-                                onClick={() => setIsProfileOpen(false)}
-                                className="flex items-center gap-3 px-3 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] rounded-lg transition-colors"
-                            >
-                                <Settings className="w-4 h-4" /> Workspace Settings
-                            </Link>
-
-                            <Link 
-                                href="/settings/billing" 
-                                onClick={() => setIsProfileOpen(false)}
-                                className="flex items-center gap-3 px-3 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] rounded-lg transition-colors"
-                            >
-                                <CreditCard className="w-4 h-4" /> Workspace Billing
-                            </Link>
-                            
+                                <LogOut className="w-4 h-4" /> Sign Out
+                            </button>
                         </div>
                     </div>
                 )}

@@ -1,53 +1,42 @@
 'use client';
 
-import Link from 'next/link';
-import { AlertTriangle, ArrowRight, Eye, EyeOff, Lock, Shield, Smartphone, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-
+import { 
+    AlertTriangle, 
+    ArrowLeft, 
+    ChevronRight, 
+    Eye, 
+    EyeOff, 
+    Lock, 
+    Shield, 
+    Smartphone, 
+    Trash2, 
+    LogOut,
+    Mail,
+    Key,
+    ShieldCheck
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { Button, InlineAlert, Input, KeyValueList, ModalShell, PageHeader, SectionCard, StatCard, useToast } from '@/components/ui';
+import { Button, InlineAlert, Input, ModalShell, useToast } from '@/components/ui';
+import Link from 'next/link';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
-
-interface DeletionBlockingReason {
-    code: string;
-    tenant_id: string;
-    workspace_name: string;
-    role: string;
-    message: string;
-}
-
-interface DeletionAction {
-    type: string;
-    tenant_id: string;
-    workspace_name: string;
-    cta_label: string;
-    cta_href: string;
-}
-
-interface WorkspaceImpact {
-    tenant_id: string;
-    workspace_name: string;
-    role: string;
-    member_count: number;
-    admin_count: number;
-    workspace_status: string;
-    outcome: string;
-}
 
 interface DeletionPreflight {
     account_status: string;
     deletion_scheduled_at?: string | null;
     can_request_deletion: boolean;
-    blocking_reasons: DeletionBlockingReason[];
-    actions_required: DeletionAction[];
-    workspace_impacts: WorkspaceImpact[];
+    blocking_reasons: any[];
+    actions_required: any[];
+    workspace_impacts: any[];
 }
 
 export default function AccountSecurityPage() {
-    const { token, user } = useAuth();
+    const { token, user, logout } = useAuth();
     const { success, error } = useToast();
 
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [current, setCurrent] = useState('');
     const [nextPassword, setNextPassword] = useState('');
     const [confirm, setConfirm] = useState('');
@@ -55,51 +44,28 @@ export default function AccountSecurityPage() {
     const [showNext, setShowNext] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [formError, setFormError] = useState('');
-    const [formSuccess, setFormSuccess] = useState('');
     const [deletionState, setDeletionState] = useState<DeletionPreflight | null>(null);
     const [deletionError, setDeletionError] = useState('');
     const [isDeletionLoading, setIsDeletionLoading] = useState(true);
-    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const [confirmDeleteText, setConfirmDeleteText] = useState('');
     const [isSubmittingDeletion, setIsSubmittingDeletion] = useState(false);
     const [isCancellingDeletion, setIsCancellingDeletion] = useState(false);
 
     useEffect(() => {
-        if (!token) return;
-        void loadDeletionPreflight();
+        if (token) loadDeletionPreflight();
     }, [token]);
 
-    const pendingDeletionDate = useMemo(() => {
-        if (!deletionState?.deletion_scheduled_at) return null;
-        try {
-            return new Date(deletionState.deletion_scheduled_at).toLocaleString();
-        } catch {
-            return deletionState.deletion_scheduled_at;
-        }
-    }, [deletionState?.deletion_scheduled_at]);
-
     const loadDeletionPreflight = async () => {
-        if (!token) return;
-
         setIsDeletionLoading(true);
-        setDeletionError('');
         try {
-            const response = await fetch(`${API_BASE}/account/delete/preflight`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
+            const res = await fetch(`${API_BASE}/account/delete/preflight`, {
+                headers: { Authorization: `Bearer ${token}` },
             });
-
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                throw new Error(data.detail || 'Failed to load account deletion checks.');
-            }
-
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed to load deletion checks.');
             setDeletionState(data);
-        } catch (preflightError: any) {
-            setDeletionError(preflightError.message || 'Failed to load account deletion checks.');
-            error(preflightError.message || 'Failed to load account deletion checks.');
+        } catch (err: any) {
+            setDeletionError(err.message);
         } finally {
             setIsDeletionLoading(false);
         }
@@ -107,420 +73,289 @@ export default function AccountSecurityPage() {
 
     const handleChangePassword = async () => {
         setFormError('');
-        setFormSuccess('');
-
-        if (!current || !nextPassword || !confirm) {
-            setFormError('All password fields are required.');
-            return;
-        }
-        if (nextPassword.length < 8) {
-            setFormError('New password must be at least 8 characters.');
-            return;
-        }
-        if (nextPassword !== confirm) {
-            setFormError('New passwords do not match.');
-            return;
-        }
+        if (!current || !nextPassword || !confirm) return setFormError('All fields required.');
+        if (nextPassword.length < 8) return setFormError('Minimum 8 characters required.');
+        if (nextPassword !== confirm) return setFormError('Passwords do not match.');
 
         setIsSaving(true);
         try {
-            const response = await fetch(`${API_BASE}/auth/change-password`, {
+            const res = await fetch(`${API_BASE}/auth/change-password`, {
                 method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    current_password: current,
-                    new_password: nextPassword,
-                }),
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ current_password: current, new_password: nextPassword }),
             });
-
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                throw new Error(data.detail || 'Failed to update password.');
-            }
-
-            setCurrent('');
-            setNextPassword('');
-            setConfirm('');
-            setFormSuccess('Password updated successfully.');
-            success('Password updated successfully.');
-        } catch (changeError: any) {
-            setFormError(changeError.message || 'Could not update password.');
-            error(changeError.message || 'Could not update password.');
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed to update password.');
+            success('Password updated.');
+            setIsPasswordModalOpen(false);
+            setCurrent(''); setNextPassword(''); setConfirm('');
+        } catch (err: any) {
+            setFormError(err.message);
         } finally {
             setIsSaving(false);
         }
     };
 
-    const handleRequestDeletion = async () => {
-        if (!token) return;
-
-        setIsSubmittingDeletion(true);
-        setDeletionError('');
+    const handleForgotPassword = async () => {
         try {
-            const response = await fetch(`${API_BASE}/account/delete`, {
+            const res = await fetch(`${API_BASE}/auth/forgot-password`, {
                 method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: user?.email }),
             });
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                throw new Error(data.detail || 'Failed to request account deletion.');
-            }
+            if (!res.ok) throw new Error('Failed to send reset email.');
+            success('Reset email sent.');
+        } catch (err: any) {
+            error(err.message);
+        }
+    };
 
+    const handleRequestDeletion = async () => {
+        setIsSubmittingDeletion(true);
+        try {
+            const res = await fetch(`${API_BASE}/account/delete`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error('Failed to request deletion.');
+            success('Deletion scheduled.');
             setIsDeleteModalOpen(false);
-            setConfirmDeleteText('');
-            success('Account deletion scheduled. You can cancel it during the grace period.');
-            await loadDeletionPreflight();
-        } catch (requestError: any) {
-            setDeletionError(requestError.message || 'Failed to request account deletion.');
-            error(requestError.message || 'Failed to request account deletion.');
+            loadDeletionPreflight();
+        } catch (err: any) {
+            error(err.message);
         } finally {
             setIsSubmittingDeletion(false);
         }
     };
 
     const handleCancelDeletion = async () => {
-        if (!token) return;
-
         setIsCancellingDeletion(true);
-        setDeletionError('');
         try {
-            const response = await fetch(`${API_BASE}/account/cancel-deletion`, {
+            const res = await fetch(`${API_BASE}/account/cancel-deletion`, {
                 method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
+                headers: { Authorization: `Bearer ${token}` },
             });
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                throw new Error(data.detail || 'Failed to cancel account deletion.');
-            }
-
-            success('Account deletion cancelled.');
-            await loadDeletionPreflight();
-        } catch (cancelError: any) {
-            setDeletionError(cancelError.message || 'Failed to cancel account deletion.');
-            error(cancelError.message || 'Failed to cancel account deletion.');
+            if (!res.ok) throw new Error('Failed to cancel deletion.');
+            success('Deletion cancelled.');
+            loadDeletionPreflight();
+        } catch (err: any) {
+            error(err.message);
         } finally {
             setIsCancellingDeletion(false);
         }
     };
 
     return (
-        <div className="space-y-8 pb-8">
-            <PageHeader
-                title="Account Security"
-                subtitle="Manage password hygiene and future account-protection controls at the identity layer, separate from workspace operations."
-                action={
-                    <Link href="/account">
-                        <Button variant="secondary">Back to Account</Button>
-                    </Link>
-                }
-            />
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <StatCard label="Account Email" value={user?.email || 'Unknown'} icon={<Lock className="h-5 w-5" />} />
-                <StatCard label="Password" value="Managed" icon={<Shield className="h-5 w-5" />} />
-                <StatCard label="Two-Factor Auth" value="Coming Soon" icon={<Smartphone className="h-5 w-5" />} />
+        <div className="max-w-[1280px] mx-auto space-y-12">
+            {/* Top Bar */}
+            <div className="flex items-center gap-4">
+                <Link 
+                    href="/account" 
+                    className="p-2 -ml-2 rounded-lg hover:bg-[var(--bg-secondary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                >
+                    <ArrowLeft className="w-5 h-5" />
+                </Link>
+                <h1 className="text-3xl font-bold text-[var(--text-primary)]">Security</h1>
             </div>
 
             {deletionState?.account_status === 'pending_deletion' && (
-                <InlineAlert
-                    variant="warning"
-                    title="Account deletion scheduled"
-                    description={`Your account is scheduled for anonymization${pendingDeletionDate ? ` on ${pendingDeletionDate}` : ''}. Workspace memberships and refresh tokens will be revoked when the grace period ends.`}
-                    icon={<AlertTriangle className="mt-0.5 h-4 w-4" />}
-                    action={
-                        <Button variant="secondary" onClick={handleCancelDeletion} isLoading={isCancellingDeletion}>
+                <div className="p-6 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <AlertTriangle className="w-6 h-6 text-amber-500 shrink-0 mt-0.5" />
+                    <div className="flex-1 space-y-3">
+                        <div>
+                            <p className="text-lg font-bold text-amber-500 leading-none">Account deletion scheduled</p>
+                            <p className="text-sm text-[var(--text-muted)] mt-1 max-w-2xl leading-relaxed">
+                                Your account is scheduled for anonymization. All your personal data will be removed. You can cancel this request at any time before the deadline.
+                            </p>
+                        </div>
+                        <Button variant="secondary" size="sm" onClick={handleCancelDeletion} isLoading={isCancellingDeletion}>
                             Cancel Deletion
                         </Button>
-                    }
-                />
+                    </div>
+                </div>
             )}
 
-            <SectionCard
-                title="Identity Access"
-                description="These controls affect how you sign in to ShrFlow itself, regardless of which workspace you enter."
-            >
-                <KeyValueList
-                    columns={2}
-                    items={[
-                        { label: 'Primary Email', value: user?.email || 'Not available', helper: 'Used for sign-in, recovery, and invitations.' },
-                        { label: 'Security Scope', value: 'Account-wide', helper: 'Password and future MFA settings apply to your identity, not one workspace.' },
-                    ]}
-                />
-            </SectionCard>
-
-            <SectionCard
-                title="Password & Recovery"
-                description="Password changes and recovery access belong here, but they should stay one step deeper than the main security landing view."
-            >
-                <div className="flex flex-col gap-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)] p-5 md:flex-row md:items-center md:justify-between">
-                    <div className="space-y-1">
-                        <p className="text-sm font-semibold text-[var(--text-primary)]">Password access</p>
-                        <p className="text-sm text-[var(--text-muted)]">
-                            Change your password, keep recovery access healthy, and manage sign-in hygiene without mixing these controls into workspace settings.
-                        </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Password Card */}
+                <div className="p-8 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden">
+                    <div className="flex items-start justify-between relative z-10">
+                        <div className="space-y-4">
+                            <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 shadow-sm group-hover:scale-110 transition-transform">
+                                <Key className="w-7 h-7" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-[var(--text-primary)]">Password</h3>
+                                <p className="text-sm text-[var(--text-muted)] mt-1 opacity-80 leading-relaxed">
+                                    Last updated recently. Ensure your password is at least 8 characters long.
+                                </p>
+                            </div>
+                            <Button 
+                                variant="ghost" 
+                                onClick={() => setIsPasswordModalOpen(true)}
+                                className="border border-[var(--border)] px-6"
+                            >
+                                Change Password
+                            </Button>
+                        </div>
                     </div>
-                    <Button variant="secondary" onClick={() => setIsPasswordModalOpen(true)}>
-                        Change Password
-                    </Button>
+                    {/* Decorative glow */}
+                    <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl group-hover:bg-blue-500/10 transition-colors" />
                 </div>
 
-                {formSuccess && <InlineAlert variant="success" title="Password updated" description={formSuccess} />}
-            </SectionCard>
-
-            <SectionCard
-                tone="subtle"
-                title="Two-Factor Authentication"
-                description="Authenticator-app protection belongs here as an account-level control. The product scaffolding can point here even before the full TOTP flow ships."
-            >
-                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-muted)]">
-                    <Smartphone className="h-4 w-4" />
-                    Coming Soon
+                {/* Recovery Card */}
+                <div className="p-8 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden">
+                    <div className="flex items-start justify-between relative z-10">
+                        <div className="space-y-4">
+                            <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 shadow-sm group-hover:scale-110 transition-transform">
+                                <Mail className="w-7 h-7" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-[var(--text-primary)]">Recovery</h3>
+                                <p className="text-sm text-[var(--text-muted)] mt-1 opacity-80 leading-relaxed">
+                                    Lost access to your account? We'll send a secure link to your registered email.
+                                </p>
+                            </div>
+                            <Button 
+                                variant="ghost" 
+                                onClick={handleForgotPassword}
+                                className="text-[var(--accent)] hover:text-[var(--accent-hover)] hover:bg-[var(--accent)]/5 px-6"
+                            >
+                                Reset via Email
+                            </Button>
+                        </div>
+                    </div>
+                    {/* Decorative glow */}
+                    <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-colors" />
                 </div>
-            </SectionCard>
 
-            <SectionCard
-                tone="danger"
-                title="Delete Account"
-                description="Delete the account identity, not the historical workspace records. Personal identifiers are anonymized after a 30-day grace period while campaigns, contacts, templates, audit logs, and analytics stay intact."
-            >
-                <div className="space-y-5">
-                    {deletionError && (
-                        <InlineAlert
+                {/* 2FA Card */}
+                <div className="p-8 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden">
+                    <div className="flex items-start justify-between relative z-10">
+                        <div className="space-y-4">
+                            <div className="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-500 shadow-sm group-hover:scale-110 transition-transform">
+                                <ShieldCheck className="w-7 h-7" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-[var(--text-primary)]">Two-Factor Auth</h3>
+                                <p className="text-sm text-[var(--text-muted)] mt-1 opacity-80 leading-relaxed">
+                                    Add an extra layer of security by requiring more than just a password to sign in.
+                                </p>
+                            </div>
+                            <div className="inline-flex items-center px-3 py-1 rounded-full bg-[var(--bg-secondary)] border border-[var(--border)] text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)]">
+                                Coming Soon
+                            </div>
+                        </div>
+                    </div>
+                    {/* Decorative glow */}
+                    <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl group-hover:bg-purple-500/10 transition-colors" />
+                </div>
+
+                {/* Sign Out Card */}
+                <div className="p-8 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden">
+                    <div className="flex items-start justify-between relative z-10">
+                        <div className="space-y-4">
+                            <div className="w-14 h-14 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-500 shadow-sm group-hover:scale-110 transition-transform">
+                                <LogOut className="w-7 h-7" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-[var(--text-primary)]">Active Session</h3>
+                                <p className="text-sm text-[var(--text-muted)] mt-1 opacity-80 leading-relaxed">
+                                    Signing out will terminate your current session on this device.
+                                </p>
+                            </div>
+                            <Button 
+                                variant="ghost" 
+                                onClick={() => void logout()}
+                                className="text-red-500 hover:bg-red-500/10 px-6"
+                            >
+                                Sign Out
+                            </Button>
+                        </div>
+                    </div>
+                    {/* Decorative glow */}
+                    <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl group-hover:bg-orange-500/10 transition-colors" />
+                </div>
+            </div>
+
+            {/* Danger Zone Section */}
+            <div className="pt-12">
+                <div className="p-8 rounded-2xl border border-red-500/20 bg-red-500/5 relative overflow-hidden group">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+                        <div className="space-y-1">
+                            <h3 className="text-xl font-bold text-red-500">Danger Zone</h3>
+                            <p className="text-sm text-[var(--text-muted)] opacity-80 max-w-xl">
+                                Permanently delete your account and all associated data. This action is irreversible.
+                            </p>
+                        </div>
+                        <Button 
                             variant="danger"
-                            title="Deletion flow unavailable"
-                            description={deletionError}
-                        />
-                    )}
-
-                    {isDeletionLoading ? (
-                        <p className="text-sm text-[var(--text-muted)]">Loading deletion checks...</p>
-                    ) : deletionState ? (
-                        <>
-                            <KeyValueList
-                                columns={2}
-                                items={[
-                                    { label: 'Grace Period', value: '30 days', helper: 'The account can be restored before anonymization runs.' },
-                                    { label: 'Current Status', value: deletionState.account_status.replace(/_/g, ' '), helper: 'Active accounts can request deletion. Pending deletion accounts can still cancel.' },
-                                ]}
-                            />
-
-                            {deletionState.blocking_reasons.length > 0 ? (
-                                <div className="space-y-3">
-                                    <InlineAlert
-                                        variant="warning"
-                                        title="Deletion is currently blocked"
-                                        description="Resolve the workspace ownership or admin coverage issues below before trying again."
-                                    />
-                                    <div className="space-y-3">
-                                        {deletionState.blocking_reasons.map((reason) => (
-                                            <div key={`${reason.code}-${reason.tenant_id}`} className="rounded-[var(--radius)] border border-[var(--warning)]/20 bg-[var(--warning)]/5 p-4">
-                                                <p className="text-sm font-semibold text-[var(--text-primary)]">{reason.workspace_name}</p>
-                                                <p className="mt-1 text-sm text-[var(--text-muted)]">{reason.message}</p>
-                                                <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--text-muted)]">Role: {reason.role}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ) : (
-                                <InlineAlert
-                                    variant="info"
-                                    title="Deletion is available"
-                                    description="No ownership or admin blockers were found. Solo-owned workspaces will be marked pending deletion alongside your account."
-                                />
-                            )}
-
-                            {deletionState.actions_required.length > 0 && (
-                                <div className="grid gap-3 md:grid-cols-2">
-                                    {deletionState.actions_required.map((action) => (
-                                        <div key={`${action.type}-${action.tenant_id}`} className="flex items-center justify-between rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)] p-4">
-                                            <div className="pr-4">
-                                                <p className="text-sm font-semibold text-[var(--text-primary)]">{action.workspace_name}</p>
-                                                <p className="mt-1 text-sm text-[var(--text-muted)]">
-                                                    {action.type === 'transfer_ownership' ? 'Transfer ownership before deleting the account.' : 'Promote another admin before deleting the account.'}
-                                                </p>
-                                            </div>
-                                            <Link href={action.cta_href}>
-                                                <Button variant="secondary">
-                                                    {action.cta_label}
-                                                    <ArrowRight className="h-4 w-4" />
-                                                </Button>
-                                            </Link>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)] p-4">
-                                <p className="text-sm font-semibold text-[var(--text-primary)]">Workspace impact</p>
-                                <div className="mt-3 space-y-3">
-                                    {deletionState.workspace_impacts.map((impact) => (
-                                        <div key={impact.tenant_id} className="flex flex-col gap-1 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)]/40 p-3">
-                                            <div className="flex items-center justify-between gap-3">
-                                                <span className="text-sm font-medium text-[var(--text-primary)]">{impact.workspace_name}</span>
-                                                <span className="text-xs uppercase tracking-[0.16em] text-[var(--text-muted)]">{impact.role}</span>
-                                            </div>
-                                            <p className="text-sm text-[var(--text-muted)]">
-                                                {impact.outcome === 'pending_deletion'
-                                                    ? 'This solo-owned workspace will be marked pending deletion.'
-                                                    : impact.outcome === 'blocked'
-                                                        ? 'This workspace is currently blocking account deletion.'
-                                                        : 'Your membership will be removed when anonymization runs.'}
-                                            </p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--danger)]/20 bg-[var(--danger)]/5 p-4">
-                                <div>
-                                    <p className="text-sm font-semibold text-[var(--text-primary)]">Schedule account deletion</p>
-                                    <p className="mt-1 text-sm text-[var(--text-muted)]">
-                                        This revokes refresh tokens immediately and queues anonymization after the grace period.
-                                    </p>
-                                </div>
-                                <Button
-                                    variant="danger"
-                                    onClick={() => setIsDeleteModalOpen(true)}
-                                    disabled={!deletionState.can_request_deletion || deletionState.account_status === 'pending_deletion'}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                    Delete Account
-                                </Button>
-                            </div>
-                        </>
-                    ) : null}
+                            onClick={() => setIsDeleteModalOpen(true)}
+                            disabled={isDeletionLoading || deletionState?.account_status === 'pending_deletion'}
+                            className="px-8 shadow-lg shadow-red-500/20"
+                        >
+                            Delete Account
+                        </Button>
+                    </div>
+                    {/* Decorative stripes/background for danger zone */}
+                    <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-red-500/5 to-transparent opacity-50" />
                 </div>
-            </SectionCard>
+            </div>
 
-            <ModalShell
-                isOpen={isPasswordModalOpen}
-                onClose={() => {
-                    if (isSaving) return;
-                    setIsPasswordModalOpen(false);
-                    setFormError('');
-                    setCurrent('');
-                    setNextPassword('');
-                    setConfirm('');
-                }}
-                title="Change Password"
-                description="Update your account password here. Forgot-password and recovery flows remain public identity flows outside workspace settings."
-                maxWidthClass="max-w-xl"
-            >
+            {/* Password Modal */}
+            <ModalShell isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} title="Update Password" maxWidthClass="max-w-md">
                 <div className="space-y-4">
                     <div className="relative">
                         <Input
                             type={showCurrent ? 'text' : 'password'}
                             label="Current Password"
                             value={current}
-                            onChange={(event) => setCurrent(event.target.value)}
-                            className="pr-11"
+                            onChange={e => setCurrent(e.target.value)}
                         />
-                        <button
-                            type="button"
-                            onClick={() => setShowCurrent((value) => !value)}
-                            className="absolute right-3 top-[37px] text-[var(--text-muted)] transition hover:text-[var(--text-primary)]"
-                        >
-                            {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-[37px] text-[var(--text-muted)]">
+                            {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                     </div>
-
                     <div className="relative">
                         <Input
                             type={showNext ? 'text' : 'password'}
                             label="New Password"
-                            helperText="Minimum 8 characters."
+                            helperText="Minimum 8 characters"
                             value={nextPassword}
-                            onChange={(event) => setNextPassword(event.target.value)}
-                            className="pr-11"
+                            onChange={e => setNextPassword(e.target.value)}
                         />
-                        <button
-                            type="button"
-                            onClick={() => setShowNext((value) => !value)}
-                            className="absolute right-3 top-[37px] text-[var(--text-muted)] transition hover:text-[var(--text-primary)]"
-                        >
-                            {showNext ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        <button type="button" onClick={() => setShowNext(!showNext)} className="absolute right-3 top-[37px] text-[var(--text-muted)]">
+                            {showNext ? <EyeOff className="w-4 h-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                     </div>
-
                     <Input
                         type="password"
                         label="Confirm New Password"
                         value={confirm}
-                        onChange={(event) => setConfirm(event.target.value)}
+                        onChange={e => setConfirm(e.target.value)}
                     />
-
-                    {formError && <InlineAlert variant="danger" title="Password update failed" description={formError} />}
-
-                    <div className="flex items-center justify-end gap-3">
-                        <Button
-                            variant="ghost"
-                            onClick={() => {
-                                setIsPasswordModalOpen(false);
-                                setFormError('');
-                                setCurrent('');
-                                setNextPassword('');
-                                setConfirm('');
-                            }}
-                            disabled={isSaving}
-                        >
-                            Cancel
-                        </Button>
-                        <Button onClick={handleChangePassword} isLoading={isSaving}>
-                            Update Password
-                        </Button>
+                    {formError && <p className="text-xs text-red-500">{formError}</p>}
+                    <div className="flex justify-end gap-3 pt-4">
+                        <Button variant="ghost" onClick={() => setIsPasswordModalOpen(false)}>Cancel</Button>
+                        <Button onClick={handleChangePassword} isLoading={isSaving}>Update</Button>
                     </div>
                 </div>
             </ModalShell>
 
-            <ModalShell
-                isOpen={isDeleteModalOpen}
-                onClose={() => {
-                    setIsDeleteModalOpen(false);
-                    setConfirmDeleteText('');
-                }}
-                title="Delete Account"
-                description="Type DELETE to confirm. Your account enters a 30-day grace period before anonymization."
-                maxWidthClass="max-w-xl"
-            >
-                <div className="space-y-5">
-                    <InlineAlert
-                        variant="danger"
-                        title="This is an account-level action"
-                        description="Campaign history, contacts, templates, analytics, and audit logs stay intact, but your personal identity fields and workspace memberships will be anonymized after the grace period."
-                    />
-
+            {/* Delete Modal */}
+            <ModalShell isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Delete Account" maxWidthClass="max-w-md">
+                <div className="space-y-6">
+                    <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+                        Your account will be scheduled for anonymization. Workspace records remain intact, but your identity will be removed.
+                    </p>
                     <Input
                         label='Type "DELETE" to confirm'
                         value={confirmDeleteText}
-                        onChange={(event) => setConfirmDeleteText(event.target.value)}
+                        onChange={e => setConfirmDeleteText(e.target.value)}
                         autoFocus
                     />
-
-                    <div className="flex items-center justify-end gap-3">
-                        <Button
-                            variant="ghost"
-                            onClick={() => {
-                                setIsDeleteModalOpen(false);
-                                setConfirmDeleteText('');
-                            }}
-                            disabled={isSubmittingDeletion}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="danger"
-                            onClick={handleRequestDeletion}
-                            isLoading={isSubmittingDeletion}
-                            disabled={confirmDeleteText !== 'DELETE'}
-                        >
-                            <Trash2 className="h-4 w-4" />
+                    <div className="flex justify-end gap-3">
+                        <Button variant="ghost" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
+                        <Button variant="danger" onClick={handleRequestDeletion} isLoading={isSubmittingDeletion} disabled={confirmDeleteText !== 'DELETE'}>
                             Confirm Deletion
                         </Button>
                     </div>

@@ -11,6 +11,7 @@ export { HealthDot } from './HealthDot';
 export { LoadingSpinner, PageLoader } from './LoadingSpinner';
 export { Input } from './Input';
 export { Card } from './Card';
+export { UserAvatar } from './UserAvatar';
 
 /**
  * MOLECULES — Combined atoms

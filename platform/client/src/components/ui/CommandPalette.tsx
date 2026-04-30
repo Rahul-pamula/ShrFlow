@@ -16,7 +16,6 @@ const PAGES = [
     { name: 'Templates', path: '/templates', icon: FileText, section: 'Navigation' },
     { name: 'Create Campaign', path: '/campaigns/new', icon: Plus, section: 'Actions' },
     { name: 'Import Contacts', path: '/contacts?import=true', icon: Plus, section: 'Actions' },
-    { name: 'Profile Settings', path: '/settings/profile', icon: Settings, section: 'Settings' },
     { name: 'Billing Settings', path: '/settings/billing', icon: Settings, section: 'Settings' },
     { name: 'Notifications', path: '/settings/notifications', icon: Settings, section: 'Settings' },
 ];

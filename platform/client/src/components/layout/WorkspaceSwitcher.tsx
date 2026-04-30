@@ -149,7 +149,7 @@ export default function WorkspaceSwitcher({ collapsed = false, variant = 'sideba
 
             {/* Dropdown */}
             {isOpen && (
-                <div className={`${isHeader ? 'absolute right-0 top-full mt-2 w-[320px]' : 'absolute left-3 right-3 top-full mt-1'} z-50 bg-[var(--bg-primary)] border border-[var(--border)] rounded-xl shadow-2xl shadow-black/20 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150`}>
+                <div className={`${isHeader ? 'absolute left-0 top-full mt-2 w-[320px]' : 'absolute left-3 right-3 top-full mt-1'} z-50 bg-[var(--bg-primary)] border border-[var(--border)] rounded-xl shadow-2xl shadow-black/20 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150`}>
                     {/* Header */}
                     <div className="px-3 py-2 border-b border-[var(--border)]">
                         <p className="text-[10px] font-semibold tracking-widest uppercase text-[var(--text-muted)] opacity-60">

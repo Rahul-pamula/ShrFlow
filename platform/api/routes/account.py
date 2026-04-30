@@ -16,7 +16,12 @@ class AccountSwitchRequest(BaseModel):
 async def get_account_workspaces(
     jwt_payload: JWTPayload = Depends(require_authenticated_user),
 ):
-    return AccountService.list_workspaces(jwt_payload.user_id)
+    try:
+        return AccountService.list_workspaces(jwt_payload.user_id)
+    except Exception as e:
+        print(f"[Account API Error] Failed to list workspaces: {e}")
+        # Return empty list or raise specific error
+        return []
 
 
 @router.get("/invitations")
