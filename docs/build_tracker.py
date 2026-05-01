@@ -80,7 +80,7 @@ DESCRIPTIONS = {
   "Audit log table is write-only / immutable (no UPDATE or DELETE allowed)": "Once a log row is written, it can never be changed or deleted — even by admins — making it a tamper-proof activity record.",
   "Log severity levels: INFO / WARNING / CRITICAL on every log row": "Each audit log entry has a severity tag: INFO for normal events, WARNING for unusual ones, CRITICAL for high-risk actions like bulk deletes.",
   "Auto-alert on CRITICAL log events (bulk delete >1000, suspicious login)": "When a CRITICAL event occurs, the system automatically emails the workspace owner — e.g. 'Someone deleted 2,000 contacts from your account'.",
-  "Configure Supabase Auth SMTP to use shrmail.app@gmail.com": "Supabase's auth emails (verification, password reset) are routed through your own Gmail account instead of Supabase's generic sender.",
+  "Configure Supabase Auth SMTP to use shrflow.app@gmail.com": "Supabase's auth emails (verification, password reset) are routed through your own Gmail account instead of Supabase's generic sender.",
   "Fix forgot-password page — Supabase Auth built-in reset email flow": "The frontend forgot-password page now calls Supabase Auth's built-in reset endpoint instead of a custom one.",
   "Fix reset-password page — Supabase Auth password update": "The reset-password page uses Supabase Auth's updateUser() call to change the password after the reset link is clicked.",
   "Test: sign up > verify email > login > forgot password > reset": "An end-to-end manual test confirming the full auth lifecycle works: create account, verify email, log in, reset password.",
@@ -271,7 +271,7 @@ html_template = """<!DOCTYPE html>
 
     <script>
         const phasesData = MAGIC_JSON;
-        const savedState = JSON.parse(localStorage.getItem('shrmail_phases_tracker') || '{}');
+        const savedState = JSON.parse(localStorage.getItem('shrflow_phases_tracker') || '{}');
         let totalTasks = 0;
         let completedTasks = 0;
 
@@ -320,7 +320,7 @@ html_template = """<!DOCTYPE html>
                 
                 checkbox.addEventListener('change', (e) => {
                     savedState[taskId] = e.target.checked;
-                    localStorage.setItem('shrmail_phases_tracker', JSON.stringify(savedState));
+                    localStorage.setItem('shrflow_phases_tracker', JSON.stringify(savedState));
                     if(e.target.checked) { completedTasks++; phaseCompleted++; } 
                     else { completedTasks--; phaseCompleted--; }
                     updateMasterStats();

@@ -444,7 +444,7 @@ graph TD
 - [GAP 1] Auto-trigger CRITICAL audit log when system email count exceeds 1,600/day (80% of Workspace limit)
 - [GAP 1] Add `SYSTEM_MAILER=gmail|ses` env flag — abstraction layer for future migration
 
-> ⚠️ **Gmail Risk Note:** `shrmail.app@gmail.com` is capped at ~2,000 emails/day on Workspace. At moderate signup volume (200 users/day triggering welcome + verification = 400 emails/day), this limit will be hit within months. **Migration target: Phase 9 — `mail.shrmail.app` via AWS SES.** See Phase 9 for full plan.
+> ⚠️ **Gmail Risk Note:** `shrmail.app@gmail.com` is capped at ~2,000 emails/day on Workspace. At moderate signup volume (200 users/day triggering welcome + verification = 400 emails/day), this limit will be hit within months. **Migration target: Phase 9 — `mail.shrflow.app` via AWS SES.** See Phase 9 for full plan.
 
 ---
 
@@ -1478,7 +1478,7 @@ graph TD
 - [NEW] Direct Feedback Widgets (Interactive 1-5 Star/Yes-No embedded tracking parameters in footers)
 - [GAP 2 — Click Tracking Architecture Fix] `campaigns.click_tracking_enabled` BOOLEAN column (default: `False`)
 - [GAP 2] Plan gate: only `plan IN ('pro', 'enterprise')` may enable click tracking on a campaign
-- [GAP 2] Worker: conditionally wraps links via `https://trk.shrmail.app/c/{hmac_signed_token}` in MJML compile step when `click_tracking_enabled=True`
+- [GAP 2] Worker: conditionally wraps links via `https://trk.shrflow.app/c/{hmac_signed_token}` in MJML compile step when `click_tracking_enabled=True`
 - [GAP 2] CTR stat card (`unique_clicks / unique_opens`) rendered ONLY when `click_tracking_enabled=True`
 - [GAP 2] Click Heatmap Overlay (Phase 10) depends on `click_tracking_enabled=True` data being present
 - [GAP 2] Free/Starter plans see an upgrade prompt when hovering the disabled click tracking toggle
@@ -2242,8 +2242,8 @@ graph TD
 - DNS Setup Instructions rendering copy-paste values for external providers
 - Dedicated IP health monitoring widget
 - IP warmup status page (daily send limit and progression)
-- [GAP 1 — System Email Migration] Register and verify `mail.shrmail.app` via AWS SES
-- [GAP 1] Migrate all system emails (OTP, audit alerts, notifications) off Gmail MVP onto `mail.shrmail.app`
+- [GAP 1 — System Email Migration] Register and verify `mail.shrflow.app` via AWS SES
+- [GAP 1] Migrate all system emails (OTP, audit alerts, notifications) off Gmail MVP onto `mail.shrflow.app`
 - [GAP 6 — Dedicated IP Warmup] Implement 30-day warmup automation CRON (`warmup_scheduler.py`)
 - [GAP 6] Days 1–3: 50 emails/day cap
 - [GAP 6] Days 4–7: 200 emails/day cap

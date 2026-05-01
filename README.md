@@ -96,9 +96,9 @@ SMTP_PASSWORD=your_ses_password
 # (e.g. AWS SES via mail.shrflow.app) for full production-grade delivery.
 SYSTEM_SMTP_HOST=smtp.gmail.com
 SYSTEM_SMTP_PORT=587
-SYSTEM_SMTP_USERNAME=shrflow.app@gmail.com
+SYSTEM_SMTP_USERNAME=shrmail.app@gmail.com
 SYSTEM_SMTP_PASSWORD=your_google_app_password
-SYSTEM_SMTP_FROM_EMAIL=shrflow.app@gmail.com
+SYSTEM_SMTP_FROM_EMAIL=shrmail.app@gmail.com
 SYSTEM_SMTP_FROM_NAME=Email Engine
 
 # ── 5. Authentication (Custom JWT) ──────────────────────────

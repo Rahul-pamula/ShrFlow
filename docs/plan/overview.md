@@ -16,7 +16,7 @@ The Dual Email Engine Strategy
 
 A defining feature of the platform is the physical separation of email traffic based on intent:
 
-1. System Emails: (OTPs, password resets, invites) Sent via Gmail SMTP (shrmail.app@gmail.com). This leverages Gmail’s high trust reputation to ensure critical alerts land in the inbox.
+1. System Emails: (OTPs, password resets, invites) Sent via Gmail SMTP (shrflow.app@gmail.com). This leverages Gmail’s high trust reputation to ensure critical alerts land in the inbox.
 2. Campaign Emails: (Newsletters, bulk marketing) Sent via AWS SES using the tenant’s verified domain.
 
 Strategic Impact: This design isolates sender reputations. A spam complaint against one tenant’s campaign cannot impede the delivery of critical system notifications for another user.
@@ -121,7 +121,7 @@ The long-term strategy focuses on automation and deep intelligence:
 VI. Critical Risks and Mitigations
 
 Risk	Mitigation Strategy
-Gmail Send Limits	The current 2,000/day cap on system emails will be mitigated by migrating to a dedicated AWS SES sub-domain (mail.shrmail.app) in Phase 9.
+Gmail Send Limits	The current 2,000/day cap on system emails will be mitigated by migrating to a dedicated AWS SES sub-domain (mail.shrflow.app) in Phase 9.
 Database Performance	Monthly PostgreSQL table partitioning and eventual migration of historical events to ClickHouse/TimescaleDB.
 Cross-Tenant Leaks	Heavy enforcement of PostgreSQL Row Level Security (RLS) and standardized Redis key namespacing (tenant:{id}:*).
 Worker Zombie Tasks	Implementation of a locked_by column in the database and Redis-based heartbeats for every active worker.

@@ -27,9 +27,9 @@ DLQ_NAME = "central_system_dlq"
 # SMTP config for centralized system (Gmail)
 SMTP_HOST = os.getenv("SYSTEM_SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SYSTEM_SMTP_PORT", "587"))
-SMTP_USERNAME = os.getenv("SYSTEM_SMTP_USERNAME", "shrflow.app@gmail.com")
+SMTP_USERNAME = os.getenv("SYSTEM_SMTP_USERNAME", "shrmail.app@gmail.com")
 SMTP_PASSWORD = os.getenv("SYSTEM_SMTP_PASSWORD", "")
-FROM_EMAIL = os.getenv("SYSTEM_SMTP_FROM_EMAIL", "shrflow.app@gmail.com")
+FROM_EMAIL = os.getenv("SYSTEM_SMTP_FROM_EMAIL", "shrmail.app@gmail.com")
 FROM_NAME = os.getenv("SYSTEM_SMTP_FROM_NAME", "ShrFlow")
 
 # Jinja2 environment setup

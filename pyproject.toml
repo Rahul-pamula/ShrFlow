@@ -1,7 +1,7 @@
 [project]
-name = "sh_r_mail_platform"
+name = "shrflow_platform"
 version = "0.1.0"
-description = "Sh_R_Mail Email Engine Platform"
+description = "ShrFlow Email Engine Platform"
 requires-python = ">=3.11"
 
 [tool.ruff]
