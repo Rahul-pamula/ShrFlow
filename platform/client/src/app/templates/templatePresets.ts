@@ -46,7 +46,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
           columns: [
             {
               id: "col-p1", width: 50, blocks: [
-                { id: "p-img-1", type: "image", props: { src: "https://via.placeholder.com/250x200/e2e8f0/4f46e5?text=Product+1", alt: "Product 1", align: "center" } },
+                { id: "p-img-1", type: "image", props: { src: "https://placehold.co/250x200/e2e8f0/4f46e5?text=Product+1", alt: "Product 1", align: "center" } },
                 { id: "p-title-1", type: "text", props: { content: "Premium Sneakers", fontSize: 18, align: "center" } },
                 { id: "p-price-1", type: "text", props: { content: "$79.99", fontSize: 16, color: "#4f46e5", align: "center" } },
                 { id: "p-btn-1", type: "button", props: { text: "Buy Now", url: "#", backgroundColor: "#111827", color: "#ffffff", align: "center", borderRadius: 4, padding: 10 } },
@@ -54,7 +54,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
             },
             {
               id: "col-p2", width: 50, blocks: [
-                { id: "p-img-2", type: "image", props: { src: "https://via.placeholder.com/250x200/e2e8f0/4f46e5?text=Product+2", alt: "Product 2", align: "center" } },
+                { id: "p-img-2", type: "image", props: { src: "https://placehold.co/250x200/e2e8f0/4f46e5?text=Product+2", alt: "Product 2", align: "center" } },
                 { id: "p-title-2", type: "text", props: { content: "Smart Watch", fontSize: 18, align: "center" } },
                 { id: "p-price-2", type: "text", props: { content: "$129.99", fontSize: 16, color: "#4f46e5", align: "center" } },
                 { id: "p-btn-2", type: "button", props: { text: "Buy Now", url: "#", backgroundColor: "#111827", color: "#ffffff", align: "center", borderRadius: 4, padding: 10 } },

@@ -6,7 +6,7 @@ import {
     Bold, Italic, Link as LinkIcon, Facebook, Instagram, Twitter, Linkedin,
     Youtube, MessageCircle
 } from "lucide-react";
-import { DesignJSON, DesignBlock, SelectedNode, BLOCK_DEFAULTS, BlockType } from "./types";
+import { DesignJSON, DesignBlock, SelectedNode, BLOCK_DEFAULTS, BlockType, BrandTypography } from "./types";
 
 // ── STABLE TEXT COMPONENT (Prevents React from overwriting typed content) ──
 const StableText = React.memo(({ content, isSelected, style, onBlur, onDoubleClick, linkUrl }: any) => {
@@ -172,7 +172,7 @@ function FloatingToolbar({ block, onUpdate, position, onDuplicate, onDelete, onA
 
 // ── EDITABLE BLOCK RENDERER ────────────────────────────────────────────────
 export function EditableBlock({
-    block, isSelected, isHovered, onSelect, onHover, onLeave, onUpdate, onBulkUpdate, onDuplicate, onDelete, zone, index, design, viewMode, draggedBlockId, setDropIndicator
+    block, isSelected, isHovered, onSelect, onHover, onLeave, onUpdate, onBulkUpdate, onDuplicate, onDelete, zone, index, design, viewMode, draggedBlockId, setDropIndicator, brandTypography
 }: {
     block: DesignBlock; isSelected: boolean; isHovered: boolean;
     onSelect: () => void; onHover: () => void; onLeave: () => void;
@@ -184,6 +184,7 @@ export function EditableBlock({
     viewMode: "desktop" | "mobile";
     draggedBlockId: React.MutableRefObject<{ id: string, zone: string } | null>;
     setDropIndicator: (val: { zone: string, index: number, y: number } | null) => void;
+    brandTypography?: BrandTypography;
 }) {
     const blockRef = useRef<HTMLDivElement>(null);
     const [localDragging, setLocalDragging] = useState(false);
@@ -193,6 +194,7 @@ export function EditableBlock({
     const toolbarRef = useRef<HTMLDivElement>(null);
     const [toolbarPos, setToolbarPos] = useState<{ top: number; left: number } | null>(null);
     const [isDragging, setIsDragging] = useState(false);
+    const [isDraggable, setIsDraggable] = useState(false);
     const [tmpPos, setTmpPos] = useState<{ x: number, y: number } | null>(null);
     const dragOffset = useRef({ x: 0, y: 0 });
     const longPressTimer = useRef<NodeJS.Timeout | null>(null);
@@ -205,11 +207,28 @@ export function EditableBlock({
 
     const handleSelect = () => {
         onSelect();
+        // The useEffect will handle positioning, but we can do an immediate one too
         if (blockRef.current) {
             const rect = blockRef.current.getBoundingClientRect();
             setToolbarPos({ top: rect.top, left: rect.left + rect.width / 2 });
         }
     };
+
+    React.useEffect(() => {
+        const updatePos = () => {
+            if (isSelected && blockRef.current) {
+                const rect = blockRef.current.getBoundingClientRect();
+                setToolbarPos({ top: rect.top, left: rect.left + rect.width / 2 });
+            }
+        };
+        updatePos();
+        window.addEventListener("canvas-scroll", updatePos);
+        window.addEventListener("resize", updatePos);
+        return () => {
+            window.removeEventListener("canvas-scroll", updatePos);
+            window.removeEventListener("resize", updatePos);
+        };
+    }, [isSelected, block.props]);
 
     const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
         onUpdate("content", e.currentTarget.innerHTML);
@@ -302,6 +321,9 @@ export function EditableBlock({
 
     const renderBlock = () => {
         const p = block.props;
+        const scale = (viewMode === "mobile" && brandTypography) ? brandTypography.mobileScale : 1;
+        const getFontSize = (size: number) => Math.round(size * scale);
+
         switch (block.type) {
             case "text":
             case "floating-text": {
@@ -338,10 +360,12 @@ export function EditableBlock({
                                 }
                             }}
                             style={{
-                                fontSize: p.fontSize || 16, color: p.color || design.theme.paragraphColor || "#475569",
+                                fontSize: getFontSize(p.fontSize || 16), color: p.color || design.theme.paragraphColor || "#475569",
                                 textAlign: (p.align as any) || "left", fontWeight: p.fontWeight || "normal",
                                 fontStyle: p.fontStyle || "normal", fontFamily: p.fontFamily || "inherit",
-                                lineHeight: 1.6, outline: "none", minHeight: 24, cursor: isSelected ? "text" : (isFloating ? "move" : "pointer"),
+                                lineHeight: p.lineHeight || 1.6, 
+                                letterSpacing: p.letterSpacing ? `${p.letterSpacing}px` : "normal",
+                                outline: "none", minHeight: 24, cursor: isSelected ? "text" : (isFloating ? "move" : "pointer"),
                             }}
                         />
                     </div>
@@ -366,6 +390,7 @@ export function EditableBlock({
                                 height: "auto", 
                                 borderRadius: p.borderRadius || design.theme.borderRadius || 4, 
                                 display: "block",
+                                boxShadow: p.shadow ? `0 ${p.shadow}px ${p.shadow * 3}px ${p.shadowColor || "rgba(0,0,0,0.1)"}` : "none",
                                 cursor: p.linkUrl ? "pointer" : "default" 
                             }} 
                         />
@@ -388,6 +413,7 @@ export function EditableBlock({
                                 borderRadius: p.borderRadius || design.theme.borderRadius || 0,
                                 border: `${p.borderWidth || 0}px solid ${p.borderColor || "transparent"}`,
                                 display: "block",
+                                boxShadow: p.shadow ? `0 ${p.shadow}px ${p.shadow * 3}px ${p.shadowColor || "rgba(0,0,0,0.1)"}` : "none",
                                 cursor: p.linkUrl ? "pointer" : "move"
                             }} 
                         />
@@ -397,6 +423,11 @@ export function EditableBlock({
                 return (
                     <div style={{ textAlign: (p.align as any) || "center" }}>
                         <div 
+                            onClick={(e) => {
+                                if (p.url && p.url !== "#") {
+                                    cleanOpen(p.url);
+                                }
+                            }}
                             onDoubleClick={(e) => {
                                 e.stopPropagation();
                                 cleanOpen(p.url);
@@ -421,9 +452,15 @@ export function EditableBlock({
                             }}
                             style={{
                                 display: "inline-block", padding: `14px 28px`,
-                                background: p.backgroundColor || "#6366F1", color: p.color || "#fff",
+                                background: p.backgroundColor || design.theme.primaryColor || "#6366F1", 
+                                color: p.color || "#fff",
+                                border: `${p.borderWidth || 0}px solid ${p.borderColor || "transparent"}`,
                                 borderRadius: p.borderRadius || design.theme.borderRadius || 8, textDecoration: "none",
-                                fontWeight: 600, fontSize: p.fontSize || 14, cursor: isSelected ? "pointer" : "default",
+                                fontWeight: p.fontWeight || 600, fontSize: getFontSize(p.fontSize || 14), 
+                                lineHeight: p.lineHeight || 1,
+                                letterSpacing: p.letterSpacing ? `${p.letterSpacing}px` : "normal",
+                                boxShadow: p.shadow ? `0 ${p.shadow}px ${p.shadow * 3}px ${p.shadowColor || "rgba(0,0,0,0.2)"}` : "none",
+                                cursor: isSelected ? "pointer" : "default",
                                 transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                             }}>{p.text || "Button"}</div>
                     </div>
@@ -525,8 +562,15 @@ export function EditableBlock({
             case "hero":
                 return (
                     <div style={{ background: p.bgColor || "#6366F1", padding: "40px 24px", borderRadius: 12, textAlign: "center" }}>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: p.textColor || "#fff", marginBottom: 8 }}>{p.headline || "Hero Headline"}</div>
-                        <div style={{ fontSize: 15, color: "rgba(255,255,255,0.8)", marginBottom: p.btnText ? 24 : 0 }}>{p.subheadline || "Subheadline text"}</div>
+                        <div style={{ 
+                            fontSize: getFontSize(p.fontSize || 24), fontWeight: p.fontWeight || 700, color: p.textColor || "#fff", marginBottom: 8,
+                            lineHeight: p.lineHeight || 1.2,
+                            letterSpacing: p.letterSpacing ? `${p.letterSpacing}px` : "normal"
+                        }}>{p.headline || "Hero Headline"}</div>
+                        <div style={{ 
+                            fontSize: 15, color: "rgba(255,255,255,0.8)", marginBottom: p.btnText ? 24 : 0,
+                            lineHeight: 1.5
+                        }}>{p.subheadline || "Subheadline text"}</div>
                          {p.btnText && (
                             <div 
                                 onDoubleClick={(e) => {
@@ -540,6 +584,19 @@ export function EditableBlock({
                                 {p.btnText}
                             </div>
                         )}
+                    </div>
+                );
+            case "footer":
+                return (
+                    <div style={{ padding: "32px 20px", textAlign: (p.align as any) || "center" }}>
+                        <div style={{ 
+                            fontSize: getFontSize(p.fontSize || 12), 
+                            color: p.color || "#9CA3AF",
+                            lineHeight: p.lineHeight || 1.5,
+                            letterSpacing: p.letterSpacing ? `${p.letterSpacing}px` : "normal"
+                        }}>
+                            {p.content || "© Company · Unsubscribe"}
+                        </div>
                     </div>
                 );
             case "shape":
@@ -558,6 +615,7 @@ export function EditableBlock({
                                     backgroundColor: p.backgroundColor || "#6366F1",
                                     border: `${p.borderWidth || 0}px solid ${p.borderColor || "transparent"}`,
                                     borderRadius: p.shapeType === "circle" ? "50%" : (p.borderRadius || 0),
+                                    boxShadow: p.shadow ? `0 ${p.shadow}px ${p.shadow * 3}px ${p.shadowColor || "rgba(0,0,0,0.1)"}` : "none",
                                 }} />
                             )}
                         </div>
@@ -624,7 +682,7 @@ export function EditableBlock({
                 onLeave();
                 endLongPress();
             }}
-            draggable={(block.type === "text" || block.type === "image" || block.type === "floating-text" || block.type === "floating-image")}
+            draggable={isDraggable && (block.type === "text" || block.type === "image" || block.type === "floating-text" || block.type === "floating-image")}
             onDragStart={(e) => {
                 if (window.getSelection()) window.getSelection()!.removeAllRanges();
 
@@ -680,6 +738,8 @@ export function EditableBlock({
             {/* ── Visual Grip Handle for Selected Blocks ── */}
             {(block.type === "floating-text" || block.type === "text" || block.type === "floating-image" || block.type === "image") && isSelected && (
                 <div 
+                    onMouseEnter={() => setIsDraggable(true)}
+                    onMouseLeave={() => setIsDraggable(false)}
                     style={{
                         position: "absolute",
                         top: -12,
@@ -721,11 +781,11 @@ export function EditableBlock({
 
 // ── CANVAS COMPONENT ───────────────────────────────────────────────────────
 export default function EditorCanvas({
-    design, selectedNode, hoveredBlock, viewMode,
+    design, brandTypography, selectedNode, hoveredBlock, viewMode,
     onSelectNode, onHoverBlock, onLeaveBlock,
     onUpdateBlockProp, onBulkUpdateBlock, onAddBlockToZone, onMoveBlock, onDuplicateBlock, onDeleteBlock,
 }: {
-    design: DesignJSON; selectedNode: SelectedNode | null; hoveredBlock: string | null; viewMode: "desktop" | "mobile";
+    design: DesignJSON; brandTypography?: BrandTypography; selectedNode: SelectedNode | null; hoveredBlock: string | null; viewMode: "desktop" | "mobile";
     onSelectNode: (node: SelectedNode | null) => void; onHoverBlock: (id: string) => void; onLeaveBlock: () => void;
     onUpdateBlockProp: (blockId: string, key: string, val: any) => void;
     onBulkUpdateBlock: (blockId: string, updates: Record<string, any>, newType?: BlockType) => void;
@@ -758,11 +818,12 @@ export default function EditorCanvas({
                     borderTop: zone !== "header" ? "1px dashed rgba(0,0,0,0.05)" : "none"
                 }}
                 onDragOver={(e) => { 
+                    // Let the canvas handle detection for cross-zone and indexing, 
+                    // but we still need preventDefault to allow dropping.
                     e.preventDefault(); 
-                    e.currentTarget.style.background = `${zoneColors[zone]}08`; 
                 }}
                 onDragLeave={(e) => { 
-                    e.currentTarget.style.background = "transparent"; 
+                    // Clean up highlight if needed
                 }}
                 onClick={(e) => {
                     // Only trigger if clicking the zone background itself, not a block
@@ -805,6 +866,7 @@ export default function EditorCanvas({
                                     viewMode={viewMode}
                                     draggedBlockId={draggedBlockId}
                                     setDropIndicator={setDropIndicator}
+                                    brandTypography={brandTypography}
                                 />
                             </React.Fragment>
                         );
@@ -828,24 +890,31 @@ export default function EditorCanvas({
     };
 
     return (
-        <div style={{ 
+        <div 
+            id="editor-scroll-container"
+            style={{ 
             flex: 1, 
-            display: "flex", 
-            justifyContent: "center", 
-            minHeight: "100%", 
+            display: "block", 
+            minHeight: 0, 
+            height: "100%", 
             width: "100%", 
             paddingTop: 20, 
-            overflow: "auto",
+            paddingBottom: 40,
+            overflowY: "auto",
+            overflowX: "hidden",
             backgroundColor: viewMode === "mobile" ? "#0F172A" : "transparent", // Dark room for mobile
             transition: "background-color 0.4s ease"
-        }} onClick={() => onSelectNode(null)}>
+        }} 
+        onClick={() => onSelectNode(null)}
+        onScroll={() => window.dispatchEvent(new Event("canvas-scroll"))}
+        >
             <div data-canvas-wrapper className={viewMode === "mobile" ? "mobile-frame" : ""} style={{ 
+                margin: "0 auto",
                 width: viewMode === "desktop" ? 600 : 375, 
                 height: viewMode === "mobile" ? 667 : "auto",
                 transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)", 
                 position: "relative",
-                display: "flex",
-                justifyContent: "center",
+                display: "block",
                 backgroundColor: viewMode === "mobile" ? "#0F172A" : "transparent", // FORCE DARK BACKGROUND
                 overflow: viewMode === "mobile" ? "auto" : "visible",
                 paddingLeft: viewMode === "mobile" ? 24 : 0, // More generous gutter
@@ -867,14 +936,9 @@ export default function EditorCanvas({
                         let indicatorY = 0;
 
                         if (zoneNodes.length > 0) {
-                            const firstRect = zoneNodes[0].getBoundingClientRect();
-                            const lastRect = zoneNodes[zoneNodes.length - 1].getBoundingClientRect();
-                            
-                            if (e.clientY <= firstRect.bottom) targetZone = zoneNodes[0].getAttribute('data-zone');
-                            else if (e.clientY >= lastRect.top) targetZone = zoneNodes[zoneNodes.length - 1].getAttribute('data-zone');
-
                             for (const node of zoneNodes) {
                                 const nodeRect = node.getBoundingClientRect();
+                                // Check if we are inside or closest to this zone
                                 if (e.clientY >= nodeRect.top && e.clientY <= nodeRect.bottom) {
                                     targetZone = node.getAttribute('data-zone');
                                     break;
@@ -883,14 +947,14 @@ export default function EditorCanvas({
                         }
 
                         // Calculate index within the final targetZone
-                        const targetNode = e.currentTarget.querySelector(`[data-zone="${targetZone}"]`);
+                        const targetNode = e.currentTarget.querySelector(`[data-zone="${targetZone}"]`) as HTMLElement;
                         if (targetNode) {
                             const allInZone = Array.from(targetNode.querySelectorAll('[data-block-id]'));
                             const otherNodes = allInZone.filter(n => n.getAttribute('data-block-id') !== draggedId);
                             
                             destIndex = otherNodes.length;
                             const tRect = targetNode.getBoundingClientRect();
-                            indicatorY = tRect.bottom - rect.top; // Bottom of zone by default
+                            indicatorY = tRect.bottom - rect.top; 
 
                             for (let i = 0; i < otherNodes.length; i++) {
                                 const bRect = (otherNodes[i] as HTMLElement).getBoundingClientRect();
@@ -944,7 +1008,9 @@ export default function EditorCanvas({
                         flexDirection: "column",
                         padding: "0",
                         transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
-                        position: "relative"
+                        position: "relative",
+                        fontFamily: design.settings?.global?.fontFamily || design.theme.fontFamily,
+                        filter: design.settings?.global?.darkMode ? "invert(1) hue-rotate(180deg)" : "none",
                     }}>
                     {renderZone("header", design.headerBlocks)}
                     {renderZone("body", design.bodyBlocks)}

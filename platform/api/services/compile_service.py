@@ -320,6 +320,7 @@ def compile_mjml_to_html(mjml_string: str) -> str:
             ["npx", "-y", "mjml", tmp_path, "-s"],
             capture_output=True,
             text=True,
+            shell=os.name == "nt"
         )
         if result.returncode != 0:
             raise RuntimeError(f"MJML compilation error: {result.stderr}")

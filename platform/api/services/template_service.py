@@ -2,6 +2,7 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID
 from utils.supabase_client import db
 from models.template import TemplateCreate, TemplateUpdate
+from services.compile_service import compile_design_json
 
 class TemplateService:
 
@@ -16,15 +17,29 @@ class TemplateService:
         elif design_data and hasattr(design_data, 'dict'):
             design_data = design_data.dict()
 
+        # Auto-compile HTML if design_json is provided
+        compiled_html = template.compiled_html
+        is_placeholder = compiled_html in [None, "", "<p>Loading…</p>", "<p>Rendering failed...</p>"]
+        
+        if design_data and is_placeholder:
+            try:
+                compiled_html = compile_design_json(design_data)
+            except Exception as e:
+                print(f"Auto-compile failed on creation: {e}")
+                compiled_html = "<p>Rendering failed...</p>"
+
         insert_data = {
             "tenant_id": tenant_id,
             "name": template.name,
             "subject": template.subject,
             "category": template.category,
             "created_by_user_id": user_id,
-            "mjml_json": {"design_json": design_data} if design_data else {},
+            "mjml_json": {
+                "design_json": design_data,
+                "preview": template.preview or ""
+            } if design_data or template.preview else {},
             "mjml_source": "",
-            "compiled_html": template.compiled_html or "<p>Loading…</p>",
+            "compiled_html": compiled_html or "<p>Loading…</p>",
             "plain_text": template.plain_text,
             "version": 1,
         }
@@ -99,9 +114,30 @@ class TemplateService:
         if template.plain_text is not None:
             update_data["plain_text"] = template.plain_text
 
-        # Store design_json inside mjml_json column
+        # Store design_json and preview inside mjml_json column (workaround for missing preview column)
+        mjml_data = existing.get("mjml_json") or {}
+        if not isinstance(mjml_data, dict):
+            mjml_data = {}
+            
         if template.design_json is not None:
-            update_data["mjml_json"] = {"design_json": template.design_json}
+            mjml_data["design_json"] = template.design_json
+        if template.preview is not None:
+            mjml_data["preview"] = template.preview
+            
+        if template.design_json is not None or template.preview is not None:
+            update_data["mjml_json"] = mjml_data
+            
+            # If design_json was updated, also update compiled_html
+            existing_html = existing.get("compiled_html") or update_data.get("compiled_html")
+            html_placeholder = existing_html in [None, "", "<p>Loading…</p>", "<p>Rendering failed...</p>"]
+            
+            # Trigger compilation if we have design data and (no HTML or it's a placeholder)
+            design_for_comp = mjml_data.get("design_json")
+            if design_for_comp and (template.compiled_html is None or html_placeholder):
+                try:
+                    update_data["compiled_html"] = compile_design_json(design_for_comp)
+                except Exception as e:
+                    print(f"Auto-compile failed on update: {e}")
 
         if not update_data:
             return existing
@@ -133,14 +169,16 @@ class TemplateService:
     @staticmethod
     def _unpack_design(row: Dict[str, Any]) -> Dict[str, Any]:
         """
-        The DB stores design_json inside the mjml_json JSONB column.
-        This unpacks it so the API response has a top-level design_json field.
+        The DB stores design_json and preview inside the mjml_json JSONB column.
+        This unpacks them so the API response has top-level fields.
         """
         mjml = row.get("mjml_json") or {}
-        if isinstance(mjml, dict) and "design_json" in mjml:
-            row["design_json"] = mjml["design_json"]
+        if isinstance(mjml, dict):
+            row["design_json"] = mjml.get("design_json")
+            row["preview"] = mjml.get("preview") or ""
         else:
             row["design_json"] = None
+            row["preview"] = ""
 
         # Ensure field compatibility with Pydantic response model
         row.setdefault("template_type", "block")

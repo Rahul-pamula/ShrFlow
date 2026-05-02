@@ -8,6 +8,7 @@ import { can } from "@/utils/permissions";
 
 import { TEMPLATE_PRESETS } from "./templatePresets";
 import { Button, ConfirmModal, FilterBar, EmptyState, PageHeader, SectionCard, StatCard, useToast } from "@/components/ui";
+import ScaledPreview from "@/components/editor/ScaledPreview";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
@@ -25,6 +26,15 @@ interface Template {
     design_json?: { editor?: string; [key: string]: any };
 }
 
+const ColorfulPlusIcon = ({ className }: { className?: string }) => (
+    <svg viewBox="0 0 36 36" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="16" y="6" width="4" height="10" fill="#EA4335" />
+        <rect x="16" y="20" width="4" height="10" fill="#34A853" />
+        <rect x="6" y="16" width="10" height="4" fill="#FBBC04" />
+        <rect x="16" y="16" width="14" height="4" fill="#4285F4" />
+    </svg>
+);
+
 export default function TemplatesPage() {
     const { token, user, isLoading: authLoading } = useAuth();
 
@@ -39,6 +49,17 @@ export default function TemplatesPage() {
     const [creatingPreset, setCreatingPreset] = useState<string | null>(null);
     const [showAllPresets, setShowAllPresets] = useState(false);
     const [pendingAction, setPendingAction] = useState<{ type: "duplicate" | "delete"; id: string } | null>(null);
+    const [isNamingModalOpen, setIsNamingModalOpen] = useState(false);
+    const [templateName, setTemplateName] = useState("");
+
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get("create") === "true") {
+            setIsNamingModalOpen(true);
+            // Clean up the URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    }, []);
 
     useEffect(() => {
         if (!authLoading) {
@@ -77,7 +98,7 @@ export default function TemplatesPage() {
         if (!preset) return;
 
         if (presetId === "blank") {
-            router.push("/templates/new");
+            setIsNamingModalOpen(true);
             return;
         }
 
@@ -91,15 +112,16 @@ export default function TemplatesPage() {
                     subject: `${preset.name} - Edit subject`,
                     category: preset.category,
                     design_json: preset.design || {},
-                    compiled_html: "<p>Loading…</p>",
+                    compiled_html: null,
                     template_type: "block",
                     schema_version: "2.0.0",
                 }),
             });
 
+
             if (res.ok) {
                 const data = await res.json();
-                router.push(`/templates/${data.id}/builder`);
+                router.push(`/templates/${data.id}/block`);
             } else {
                 error("Failed to create template from preset");
             }
@@ -111,8 +133,42 @@ export default function TemplatesPage() {
         }
     };
 
+    const handleCreateNamedTemplate = async () => {
+        if (!templateName.trim()) return;
+
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_BASE}/templates`, {
+                method: "POST",
+                headers: apiHeaders(token!),
+                body: JSON.stringify({
+                    name: templateName,
+                    subject: `${templateName} - Subject`,
+                    category: "General",
+                    design_json: { theme: { background: "#f3f4f6", contentWidth: 600, fontFamily: "Arial, sans-serif", primaryColor: "#4f46e5" }, rows: [] },
+                    compiled_html: null,
+                    template_type: "block",
+                    schema_version: "2.0.0",
+                }),
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                router.push(`/templates/${data.id}/block?tab=home`);
+            } else {
+                error("Failed to create template");
+            }
+        } catch (err) {
+            console.error(err);
+            error("Error creating template");
+        } finally {
+            setLoading(false);
+            setIsNamingModalOpen(false);
+        }
+    };
+
     const handleEdit = (id: string) => {
-        router.push(`/templates/${id}/builder`);
+        router.push(`/templates/${id}/block`);
     };
 
     const handleDuplicate = async (e: React.MouseEvent, id: string) => {
@@ -180,8 +236,17 @@ export default function TemplatesPage() {
     }
 
     return (
-        <div className="space-y-8 pb-8">
-            <PageHeader
+        <>
+            {/* Background Image Layer specifically for Templates Page */}
+            <div className="pointer-events-none fixed inset-0 z-[-1] overflow-hidden">
+                <div 
+                  className="absolute inset-0 bg-cover bg-center bg-fixed opacity-[0.15] mix-blend-screen"
+                  style={{ backgroundImage: "url('/images/home-bg.jpg')" }}
+                />
+            </div>
+
+            <div className="relative z-10 space-y-8 pb-8">
+                <PageHeader
                 title="Templates"
                 subtitle="Create reusable email layouts, start from proven presets, and keep your sending system visually consistent."
                 action={
@@ -190,7 +255,7 @@ export default function TemplatesPage() {
                             <Sparkles className="h-4 w-4" />
                             {showAllPresets ? "Show Fewer Presets" : "Browse Presets"}
                         </Button>
-                        <Button onClick={() => router.push("/templates/new")}>
+                        <Button onClick={() => setIsNamingModalOpen(true)}>
                             <Plus className="h-4 w-4" />
                             New Template
                         </Button>
@@ -228,7 +293,7 @@ export default function TemplatesPage() {
                             className="group text-left disabled:cursor-wait disabled:opacity-60"
                         >
                             <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)] transition group-hover:border-[var(--accent-border)] group-hover:bg-[var(--bg-hover)]">
-                                <div className="relative aspect-[3/4] overflow-hidden border-b border-[var(--border)] bg-[var(--bg-hover)]">
+                                <div className={`relative aspect-[3/4] overflow-hidden border-b border-[var(--border)] ${!preset.thumbnail ? "bg-white" : "bg-[var(--bg-hover)]"}`}>
                                     {preset.thumbnail ? (
                                         <img
                                             src={preset.thumbnail}
@@ -236,9 +301,8 @@ export default function TemplatesPage() {
                                             className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
                                         />
                                     ) : (
-                                        <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-[var(--text-muted)]">
-                                            <Plus className="h-7 w-7" strokeWidth={1.5} />
-                                            <span className="text-xs font-medium">Blank Canvas</span>
+                                        <div className="flex h-full w-full flex-col items-center justify-center">
+                                            <ColorfulPlusIcon className="h-14 w-14" />
                                         </div>
                                     )}
                                 </div>
@@ -278,7 +342,7 @@ export default function TemplatesPage() {
                         icon={<FileText className="h-10 w-10" />}
                         title={total === 0 ? "No templates yet" : "No matching templates"}
                         description={total === 0 ? "Choose a preset above or start from scratch to create your first reusable template." : "Try adjusting your search or create a new template."}
-                        action={<Button onClick={() => router.push("/templates/new")}>Create Template</Button>}
+                        action={<Button onClick={() => setIsNamingModalOpen(true)}>Create Template</Button>}
                     />
                 ) : (
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -293,11 +357,9 @@ export default function TemplatesPage() {
                                 >
                                     <div className="relative h-40 overflow-hidden border-b border-[var(--border)] bg-[var(--bg-hover)]">
                                         {hasRealHtml ? (
-                                            <iframe
-                                                srcDoc={template.compiled_html}
-                                                title={template.name}
-                                                className="h-[200%] w-[200%] origin-top-left scale-50 border-0 pointer-events-none"
-                                            />
+                                            <div className="h-full w-full">
+                                                <ScaledPreview html={template.compiled_html} scale={0.2} />
+                                            </div>
                                         ) : (
                                             <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-[var(--text-muted)]">
                                                 <FileText className="h-7 w-7" strokeWidth={1.5} />
@@ -361,6 +423,52 @@ export default function TemplatesPage() {
                 confirmLabel={pendingAction?.type === "duplicate" ? "Duplicate" : "Delete"}
                 variant={pendingAction?.type === "duplicate" ? "primary" : "danger"}
             />
+
+            {/* Naming Modal */}
+            {isNamingModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="w-full max-w-md scale-in-center overflow-hidden rounded-[24px] bg-white shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="px-8 pt-8 pb-6">
+                            <h3 className="text-2xl font-bold text-slate-900">Name your template</h3>
+                            <p className="mt-2 text-slate-500">Give your project a name to get started.</p>
+                            
+                            <div className="mt-8">
+                                <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Template Name</label>
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    placeholder="e.g. Monthly Newsletter"
+                                    value={templateName}
+                                    onChange={(e) => setTemplateName(e.target.value)}
+                                    onKeyDown={(e) => e.key === "Enter" && handleCreateNamedTemplate()}
+                                    className="mt-2 h-14 w-full rounded-xl border-2 border-slate-100 bg-slate-50 px-4 text-lg font-medium text-slate-900 outline-none transition-all focus:border-[var(--accent)] focus:bg-white"
+                                />
+                            </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-end gap-3 bg-slate-50/50 px-8 py-6">
+                            <button
+                                onClick={() => {
+                                    setIsNamingModalOpen(false);
+                                    setTemplateName("");
+                                }}
+                                className="rounded-xl px-6 py-3 text-sm font-bold text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleCreateNamedTemplate}
+                                disabled={!templateName.trim() || loading}
+                                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[var(--accent)] to-[var(--ai-accent)] px-8 py-3 text-sm font-bold text-white shadow-lg shadow-[var(--accent)]/20 transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
+                            >
+                                {loading ? "Creating..." : "Next"}
+                                {!loading && <ChevronRight className="h-4 w-4" />}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
+        </>
     );
 }

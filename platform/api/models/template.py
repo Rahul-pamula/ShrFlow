@@ -90,6 +90,7 @@ class TemplateBase(BaseModel):
     compiled_html: Optional[str] = None
     plain_text: Optional[str] = None
 
+    preview: Optional[str] = Field(default="", max_length=1000)
     template_type: str = Field("block")
     schema_version: str = Field("2.0.0")
 
@@ -115,6 +116,7 @@ class TemplateUpdate(BaseModel):
     compiled_html: Optional[str] = None
     plain_text: Optional[str] = None
 
+    preview: Optional[str] = None
     template_type: Optional[str] = None
     schema_version: Optional[str] = None
 

@@ -7,9 +7,10 @@ interface ImageUploadModalProps {
     isOpen: boolean;
     onClose: () => void;
     onUpload: (imageUrl: string) => void;
+    token: string | null;
 }
 
-export default function ImageUploadModal({ isOpen, onClose, onUpload }: ImageUploadModalProps) {
+export default function ImageUploadModal({ isOpen, onClose, onUpload, token }: ImageUploadModalProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [showUrlInput, setShowUrlInput] = React.useState(false);
     const [uploading, setUploading] = React.useState(false);
@@ -36,12 +37,26 @@ export default function ImageUploadModal({ isOpen, onClose, onUpload }: ImageUpl
             try {
                 const res = await fetch(`${API}/assets/upload`, {
                     method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${token}`
+                    },
                     body: formData,
                 });
                 
                 if (!res.ok) {
                     const errorData = await res.json().catch(() => ({}));
-                    throw new Error(errorData.detail || "Upload failed");
+                    let detail = errorData.detail || "Upload failed";
+                    
+                    // Handle FastAPI validation error objects/arrays
+                    if (typeof detail !== "string") {
+                        if (Array.isArray(detail)) {
+                            detail = detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ");
+                        } else {
+                            detail = JSON.stringify(detail);
+                        }
+                    }
+                    
+                    throw new Error(detail);
                 }
                 const data = await res.json();
                 onUpload(data.url);
