@@ -433,27 +433,36 @@ export const ProjectsDashboard = ({ setActiveSidebarTab, loadTemplate, token }: 
             <div style={{ flex: 1, overflowY: "auto", paddingBottom: 60 }}>
                 {viewMode === "starter" ? (
                     <div>
+                        {/* Featured Categories */}
                         {dynamicCategories.map(category => (
                             <HorizontalScrollRow key={category.title} title={category.title} presets={category.presets} onUse={handleUseTemplate} onPreview={handlePreview} />
                         ))}
+
+                        {/* Browse All Section */}
+                        <div style={{ padding: "40px 40px 20px" }}>
+                            <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 40, marginBottom: 24 }}>
+                                <h2 style={{ fontSize: 24, fontWeight: 800, color: "#0F172A", marginBottom: 8 }}>Browse All Templates</h2>
+                                <p style={{ fontSize: 15, color: "#64748B" }}>Explore our full library of {TEMPLATE_PRESETS.length} professionally crafted designs.</p>
+                            </div>
+                            
+                            <div style={{ 
+                                display: "grid", 
+                                gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", 
+                                gap: 24 
+                            }}>
+                                {TEMPLATE_PRESETS
+                                    .filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.description.toLowerCase().includes(searchTerm.toLowerCase()))
+                                    .map(preset => (
+                                        <ProjectCard key={preset.id} preset={preset} onUse={handleUseTemplate} onPreview={handlePreview} />
+                                    ))
+                                }
+                            </div>
+                        </div>
                     </div>
                 ) : (
                     <div style={{ padding: "0 40px" }}>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 24 }}>
-                            <div 
-                                style={{ 
-                                    height: 250, borderRadius: 16, border: "2px dashed #CBD5E1", display: "flex", flexDirection: "column", 
-                                    alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#64748B", transition: "all 0.2s" 
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.borderColor = "#6366F1"}
-                                onMouseLeave={e => e.currentTarget.style.borderColor = "#CBD5E1"}
-                                onClick={() => setActiveSidebarTab("projects")}
-                            >
-                                <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#EEF2FF", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-                                    <Plus size={24} color="#6366F1" />
-                                </div>
-                                <span style={{ fontWeight: 700, fontSize: 15, color: "#0F172A" }}>Create Blank</span>
-                            </div>
+                            {/* Create Blank Card removed per user request */}
                             
                             {dynamicMyProjects.map(preset => (
                                 <ProjectCard key={preset.id} preset={preset} onUse={handleUseTemplate} onPreview={handlePreview} />

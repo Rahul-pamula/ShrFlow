@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+import traceback
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from pydantic import BaseModel
@@ -97,12 +98,28 @@ async def compile_preview_endpoint(
     payload: CompilePreviewRequest,
     jwt_payload: JWTPayload = Depends(require_permission("template:view"))
 ):
-
     """Compiles the given design_json to raw HTML for editor preview."""
     try:
         from services.compile_service import compile_design_json
         html = compile_design_json(payload.design_json)
         return {"html": html}
+    except Exception as e:
+        print(f"ERROR compile_preview: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/validate")
+async def validate_template_endpoint(
+    payload: CompilePreviewRequest,
+    jwt_payload: JWTPayload = Depends(require_permission("template:view"))
+):
+    """Runs pre-flight validation checks on the design."""
+    try:
+        from services.compile_service import compile_design_json, run_preflight_checks
+        html = compile_design_json(payload.design_json)
+        warnings = run_preflight_checks(html, payload.design_json)
+        return {"warnings": warnings}
     except Exception as e:
         raise HTTPException(status_code=500, detail="Access denied.")
 

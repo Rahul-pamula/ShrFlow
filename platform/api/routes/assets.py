@@ -1,83 +1,53 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-
-
-from services.storage import get_storage_provider
-from pydantic import BaseModel
+from typing import List
+import os
 import uuid
-import httpx
+import shutil
+from utils.permissions import require_permission, JWTPayload
 
-class MirrorRequest(BaseModel):
-    url: str
+router = APIRouter(prefix="/assets", tags=["assets"])
 
-from utils.jwt_middleware import require_active_tenant, JWTPayload
-from utils.permissions import require_permission
-
-router = APIRouter(prefix="/assets", tags=["Assets"])
-
+# Ensure uploads directory exists
+UPLOAD_DIR = "uploads"
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
 
 @router.post("/upload")
 async def upload_asset(
     file: UploadFile = File(...),
-    tenant_id: str = Depends(require_active_tenant),
-    jwt_payload: JWTPayload = Depends(require_permission("template:manage"))
+    jwt_payload: JWTPayload = Depends(require_permission("asset:create"))
 ):
+    """Uploads an image file to the server and returns the URL."""
+    
+    # Validate file type
+    allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"File type {file.content_type} not supported. Use JPG, PNG, GIF, WebP, or SVG.")
 
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Only image files are allowed.")
-    
-    storage = get_storage_provider()
-    
-    # Generate a unique filename to avoid collisions
-    ext = file.filename.split(".")[-1] if "." in file.filename else "png"
-    unique_filename = f"{uuid.uuid4()}.{ext}"
-    
+    # Validate file size (max 5MB)
+    MAX_SIZE = 5 * 1024 * 1024
+    content = await file.read()
+    if len(content) > MAX_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Max size is 5MB.")
+    await file.seek(0) # Reset pointer
+
+    # Generate unique filename
+    ext = os.path.splitext(file.filename)[1]
+    if not ext:
+        # Try to infer extension from content type
+        ext_map = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp", "image/svg+xml": ".svg"}
+        ext = ext_map.get(file.content_type, ".bin")
+        
+    filename = f"{uuid.uuid4()}{ext}"
+    file_path = os.path.join(UPLOAD_DIR, filename)
+
     try:
-        print(f"DEBUG: Received upload request for {file.filename} from tenant {tenant_id}")
-        url = await storage.upload(file, unique_filename, tenant_id)
-        print(f"DEBUG: Resource uploaded. URL: {url}")
-        return {"url": url, "filename": unique_filename}
-
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
     except Exception as e:
-        print(f"ERROR in upload_asset: {str(e)}")
-        raise HTTPException(status_code=500, detail="Access denied.")
+        raise HTTPException(status_code=500, detail=f"Could not save file: {str(e)}")
 
-
-@router.post("/mirror")
-async def mirror_asset(
-    request: MirrorRequest,
-    tenant_id: str = Depends(require_active_tenant),
-    jwt_payload: JWTPayload = Depends(require_permission("template:manage"))
-):
-
-    storage = get_storage_provider()
-    try:
-        print(f"DEBUG: Attempting to mirror URL: {request.url}")
-        async with httpx.AsyncClient() as client:
-            response = await client.get(request.url, follow_redirects=True, timeout=10.0)
-            if response.status_code != 200:
-                raise HTTPException(status_code=400, detail=f"Failed to fetch image: {response.status_code}")
-            
-            content_type = response.headers.get("Content-Type", "")
-            if not content_type.startswith("image/"):
-                raise HTTPException(status_code=400, detail="URL does not point to a valid image")
-            
-            # Generate filename
-            ext = content_type.split("/")[-1] if "/" in content_type else "png"
-            if ";" in ext: ext = ext.split(";")[0]
-            unique_filename = f"mirrored-{uuid.uuid4()}.{ext}"
-            
-            url = await storage.upload_bytes(response.content, unique_filename, content_type, tenant_id)
-            print(f"DEBUG: Mirrored to S3. New URL: {url}")
-            return {"url": url, "filename": unique_filename, "original_url": request.url}
-    except Exception as e:
-        print(f"ERROR in mirror_asset: {str(e)}")
-        raise HTTPException(status_code=500, detail="Access denied.")
-
-@router.get("/list")
-async def list_assets(
-    tenant_id: str = Depends(require_active_tenant),
-    jwt_payload: JWTPayload = Depends(require_permission("template:view"))
-):
-    storage = get_storage_provider()
-    return storage.list_files(tenant_id)
-
+    # Return the URL
+    # In a real app, this would be a CDN URL. 
+    # For local dev, we assume the server serves the /uploads directory.
+    return {"url": f"/uploads/{filename}", "filename": filename}

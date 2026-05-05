@@ -16,7 +16,7 @@ ROLE_PERMISSIONS = {
         "campaign:create", "campaign:edit", "contacts:import", "contacts:view",
         "analytics:view", "campaign:view", "team:view", "domains:view", 
         "sender:manage", "template:view", "template:manage", "billing:view",
-        "settings:manage", "workspace:view", "settings:view"
+        "settings:manage", "workspace:view", "settings:view", "asset:create"
     ],
     "ADMIN": [
         "team:invite", "campaign:send", "campaign:manage", "contacts:export",
@@ -24,13 +24,13 @@ ROLE_PERMISSIONS = {
         "campaign:create", "campaign:edit", "contacts:import", "contacts:view",
         "analytics:view", "campaign:view", "team:view", "domains:view",
         "sender:manage", "template:view", "template:manage", "billing:view",
-        "settings:manage", "workspace:view", "settings:view"
+        "settings:manage", "workspace:view", "settings:view", "asset:create"
     ],
     "CREATOR": [
         "campaign:create", "campaign:edit", "contacts:import", "contacts:view",
         "analytics:view", "campaign:view", "team:view", "domains:view",
         "template:view", "template:manage",
-        "workspace:view", "settings:view", "billing:view", "settings:update"
+        "workspace:view", "settings:view", "billing:view", "settings:update", "asset:create"
     ],
     "VIEWER": [
         "analytics:view", "campaign:view", "team:view", "domains:view", "template:view", "billing:view",

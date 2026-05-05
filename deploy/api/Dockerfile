@@ -24,10 +24,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install only runtime system dependencies
+# Install runtime system dependencies: curl, Node.js (for MJML)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
+    gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g mjml \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the compiled virtual environment from the builder

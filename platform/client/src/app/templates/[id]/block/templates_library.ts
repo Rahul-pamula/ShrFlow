@@ -15,7 +15,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for back in stock 1.",
         thumbnail: "https://picsum.photos/seed/angpn6kn/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -89,7 +89,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for new arrivals 2.",
         thumbnail: "https://picsum.photos/seed/8feyz58i/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -167,7 +167,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for new arrivals 3.",
         thumbnail: "https://picsum.photos/seed/xlfv8pdf/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -241,7 +241,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for new arrivals 4.",
         thumbnail: "https://picsum.photos/seed/zzpdqm8g/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -319,7 +319,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for back in stock 5.",
         thumbnail: "https://picsum.photos/seed/ymgafvvz/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#06b6d4",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -393,7 +393,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for flash sale 6.",
         thumbnail: "https://picsum.photos/seed/om14q485/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -471,7 +471,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for flash sale 7.",
         thumbnail: "https://picsum.photos/seed/n2erjexb/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -549,7 +549,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for flash sale 8.",
         thumbnail: "https://picsum.photos/seed/3c4udrm7/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f97316",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -621,7 +621,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for back in stock 9.",
         thumbnail: "https://picsum.photos/seed/482idl99/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -699,7 +699,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for back in stock 10.",
         thumbnail: "https://picsum.photos/seed/s1k6pyf8/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -773,7 +773,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for weekly deals 11.",
         thumbnail: "https://picsum.photos/seed/wcz1jefu/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -851,7 +851,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for weekly deals 12.",
         thumbnail: "https://picsum.photos/seed/k5w2xrvy/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -925,7 +925,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for flash sale 13.",
         thumbnail: "https://picsum.photos/seed/1gr11haa/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -997,7 +997,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for exclusive offer 14.",
         thumbnail: "https://picsum.photos/seed/ija2vxty/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -1069,7 +1069,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for abandoned cart 15.",
         thumbnail: "https://picsum.photos/seed/cfswqonj/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -1141,7 +1141,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for special discount 16.",
         thumbnail: "https://picsum.photos/seed/5j9ns694/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -1219,7 +1219,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for abandoned cart 17.",
         thumbnail: "https://picsum.photos/seed/cz5i9eum/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -1291,7 +1291,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for flash sale 18.",
         thumbnail: "https://picsum.photos/seed/rot5l7gj/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -1365,7 +1365,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for back in stock 19.",
         thumbnail: "https://picsum.photos/seed/xg4qe9zn/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -1443,7 +1443,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for product launch 20.",
         thumbnail: "https://picsum.photos/seed/zlpwrvhi/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -1521,7 +1521,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for daily brief 1.",
         thumbnail: "https://picsum.photos/seed/llsbyoq0/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -1593,7 +1593,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for monthly newsletter 2.",
         thumbnail: "https://picsum.photos/seed/nn5cpgah/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -1665,7 +1665,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for community highlights 3.",
         thumbnail: "https://picsum.photos/seed/8x0c0fnl/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -1737,7 +1737,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for product update 4.",
         thumbnail: "https://picsum.photos/seed/tu4b31c3/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -1809,7 +1809,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for tech trends 5.",
         thumbnail: "https://picsum.photos/seed/i5mq7udd/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -1883,7 +1883,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for tech trends 6.",
         thumbnail: "https://picsum.photos/seed/2mz1fhew/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -1955,7 +1955,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for blog roundup 7.",
         thumbnail: "https://picsum.photos/seed/hf1sgwlz/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f97316",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -2027,7 +2027,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for daily brief 8.",
         thumbnail: "https://picsum.photos/seed/8h24lmu7/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#06b6d4",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -2101,7 +2101,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for industry news 9.",
         thumbnail: "https://picsum.photos/seed/ye1p383a/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -2175,7 +2175,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for industry news 10.",
         thumbnail: "https://picsum.photos/seed/h1dg9sre/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -2249,7 +2249,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for community highlights 11.",
         thumbnail: "https://picsum.photos/seed/8n95vszl/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#6366f1",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -2323,7 +2323,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for industry news 12.",
         thumbnail: "https://picsum.photos/seed/4xh4t5vn/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -2397,7 +2397,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for community highlights 13.",
         thumbnail: "https://picsum.photos/seed/cc6b3f3z/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#06b6d4",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -2469,7 +2469,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for blog roundup 14.",
         thumbnail: "https://picsum.photos/seed/qs8m8rn0/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -2547,7 +2547,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for industry news 15.",
         thumbnail: "https://picsum.photos/seed/kdeqv8lw/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -2625,7 +2625,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for monthly newsletter 16.",
         thumbnail: "https://picsum.photos/seed/fjdd21n9/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -2699,7 +2699,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for product update 17.",
         thumbnail: "https://picsum.photos/seed/nugbjbxh/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -2777,7 +2777,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for product update 18.",
         thumbnail: "https://picsum.photos/seed/h0ka2ke0/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -2855,7 +2855,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for industry news 19.",
         thumbnail: "https://picsum.photos/seed/by7xo5x8/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f97316",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -2929,7 +2929,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for tech trends 20.",
         thumbnail: "https://picsum.photos/seed/36m9qs9g/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -3007,7 +3007,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for partnership 1.",
         thumbnail: "https://picsum.photos/seed/1rga98zp/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -3085,7 +3085,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for welcome aboard 2.",
         thumbnail: "https://picsum.photos/seed/elzw84n9/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -3159,7 +3159,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for policy change 3.",
         thumbnail: "https://picsum.photos/seed/a3n3weaf/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -3231,7 +3231,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for welcome aboard 4.",
         thumbnail: "https://picsum.photos/seed/0h3s6h93/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -3305,7 +3305,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for policy change 5.",
         thumbnail: "https://picsum.photos/seed/6pnoc7qs/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f97316",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -3377,7 +3377,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for policy change 6.",
         thumbnail: "https://picsum.photos/seed/jy69zz3o/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -3455,7 +3455,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for financial review 7.",
         thumbnail: "https://picsum.photos/seed/saelwq9a/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -3527,7 +3527,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for internal memo 8.",
         thumbnail: "https://picsum.photos/seed/o0fb712r/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -3605,7 +3605,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for team meeting 9.",
         thumbnail: "https://picsum.photos/seed/v2a08hhv/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#06b6d4",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -3679,7 +3679,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for partnership 10.",
         thumbnail: "https://picsum.photos/seed/fgg56qv3/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#06b6d4",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -3753,7 +3753,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for strategic plan 11.",
         thumbnail: "https://picsum.photos/seed/qqu3goa5/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -3831,7 +3831,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for policy change 12.",
         thumbnail: "https://picsum.photos/seed/9nn3u63a/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -3905,7 +3905,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for policy change 13.",
         thumbnail: "https://picsum.photos/seed/5aq41wda/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -3977,7 +3977,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for quarterly report 14.",
         thumbnail: "https://picsum.photos/seed/gam02au1/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#06b6d4",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -4049,7 +4049,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for partnership 15.",
         thumbnail: "https://picsum.photos/seed/72tcatdu/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f97316",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -4127,7 +4127,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for welcome aboard 16.",
         thumbnail: "https://picsum.photos/seed/kd632yeo/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -4205,7 +4205,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for financial review 17.",
         thumbnail: "https://picsum.photos/seed/04lulzsb/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -4277,7 +4277,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for investor update 18.",
         thumbnail: "https://picsum.photos/seed/uwxpli80/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -4349,7 +4349,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for policy change 19.",
         thumbnail: "https://picsum.photos/seed/85x98kd7/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -4421,7 +4421,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for strategic plan 20.",
         thumbnail: "https://picsum.photos/seed/v0trh0hu/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -4495,7 +4495,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for trade show 1.",
         thumbnail: "https://picsum.photos/seed/cw1i1g35/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -4569,7 +4569,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for networking 2.",
         thumbnail: "https://picsum.photos/seed/tu87hcac/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -4647,7 +4647,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for networking 3.",
         thumbnail: "https://picsum.photos/seed/gx11tuhe/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -4719,7 +4719,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for meetup 4.",
         thumbnail: "https://picsum.photos/seed/928qfeql/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -4791,7 +4791,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for conference 5.",
         thumbnail: "https://picsum.photos/seed/pp3wos19/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -4863,7 +4863,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for virtual event 6.",
         thumbnail: "https://picsum.photos/seed/7nntur3z/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f97316",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -4935,7 +4935,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for conference 7.",
         thumbnail: "https://picsum.photos/seed/zll82u2s/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#06b6d4",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -5009,7 +5009,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for conference 8.",
         thumbnail: "https://picsum.photos/seed/0blf446e/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -5081,7 +5081,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for live q&a 9.",
         thumbnail: "https://picsum.photos/seed/4b6dchgb/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -5153,7 +5153,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for trade show 10.",
         thumbnail: "https://picsum.photos/seed/gd3a6ub5/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -5225,7 +5225,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for trade show 11.",
         thumbnail: "https://picsum.photos/seed/q4241e4x/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -5299,7 +5299,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for panel discussion 12.",
         thumbnail: "https://picsum.photos/seed/4g9igz4q/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -5373,7 +5373,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for workshop 13.",
         thumbnail: "https://picsum.photos/seed/hubw5czq/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -5451,7 +5451,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for conference 14.",
         thumbnail: "https://picsum.photos/seed/fktfm5q3/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#06b6d4",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -5523,7 +5523,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for meetup 15.",
         thumbnail: "https://picsum.photos/seed/cp5548e4/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -5601,7 +5601,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for live q&a 16.",
         thumbnail: "https://picsum.photos/seed/uycj8air/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -5673,7 +5673,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for workshop 17.",
         thumbnail: "https://picsum.photos/seed/5sqoh5f8/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -5745,7 +5745,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for virtual event 18.",
         thumbnail: "https://picsum.photos/seed/77v9hfzs/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -5823,7 +5823,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for trade show 19.",
         thumbnail: "https://picsum.photos/seed/dkw08qja/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -5897,7 +5897,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for trade show 20.",
         thumbnail: "https://picsum.photos/seed/i6ynbllz/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#6366f1",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -5975,7 +5975,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for gold status 1.",
         thumbnail: "https://picsum.photos/seed/hikh9j0e/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -6047,7 +6047,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for gold status 2.",
         thumbnail: "https://picsum.photos/seed/h0szfw6x/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -6119,7 +6119,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for happy birthday 3.",
         thumbnail: "https://picsum.photos/seed/zpjuiefe/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#6366f1",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -6191,7 +6191,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for points update 4.",
         thumbnail: "https://picsum.photos/seed/jb2vfzcs/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -6265,7 +6265,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for milestone 5.",
         thumbnail: "https://picsum.photos/seed/i4pwp0h5/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -6343,7 +6343,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for gold status 6.",
         thumbnail: "https://picsum.photos/seed/4tjdsdqr/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f97316",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -6415,7 +6415,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for points update 7.",
         thumbnail: "https://picsum.photos/seed/njp86vad/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#6366f1",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -6489,7 +6489,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for level up 8.",
         thumbnail: "https://picsum.photos/seed/fqldc6l4/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -6567,7 +6567,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for vip access 9.",
         thumbnail: "https://picsum.photos/seed/zdt7c1tq/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -6645,7 +6645,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for account anniversary 10.",
         thumbnail: "https://picsum.photos/seed/0lrgbj8k/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -6723,7 +6723,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for gold status 11.",
         thumbnail: "https://picsum.photos/seed/9uq4py63/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -6801,7 +6801,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for account anniversary 12.",
         thumbnail: "https://picsum.photos/seed/8g20zf3e/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#6366f1",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -6879,7 +6879,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for milestone 13.",
         thumbnail: "https://picsum.photos/seed/7vbuu63c/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#6366f1",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -6953,7 +6953,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for gold status 14.",
         thumbnail: "https://picsum.photos/seed/1auwyoux/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#6366f1",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -7025,7 +7025,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for loyalty reward 15.",
         thumbnail: "https://picsum.photos/seed/3iio2h9a/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -7097,7 +7097,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for loyalty reward 16.",
         thumbnail: "https://picsum.photos/seed/gpmejqsp/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -7171,7 +7171,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for milestone 17.",
         thumbnail: "https://picsum.photos/seed/kn8wiu5f/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -7243,7 +7243,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for happy birthday 18.",
         thumbnail: "https://picsum.photos/seed/j1wdzkye/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -7321,7 +7321,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for gold status 19.",
         thumbnail: "https://picsum.photos/seed/7oovy725/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -7395,7 +7395,7 @@ export const TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A beautiful and responsive template for milestone 20.",
         thumbnail: "https://picsum.photos/seed/xi47i28r/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -7470,7 +7470,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A personalized design saved to my library.",
         thumbnail: "https://picsum.photos/seed/b0tj1oit/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -7548,7 +7548,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A personalized design saved to my library.",
         thumbnail: "https://picsum.photos/seed/gah3ue8d/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -7620,7 +7620,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A personalized design saved to my library.",
         thumbnail: "https://picsum.photos/seed/5u600t9r/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -7694,7 +7694,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A personalized design saved to my library.",
         thumbnail: "https://picsum.photos/seed/om4bvr09/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -7766,7 +7766,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A personalized design saved to my library.",
         thumbnail: "https://picsum.photos/seed/v75gpmup/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -7844,7 +7844,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A personalized design saved to my library.",
         thumbnail: "https://picsum.photos/seed/rhznoabp/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -7918,7 +7918,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A personalized design saved to my library.",
         thumbnail: "https://picsum.photos/seed/sn50mwwz/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -7990,7 +7990,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A personalized design saved to my library.",
         thumbnail: "https://picsum.photos/seed/19cvya93/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -8064,7 +8064,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A personalized design saved to my library.",
         thumbnail: "https://picsum.photos/seed/c8fxcfak/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -8138,7 +8138,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A personalized design saved to my library.",
         thumbnail: "https://picsum.photos/seed/rtzud19j/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -8216,7 +8216,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A personalized design saved to my library.",
         thumbnail: "https://picsum.photos/seed/tjf1s0zp/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f97316",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -8290,7 +8290,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A personalized design saved to my library.",
         thumbnail: "https://picsum.photos/seed/ztpusb8h/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#475569",
         "borderRadius": 8,
@@ -8362,7 +8362,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed welcome aboard email template.",
         thumbnail: "https://picsum.photos/seed/pxjg5k8y/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#6366f1",
         "paragraphColor": "#475569",
         "borderRadius": 12,
@@ -8436,7 +8436,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed get started email template.",
         thumbnail: "https://picsum.photos/seed/mhp71bty/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -8510,7 +8510,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed your account is ready email template.",
         thumbnail: "https://picsum.photos/seed/hjcb8gqb/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -8590,7 +8590,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed hello and welcome email template.",
         thumbnail: "https://picsum.photos/seed/d68wuwy4/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#334155",
         "borderRadius": 8,
@@ -8677,7 +8677,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed first steps email template.",
         thumbnail: "https://picsum.photos/seed/ukk3xtnz/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#1e293b",
         "borderRadius": 6,
@@ -8750,7 +8750,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed thanks for joining email template.",
         thumbnail: "https://picsum.photos/seed/tw79702s/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#e2e8f0",
         "borderRadius": 0,
@@ -8823,7 +8823,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed you are in email template.",
         thumbnail: "https://picsum.photos/seed/z7h5ps6i/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#374151",
         "borderRadius": 8,
@@ -8917,7 +8917,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed welcome to the family email template.",
         thumbnail: "https://picsum.photos/seed/faxuj63s/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#475569",
         "borderRadius": 12,
@@ -8991,7 +8991,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed account activated email template.",
         thumbnail: "https://picsum.photos/seed/hl54qjbc/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f97316",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -9065,7 +9065,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed let us begin email template.",
         thumbnail: "https://picsum.photos/seed/xujbko32/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#06b6d4",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -9145,7 +9145,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed your journey starts email template.",
         thumbnail: "https://picsum.photos/seed/tndm72io/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#0ea5e9",
         "paragraphColor": "#334155",
         "borderRadius": 8,
@@ -9232,7 +9232,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed nice to meet you email template.",
         thumbnail: "https://picsum.photos/seed/9zpdneon/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#84cc16",
         "paragraphColor": "#1e293b",
         "borderRadius": 6,
@@ -9305,7 +9305,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed glad you are here email template.",
         thumbnail: "https://picsum.photos/seed/6lj3ipou/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#a855f7",
         "paragraphColor": "#e2e8f0",
         "borderRadius": 0,
@@ -9378,7 +9378,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed welcome gift inside email template.",
         thumbnail: "https://picsum.photos/seed/sdns9eb6/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f43f5e",
         "paragraphColor": "#374151",
         "borderRadius": 8,
@@ -9472,7 +9472,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed start exploring email template.",
         thumbnail: "https://picsum.photos/seed/7vvk9reo/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#22c55e",
         "paragraphColor": "#475569",
         "borderRadius": 12,
@@ -9546,7 +9546,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed order confirmed email template.",
         thumbnail: "https://picsum.photos/seed/jvg235w1/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#6366f1",
         "paragraphColor": "#475569",
         "borderRadius": 12,
@@ -9620,7 +9620,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed your receipt email template.",
         thumbnail: "https://picsum.photos/seed/2yplmxog/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -9694,7 +9694,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed payment successful email template.",
         thumbnail: "https://picsum.photos/seed/4rqny7y7/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -9774,7 +9774,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed order shipped email template.",
         thumbnail: "https://picsum.photos/seed/0dbkzsxc/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#334155",
         "borderRadius": 8,
@@ -9861,7 +9861,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed out for delivery email template.",
         thumbnail: "https://picsum.photos/seed/ifmvkxq7/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#1e293b",
         "borderRadius": 6,
@@ -9934,7 +9934,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed delivered email template.",
         thumbnail: "https://picsum.photos/seed/wul58qx1/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#e2e8f0",
         "borderRadius": 0,
@@ -10007,7 +10007,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed return requested email template.",
         thumbnail: "https://picsum.photos/seed/xsxasw5u/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#374151",
         "borderRadius": 8,
@@ -10101,7 +10101,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed refund processed email template.",
         thumbnail: "https://picsum.photos/seed/2kn5baja/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#475569",
         "borderRadius": 12,
@@ -10175,7 +10175,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed subscription renewed email template.",
         thumbnail: "https://picsum.photos/seed/5tayb0lg/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f97316",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -10249,7 +10249,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed invoice ready email template.",
         thumbnail: "https://picsum.photos/seed/v2jsqs7f/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#06b6d4",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -10329,7 +10329,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed order cancelled email template.",
         thumbnail: "https://picsum.photos/seed/xsh3ewzj/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#0ea5e9",
         "paragraphColor": "#334155",
         "borderRadius": 8,
@@ -10416,7 +10416,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed track your order email template.",
         thumbnail: "https://picsum.photos/seed/03myz2oy/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#84cc16",
         "paragraphColor": "#1e293b",
         "borderRadius": 6,
@@ -10489,7 +10489,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed item back in cart email template.",
         thumbnail: "https://picsum.photos/seed/ijvh83yf/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#a855f7",
         "paragraphColor": "#e2e8f0",
         "borderRadius": 0,
@@ -10562,7 +10562,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed pre-order confirmed email template.",
         thumbnail: "https://picsum.photos/seed/zp4rfycz/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f43f5e",
         "paragraphColor": "#374151",
         "borderRadius": 8,
@@ -10656,7 +10656,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed pickup ready email template.",
         thumbnail: "https://picsum.photos/seed/o3dtwikb/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#22c55e",
         "paragraphColor": "#475569",
         "borderRadius": 12,
@@ -10730,7 +10730,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed introducing email template.",
         thumbnail: "https://picsum.photos/seed/pt9i856e/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#6366f1",
         "paragraphColor": "#475569",
         "borderRadius": 12,
@@ -10804,7 +10804,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed now available email template.",
         thumbnail: "https://picsum.photos/seed/fake5t2a/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -10878,7 +10878,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed meet the new email template.",
         thumbnail: "https://picsum.photos/seed/tjqtt7wt/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -10958,7 +10958,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed just launched email template.",
         thumbnail: "https://picsum.photos/seed/z7bmgaer/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#334155",
         "borderRadius": 8,
@@ -11045,7 +11045,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed first look email template.",
         thumbnail: "https://picsum.photos/seed/rjlxfvmu/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#1e293b",
         "borderRadius": 6,
@@ -11118,7 +11118,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed sneak peek email template.",
         thumbnail: "https://picsum.photos/seed/zv2hih1m/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#e2e8f0",
         "borderRadius": 0,
@@ -11191,7 +11191,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed launching soon email template.",
         thumbnail: "https://picsum.photos/seed/kyhfd0mt/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#374151",
         "borderRadius": 8,
@@ -11285,7 +11285,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed pre-order open email template.",
         thumbnail: "https://picsum.photos/seed/08kl3jpx/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#475569",
         "borderRadius": 12,
@@ -11359,7 +11359,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed limited edition drop email template.",
         thumbnail: "https://picsum.photos/seed/swe51a3h/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f97316",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -11433,7 +11433,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed version 2 point 0 email template.",
         thumbnail: "https://picsum.photos/seed/dx4lvra9/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#06b6d4",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -11513,7 +11513,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed new feature alert email template.",
         thumbnail: "https://picsum.photos/seed/0sjkeqql/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#0ea5e9",
         "paragraphColor": "#334155",
         "borderRadius": 8,
@@ -11600,7 +11600,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed it is here email template.",
         thumbnail: "https://picsum.photos/seed/n0zwpous/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#84cc16",
         "paragraphColor": "#1e293b",
         "borderRadius": 6,
@@ -11673,7 +11673,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed the wait is over email template.",
         thumbnail: "https://picsum.photos/seed/lpx025jg/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#a855f7",
         "paragraphColor": "#e2e8f0",
         "borderRadius": 0,
@@ -11746,7 +11746,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed grand reveal email template.",
         thumbnail: "https://picsum.photos/seed/16guoayg/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f43f5e",
         "paragraphColor": "#374151",
         "borderRadius": 8,
@@ -11840,7 +11840,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed exclusive early access email template.",
         thumbnail: "https://picsum.photos/seed/0eogp3iz/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#22c55e",
         "paragraphColor": "#475569",
         "borderRadius": 12,
@@ -11914,7 +11914,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed happy new year email template.",
         thumbnail: "https://picsum.photos/seed/7vn8vldf/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#6366f1",
         "paragraphColor": "#475569",
         "borderRadius": 12,
@@ -11988,7 +11988,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed valentine day email template.",
         thumbnail: "https://picsum.photos/seed/kkguo6qq/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -12062,7 +12062,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed spring sale email template.",
         thumbnail: "https://picsum.photos/seed/j854nx3g/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -12142,7 +12142,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed easter special email template.",
         thumbnail: "https://picsum.photos/seed/wg7qr9xn/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#334155",
         "borderRadius": 8,
@@ -12229,7 +12229,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed summer kickoff email template.",
         thumbnail: "https://picsum.photos/seed/0tw139oi/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#1e293b",
         "borderRadius": 6,
@@ -12302,7 +12302,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed back to school email template.",
         thumbnail: "https://picsum.photos/seed/t1rfiz6f/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#e2e8f0",
         "borderRadius": 0,
@@ -12375,7 +12375,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed halloween treat email template.",
         thumbnail: "https://picsum.photos/seed/8al04mkd/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#374151",
         "borderRadius": 8,
@@ -12469,7 +12469,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed black friday email template.",
         thumbnail: "https://picsum.photos/seed/msbmq06g/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#475569",
         "borderRadius": 12,
@@ -12543,7 +12543,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed cyber monday email template.",
         thumbnail: "https://picsum.photos/seed/h5z1pdim/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f97316",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -12617,7 +12617,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed christmas gift email template.",
         thumbnail: "https://picsum.photos/seed/p35vdehc/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#06b6d4",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -12697,7 +12697,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed holiday greetings email template.",
         thumbnail: "https://picsum.photos/seed/pi92a7vk/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#0ea5e9",
         "paragraphColor": "#334155",
         "borderRadius": 8,
@@ -12784,7 +12784,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed new year offer email template.",
         thumbnail: "https://picsum.photos/seed/i39t0paj/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#84cc16",
         "paragraphColor": "#1e293b",
         "borderRadius": 6,
@@ -12857,7 +12857,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed festive sale email template.",
         thumbnail: "https://picsum.photos/seed/xoibcjc8/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#a855f7",
         "paragraphColor": "#e2e8f0",
         "borderRadius": 0,
@@ -12930,7 +12930,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed seasons best email template.",
         thumbnail: "https://picsum.photos/seed/wehkpitc/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f43f5e",
         "paragraphColor": "#374151",
         "borderRadius": 8,
@@ -13024,7 +13024,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed year end clearance email template.",
         thumbnail: "https://picsum.photos/seed/9xyopf0m/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#22c55e",
         "paragraphColor": "#475569",
         "borderRadius": 12,
@@ -13098,7 +13098,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed feature update email template.",
         thumbnail: "https://picsum.photos/seed/1y82teqz/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#6366f1",
         "paragraphColor": "#475569",
         "borderRadius": 12,
@@ -13172,7 +13172,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed product changelog email template.",
         thumbnail: "https://picsum.photos/seed/aexwkvhg/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ef4444",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -13246,7 +13246,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed usage report email template.",
         thumbnail: "https://picsum.photos/seed/d02shgmg/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#10b981",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -13326,7 +13326,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed trial ending soon email template.",
         thumbnail: "https://picsum.photos/seed/4neegs2r/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f59e0b",
         "paragraphColor": "#334155",
         "borderRadius": 8,
@@ -13413,7 +13413,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed upgrade your plan email template.",
         thumbnail: "https://picsum.photos/seed/ry6pv2x5/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#3b82f6",
         "paragraphColor": "#1e293b",
         "borderRadius": 6,
@@ -13486,7 +13486,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed api announcement email template.",
         thumbnail: "https://picsum.photos/seed/g2ejurno/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#8b5cf6",
         "paragraphColor": "#e2e8f0",
         "borderRadius": 0,
@@ -13559,7 +13559,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed maintenance notice email template.",
         thumbnail: "https://picsum.photos/seed/h6br9igo/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#ec4899",
         "paragraphColor": "#374151",
         "borderRadius": 8,
@@ -13653,7 +13653,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed new integration email template.",
         thumbnail: "https://picsum.photos/seed/k7bwtvbn/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#14b8a6",
         "paragraphColor": "#475569",
         "borderRadius": 12,
@@ -13727,7 +13727,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed security alert email template.",
         thumbnail: "https://picsum.photos/seed/o7icshqy/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f97316",
         "paragraphColor": "#1e293b",
         "borderRadius": 0,
@@ -13801,7 +13801,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed data export ready email template.",
         thumbnail: "https://picsum.photos/seed/31l72mcl/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#06b6d4",
         "paragraphColor": "#4b5563",
         "borderRadius": 4,
@@ -13881,7 +13881,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed onboarding complete email template.",
         thumbnail: "https://picsum.photos/seed/e43dqhbt/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#0ea5e9",
         "paragraphColor": "#334155",
         "borderRadius": 8,
@@ -13968,7 +13968,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed weekly analytics email template.",
         thumbnail: "https://picsum.photos/seed/rrvsxmeo/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#84cc16",
         "paragraphColor": "#1e293b",
         "borderRadius": 6,
@@ -14041,7 +14041,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed team invite email template.",
         thumbnail: "https://picsum.photos/seed/kbuhcs0q/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#a855f7",
         "paragraphColor": "#e2e8f0",
         "borderRadius": 0,
@@ -14114,7 +14114,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed workspace created email template.",
         thumbnail: "https://picsum.photos/seed/ijs2qq9z/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#f43f5e",
         "paragraphColor": "#374151",
         "borderRadius": 8,
@@ -14208,7 +14208,7 @@ export const MY_TEMPLATE_PRESETS: TemplatePreset[] = [
         description: "A professionally designed pro plan unlocked email template.",
         thumbnail: "https://picsum.photos/seed/7v58zo1d/800/400",
         design: {
-    "theme": {
+    "rows": [], "theme": {
         "primaryColor": "#22c55e",
         "paragraphColor": "#475569",
         "borderRadius": 12,

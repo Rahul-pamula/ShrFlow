@@ -233,6 +233,30 @@ services:
     networks:
       - email_engine_net
 
+  # ── Template Service (Phase 13 Decomposition) ────────────
+  template_service:
+    build:
+      context: .
+      dockerfile: deploy/template_service/Dockerfile
+    container_name: email_engine_template_service
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - ENVIRONMENT=${ENVIRONMENT}
+    volumes:
+      - ./platform/services/template_service:/app/platform/services/template_service
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - email_engine_net
+
 # ── Shared Network ─────────────────────────────────────────
 networks:
   email_engine_net:

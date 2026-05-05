@@ -59,7 +59,8 @@ export default function ImageUploadModal({ isOpen, onClose, onUpload, token }: I
                     throw new Error(detail);
                 }
                 const data = await res.json();
-                onUpload(data.url);
+                const fullUrl = data.url.startsWith("http") ? data.url : `${API}${data.url}`;
+                onUpload(fullUrl);
             } catch (err: any) {
                 setError(err.message || "Failed to upload image.");
             } finally {

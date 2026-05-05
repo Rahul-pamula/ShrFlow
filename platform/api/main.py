@@ -168,9 +168,9 @@ async def retry_on_connection_error(request: Request, call_next):
             return JSONResponse(status_code=503, content={"detail": "Service temporarily unavailable. Please try again."})
 
 # Mount static files directory for assets
-# The directory "assets" will be served at /static/assets
-os.makedirs("assets", exist_ok=True)
-app.mount("/static/assets", StaticFiles(directory="assets"), name="assets")
+# The directory "uploads" will be served at /uploads
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # CRITICAL: Add CORS middleware BEFORE including routers
 app.add_middleware(
@@ -188,6 +188,9 @@ app.include_router(auth.router)
 app.include_router(account.router)
 app.include_router(onboarding.router)
 app.include_router(contacts.router)
+
+# Phase 13 — Template Service (Microservice Decomposition)
+# This domain is currently being extracted to platform/services/template_service
 app.include_router(templates.router)
 app.include_router(assets.router)
 app.include_router(billing.router)

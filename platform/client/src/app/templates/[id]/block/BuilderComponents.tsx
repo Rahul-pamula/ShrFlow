@@ -39,17 +39,26 @@ export const Tab = ({ active, onClick, children, style }: { active: boolean, onC
     </button>
 );
 
-export const DraggableItem = ({ type, label, icon, props, children }: { type: string; label?: string; icon?: React.ReactNode; props?: any; children?: React.ReactNode }) => (
-    <div draggable onDragStart={e => {
-        e.dataTransfer.setData("blockType", type);
-        if (props) e.dataTransfer.setData("blockProps", JSON.stringify(props));
-    }}
-        className="block-card" style={{
+export const DraggableItem = ({ type, label, icon, props, children, restriction, onClick }: { type: string; label?: string; icon?: React.ReactNode; props?: any; children?: React.ReactNode, restriction?: string; onClick?: () => void }) => (
+    <div
+        draggable
+        onDragStart={e => {
+            e.dataTransfer.setData("blockType", type);
+            if (props) e.dataTransfer.setData("blockProps", JSON.stringify(props));
+            if (restriction) {
+                e.dataTransfer.setData("restriction", restriction);
+                e.dataTransfer.setData("x-restriction/" + restriction, "true");
+            }
+        }}
+        onClick={onClick}
+        className="block-card"
+        style={{
             background: "#ffffff", borderRadius: 12, border: "1px solid #F1F5F9",
-            cursor: "grab", transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+            cursor: onClick ? "pointer" : "grab", transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
             boxShadow: "0 1px 3px rgba(0,0,0,0.02)", color: "#475569",
             overflow: "hidden"
-        }}>
+        }}
+    >
         {children ? children : (
             <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{

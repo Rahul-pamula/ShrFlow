@@ -1,19 +1,24 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, Loader2 } from "lucide-react";
+import { 
+    ArrowLeft, Save, Loader2, Monitor, Smartphone, 
+    Layers, MousePointer2, Type, Image as ImageIcon, 
+    Square, Trash2, Copy, AlertCircle, CheckCircle2
+} from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { createClient } from "@supabase/supabase-js";
 import "grapesjs/dist/css/grapes.min.css";
 
+import { GjsMapper } from "./GjsMapper";
+import { TipTapGjsPlugin } from "./TipTapGjsPlugin";
+import { TipTapOverlay } from "./components/TipTapOverlay";
+import { DesignJSON, DEFAULT_THEME, DEFAULT_SETTINGS } from "../block/types";
+
 const API_BASE = "http://localhost:8000";
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default function TemplateBuilderPage({ params }: { params: { id: string } }) {
-    const { token, user } = useAuth();
+    const { token } = useAuth();
     const router = useRouter();
     const editorRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -21,8 +26,15 @@ export default function TemplateBuilderPage({ params }: { params: { id: string }
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [template, setTemplate] = useState<any>(null);
+    const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
+    const [activeTab, setActiveTab] = useState<"blocks" | "settings">("blocks");
+    const [selectedComponent, setSelectedComponent] = useState<any>(null);
+    const [designJson, setDesignJson] = useState<DesignJSON | null>(null);
+    
+    // TipTap State
+    const [tiptapActive, setTiptapActive] = useState<{ el: HTMLElement, component: any } | null>(null);
 
-    // Fetch existing template HTML
+    // Fetch template
     useEffect(() => {
         if (!token) return;
         const fetchTemplate = async () => {
@@ -33,12 +45,19 @@ export default function TemplateBuilderPage({ params }: { params: { id: string }
                 if (res.ok) {
                     const data = await res.json();
                     setTemplate(data);
+                    setDesignJson(data.design_json || { 
+                        rows: [], 
+                        theme: DEFAULT_THEME, 
+                        settings: DEFAULT_SETTINGS, 
+                        headerBlocks: [], 
+                        bodyBlocks: [], 
+                        footerBlocks: [] 
+                    });
                 } else {
-                    alert("Template not found");
                     router.push("/templates");
                 }
             } catch (e) {
-                console.error("Failed to load template", e);
+                console.error("Failed to load", e);
             }
             setLoading(false);
         };
@@ -47,98 +66,75 @@ export default function TemplateBuilderPage({ params }: { params: { id: string }
 
     // Initialize GrapesJS
     useEffect(() => {
-        if (loading || !containerRef.current || !template) return;
-
-        // Ensure window exists (NextJS SSR guard)
-        if (typeof window === "undefined") return;
+        if (loading || !containerRef.current || !designJson) return;
 
         const grapesjs = require("grapesjs");
         const presetMjml = require("grapesjs-mjml");
 
         const editor = grapesjs.init({
             container: containerRef.current,
-            fromElement: true,
-            height: '100vh',
-            width: 'auto',
-            storageManager: false, // We handle saving manually
-            plugins: [presetMjml],
-            pluginsOpts: {
-                [presetMjml]: {
-                    // MJML specific options if needed
-                }
+            height: '100%',
+            width: '100%',
+            storageManager: false,
+            plugins: [presetMjml, TipTapGjsPlugin],
+            canvas: {
+                styles: [
+                    'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
+                    'body { font-family: "Inter", sans-serif; background: #fff; }'
+                ]
             },
-            assetManager: {
-                upload: true,
-                uploadText: "Drop images here or click to upload",
-                handleAdd: async (textFromInput: string) => {
-                    editor.AssetManager.add(textFromInput);
-                }
-            }
+            panels: { defaults: [] }, // Remove default UI
+            blockManager: { custom: true }, // We build our own
         });
 
-        // Set initial HTML or JSON state if it exists
-        if (template.design_json && Object.keys(template.design_json).length > 0) {
-            editor.loadProjectData(template.design_json);
-        } else if (template.html_body) {
-            editor.setComponents(template.html_body);
-        }
+        // Load initial data via Mapper
+        const gjsComponents = GjsMapper.toGjs(designJson);
+        editor.setComponents(gjsComponents);
 
-        // Handle Supabase Upload Interception
-        editor.on('asset:upload:start', () => {
-            console.log("Upload started...");
-        });
-
-        // Add custom upload logic to the Asset Manager
-        editor.AssetManager.addType('image', {
-            view: {
-                onRemove: () => {
-                    // Could implement delete from Supabase here later
-                    console.log("Image removed from canvas");
-                }
-            }
-        });
-
-        // The Custom File Uploader Intercept
-        editor.Config.assetManager.uploadFile = async (e: any) => {
-            const files = e.dataTransfer ? e.dataTransfer.files : e.target.files;
-            if (!files || files.length === 0 || !user?.tenantId) return;
-
-            const am = editor.AssetManager;
-
-            for (let file of files) {
-                try {
-                    // 1. Generate unique filename inside the tenant's folder
-                    const fileExt = file.name.split('.').pop();
-                    const fileName = `${user.tenantId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-
-                    // 2. Upload to Supabase Storage implicitly via JWT/Session 
-                    // Note: In a robust production app, you'd pass the custom token if RLS requires it.
-                    const { data, error } = await supabase.storage
-                        .from('email_assets')
-                        .upload(fileName, file, {
-                            cacheControl: '3600',
-                            upsert: false
-                        });
-
-                    if (error) throw error;
-
-                    // 3. Get Public URL
-                    const { data: { publicUrl } } = supabase.storage
-                        .from('email_assets')
-                        .getPublicUrl(fileName);
-
-                    // 4. Add to GrapesJS Canvas
-                    am.add({
-                        src: publicUrl,
-                        name: file.name
-                    });
-
-                } catch (err: any) {
-                    console.error("Upload failed:", err);
-                    alert("Failed to upload image: " + err.message);
-                }
-            }
+        // Sync changes back to DesignJSON
+        const syncToState = () => {
+            const currentData = {
+                components: editor.getComponents().toJSON(),
+                theme: designJson.theme, // Simplified for now
+                settings: designJson.settings
+            };
+            const newDesign = GjsMapper.fromJson(currentData);
+            setDesignJson(newDesign);
         };
+
+        editor.on('component:update', syncToState);
+        editor.on('component:add', syncToState);
+        editor.on('component:remove', syncToState);
+
+        // TipTap Events
+        editor.on('tiptap:enable', (data: any) => setTiptapActive(data));
+        editor.on('tiptap:disable', () => setTiptapActive(null));
+
+        // Selection Events for Settings
+        editor.on('component:selected', () => {
+            setSelectedComponent(editor.getSelected());
+            setActiveTab("settings");
+        });
+        editor.on('component:deselected', () => {
+            setSelectedComponent(null);
+            setActiveTab("blocks");
+        });
+
+        // Validation Highlighting Helper
+        const highlightErrors = (errors: any[]) => {
+            const wrapper = editor.getWrapper();
+            wrapper.view.$el.find('.gjs-error-pulse').removeClass('gjs-error-pulse'); // Clear old
+            
+            errors.forEach(err => {
+                const comp = editor.getWrapper().find(`[data-block-id="${err.blockId}"]`)[0];
+                if (comp) {
+                    comp.addClass('gjs-error-pulse');
+                    comp.set('badgename', 'Invalid'); // Show validation text
+                }
+            });
+        };
+
+        editor.on('validation:trigger', highlightErrors);
 
         editorRef.current = editor;
 
@@ -147,27 +143,23 @@ export default function TemplateBuilderPage({ params }: { params: { id: string }
                 editorRef.current.destroy();
             }
         };
-    }, [loading, template, user?.tenantId]);
+    }, [loading]);
 
     const handleSave = async () => {
-        if (!editorRef.current || !token) return;
+        if (!editorRef.current || !token || !designJson) return;
         setSaving(true);
 
         try {
-            // Get combined HTML & CSS
-            const html = editorRef.current.getHtml();
-            const css = editorRef.current.getCss();
+            // Get HTML for preview cache
+            const mjml = editorRef.current.getHtml(); // mjml-preset returns MJML from getHtml()
             
-            // Get the GrapesJS drag-and-drop state JSON (this is the Canva magic!)
-            const projectData = editorRef.current.getProjectData();
-
-            // Generate a simple plain text fallback (strip tags)
-            const tmpDiv = document.createElement("div");
-            tmpDiv.innerHTML = html;
-            const plainText = tmpDiv.textContent || tmpDiv.innerText || "";
-
-            // Combine CSS securely inline or inside a style block for the API
-            const finalHtml = `<style>${css}</style>${html}`;
+            // Compile MJML to HTML via API for accurate storage
+            const compileRes = await fetch(`${API_BASE}/templates/compile/preview`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(designJson)
+            });
+            const compiledHtml = await compileRes.text();
 
             const res = await fetch(`${API_BASE}/templates/${params.id}`, {
                 method: "PUT",
@@ -177,105 +169,251 @@ export default function TemplateBuilderPage({ params }: { params: { id: string }
                 },
                 body: JSON.stringify({
                     name: template.name,
-                    category: template.category,
-                    compiled_html: finalHtml, // The raw html string to send in emails
-                    design_json: projectData, // The raw JSON editor state
-                    variables: template.variables
+                    design_json: designJson,
+                    compiled_html: compiledHtml
                 })
             });
 
-            if (res.ok) {
-                // Success
-                router.push("/templates");
-            } else {
-                const data = await res.json();
-                alert(data.detail || "Failed to save template");
-            }
+            if (res.ok) router.push("/templates");
         } catch (e) {
             console.error("Save error", e);
-            alert("An error occurred while saving.");
         }
         setSaving(false);
     };
 
-    if (loading) {
-        return (
-            <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-primary)' }}>
-                <Loader2 className="animate-spin" style={{ width: '32px', height: '32px', color: 'var(--text-muted)' }} />
-            </div>
-        );
-    }
+    if (loading) return (
+        <div className="h-screen w-screen flex items-center justify-center bg-[var(--bg-primary)]">
+            <Loader2 className="animate-spin text-[var(--text-muted)]" size={32} />
+        </div>
+    );
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", height: "100vh", backgroundColor: "var(--bg-primary)" }}>
+        <div className="h-screen flex flex-col bg-[var(--bg-primary)] overflow-hidden font-sans">
             {/* Top Toolbar */}
-            <div style={{
-                height: "60px",
-                borderBottom: "1px solid var(--border)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "0 24px",
-                backgroundColor: "var(--bg-card)",
-                zIndex: 10
-            }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                    <button
-                        onClick={() => router.push("/templates")}
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center" }}
-                    >
-                        <ArrowLeft style={{ width: "20px", height: "20px" }} />
+            <header className="h-14 border-b border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-between px-6 z-50">
+                <div className="flex items-center gap-4">
+                    <button onClick={() => router.push("/templates")} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+                        <ArrowLeft size={20} />
                     </button>
                     <div>
-                        <h1 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
-                            Editing: {template?.name || "Template"}
-                        </h1>
-                        <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>
-                            {template?.category || "No Category"}
-                        </p>
+                        <h1 className="text-sm font-semibold">{template?.name || "Untitled"}</h1>
+                        <div className="flex items-center gap-2">
+                            <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Source of Truth: DesignJSON</p>
+                            <span className="w-1 h-1 bg-[var(--text-muted)] rounded-full"></span>
+                            <p className="text-[10px] text-[var(--accent)] font-bold">STRICT SCHEMA</p>
+                        </div>
                     </div>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <button
-                        onClick={handleSave}
-                        disabled={saving}
-                        style={{
-                            padding: "8px 16px",
-                            backgroundColor: "var(--accent)",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "6px",
-                            cursor: saving ? "wait" : "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            fontWeight: 500,
-                            fontSize: "14px",
-                            opacity: saving ? 0.7 : 1
-                        }}
+                <div className="flex items-center bg-[var(--bg-secondary)] rounded-lg p-1 gap-1">
+                    <button 
+                        onClick={() => { setViewMode("desktop"); editorRef.current?.setDevice("Desktop"); }}
+                        className={`p-1.5 rounded-md transition-all ${viewMode === "desktop" ? "bg-white shadow-sm text-[var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"}`}
                     >
-                        {saving ? <Loader2 className="animate-spin" style={{ width: "16px", height: "16px" }} /> : <Save style={{ width: "16px", height: "16px" }} />}
-                        Save & Exit
+                        <Monitor size={16} />
+                    </button>
+                    <button 
+                        onClick={() => { setViewMode("mobile"); editorRef.current?.setDevice("Mobile"); }}
+                        className={`p-1.5 rounded-md transition-all ${viewMode === "mobile" ? "bg-white shadow-sm text-[var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"}`}
+                    >
+                        <Smartphone size={16} />
                     </button>
                 </div>
+
+                <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="h-9 px-4 bg-[var(--accent)] text-white rounded-lg flex items-center gap-2 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-indigo-500/20"
+                >
+                    {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    Save Template
+                </button>
+            </header>
+
+            <div className="flex-1 flex overflow-hidden">
+                {/* Custom Sidebar */}
+                <aside className="w-72 border-r border-[var(--border)] bg-[var(--bg-card)] flex flex-col overflow-hidden">
+                    <div className="flex border-b border-[var(--border)]">
+                        <button 
+                            onClick={() => setActiveTab("blocks")}
+                            className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === "blocks" ? "text-[var(--accent)] border-b-2 border-[var(--accent)]" : "text-[var(--text-muted)]"}`}
+                        >
+                            Blocks
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab("settings")}
+                            className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === "settings" ? "text-[var(--accent)] border-b-2 border-[var(--accent)]" : "text-[var(--text-muted)]"}`}
+                        >
+                            Settings
+                        </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto">
+                        {activeTab === "blocks" ? (
+                            <div className="flex flex-col">
+                                <div className="p-4 border-b border-[var(--border)]">
+                                    <h3 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest mb-4">Elements</h3>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <BlockIcon icon={<Type size={18}/>} label="Text" onDrag={() => editorRef.current?.runCommand('mjml-get-text')} />
+                                        <BlockIcon icon={<ImageIcon size={18}/>} label="Image" onDrag={() => editorRef.current?.runCommand('mjml-get-image')} />
+                                        <BlockIcon icon={<Square size={18}/>} label="Button" onDrag={() => editorRef.current?.runCommand('mjml-get-button')} />
+                                        <BlockIcon icon={<Layers size={18}/>} label="Row" onDrag={() => editorRef.current?.runCommand('mjml-get-section')} />
+                                    </div>
+                                </div>
+                                <div className="p-4 border-b border-[var(--border)]">
+                                    <h3 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest mb-4">Columns</h3>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <BlockIcon icon={<Layers size={18} className="rotate-90"/>} label="1 Column" onDrag={() => editorRef.current?.runCommand('mjml-get-column')} />
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-4">
+                                {selectedComponent ? (
+                                    <div className="space-y-6">
+                                        <div className="pb-4 border-b border-[var(--border)]">
+                                            <h4 className="text-[10px] font-bold text-[var(--text-muted)] uppercase mb-2">Selected</h4>
+                                            <div className="flex items-center gap-2 text-sm font-medium">
+                                                <Layers size={14} className="text-[var(--accent)]" />
+                                                {selectedComponent.get('type').replace('mj-', '').toUpperCase()}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <PropertyInput 
+                                                label="Background" 
+                                                value={selectedComponent.getAttributes()['background-color'] || "#ffffff"}
+                                                onChange={(val) => selectedComponent.addAttributes({'background-color': val})}
+                                            />
+                                            <PropertyInput 
+                                                label="Padding" 
+                                                value={selectedComponent.getAttributes()['padding'] || "10"}
+                                                onChange={(val) => selectedComponent.addAttributes({'padding': val})}
+                                            />
+                                        </div>
+                                        
+                                        <button 
+                                            onClick={() => { editorRef.current?.runCommand('core:component-delete'); }}
+                                            className="w-full py-2 bg-red-50 text-red-500 rounded-lg text-xs font-semibold border border-red-100 hover:bg-red-100 transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <Trash2 size={14} /> Delete Element
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="h-40 flex flex-col items-center justify-center text-center opacity-40">
+                                        <MousePointer2 size={32} className="mb-2" />
+                                        <p className="text-xs">Select an element<br/>to edit properties</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="p-4 bg-[var(--bg-secondary)] border-t border-[var(--border)]">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase">Status</span>
+                            <div className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                <span className="text-[10px] font-bold text-green-600 uppercase tracking-tighter">Live Sync</span>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+
+                {/* Canvas Area */}
+                <main className="flex-1 bg-[#F1F5F9] relative flex justify-center p-12 overflow-y-auto custom-scrollbar">
+                    <div 
+                        className="transition-all duration-500 ease-in-out relative"
+                        style={{ 
+                            width: viewMode === "mobile" ? 375 : 600,
+                            minHeight: "100%",
+                            backgroundColor: "#fff",
+                            boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.1)",
+                            borderRadius: viewMode === "mobile" ? 24 : 4,
+                            overflow: "hidden",
+                            border: viewMode === "mobile" ? "8px solid #1e293b" : "1px solid transparent"
+                        }}
+                    >
+                        <div ref={containerRef} className="h-full w-full"></div>
+                    </div>
+                    
+                    {/* TipTap Overlay */}
+                    {tiptapActive && (
+                        <TipTapOverlay 
+                            element={tiptapActive.el} 
+                            content={tiptapActive.component.get('content')} 
+                            onSave={(html) => {
+                                tiptapActive.component.set('content', html);
+                                // editorRef.current.trigger('component:update'); 
+                            }}
+                            onClose={() => setTiptapActive(null)}
+                        />
+                    )}
+                </main>
             </div>
 
-            {/* GrapesJS Editor Container */}
-            <div style={{ flex: 1, overflow: "hidden" }}>
-                <div ref={containerRef} style={{ height: "100%" }}></div>
-            </div>
+            <style jsx global>{`
+                .gjs-cv-canvas { background-color: transparent !important; }
+                .gjs-frame { box-shadow: none !important; }
+                .gjs-highlighter { 
+                    outline: 2px solid var(--accent) !important; 
+                    outline-offset: -2px; 
+                    border: none !important; 
+                    background: rgba(99, 102, 241, 0.05) !important;
+                    pointer-events: none;
+                }
+                .gjs-badge { 
+                    background-color: var(--accent) !important; 
+                    font-size: 10px !important; 
+                    padding: 4px 8px !important; 
+                    border-radius: 4px !important; 
+                    font-weight: bold !important;
+                    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
+                }
+                .gjs-error-pulse {
+                    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.3), 0 0 20px rgba(239, 68, 68, 0.2) !important;
+                    animation: gjs-pulse-red 2s infinite;
+                    border-radius: 4px;
+                }
+                @keyframes gjs-pulse-red {
+                    0% { box-shadow: 0 0 0 0px rgba(239, 68, 68, 0.5); }
+                    70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+                    100% { box-shadow: 0 0 0 0px rgba(239, 68, 68, 0); }
+                }
+                .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+            `}</style>
+        </div>
+    );
+}
 
-            {/* Simple CSS override to make GrapesJS play nice with our dark mode body */}
-            <style dangerouslySetInnerHTML={{
-                __html: `
-                .gjs-cv-canvas {
-                    background-color: #ffffff; 
-                }
-                .gjs-block {
-                    box-shadow: none;
-                }
-            `}} />
+function BlockIcon({ icon, label, onDrag }: { icon: React.ReactNode, label: string, onDrag?: () => void }) {
+    return (
+        <div 
+            draggable 
+            onDragStart={onDrag}
+            className="flex flex-col items-center justify-center p-4 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl cursor-grab hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all group active:scale-95"
+        >
+            <div className="mb-2 text-[var(--text-muted)] group-hover:text-[var(--accent)] transition-colors">{icon}</div>
+            <span className="text-[10px] font-medium uppercase tracking-wider">{label}</span>
+        </div>
+    );
+}
+
+function PropertyInput({ label, value, onChange }: { label: string, value: string, onChange: (val: string) => void }) {
+    return (
+        <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{label}</label>
+            <div className="flex gap-2">
+                <input 
+                    type={label === "Background" ? "color" : "text"}
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    className="flex-1 h-9 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-3 text-xs focus:ring-2 focus:ring-[var(--accent)] outline-none transition-all"
+                />
+            </div>
         </div>
     );
 }

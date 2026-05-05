@@ -4,6 +4,11 @@ export type BlockType = "text" | "image" | "button" | "divider" | "spacer" | "so
 export interface DesignBlock { id: string; type: BlockType; props: Record<string, any>; }
 export interface DesignTheme { 
     background: string; 
+    headerBackground?: string;
+    bodyBackground?: string;
+    footerBackground?: string;
+    headerPadding?: number;
+    footerPadding?: number;
     contentWidth: number; 
     fontFamily: string; 
     primaryColor: string; 
@@ -23,19 +28,34 @@ export interface TemplateSettings {
     advanced: { autoSave: boolean };
 }
 
+export interface DesignColumn {
+    blocks: DesignBlock[];
+}
+
+export interface DesignRow {
+    columns: DesignColumn[];
+}
+
 export interface DesignJSON { 
     theme: DesignTheme; 
     settings: TemplateSettings;
+    rows: DesignRow[];
     headerBlocks: DesignBlock[];
     bodyBlocks: DesignBlock[];
     footerBlocks: DesignBlock[];
 }
 
-export interface SelectedNode { type: "block"; id: string; }
+export interface SelectedNode { type: "block" | "page"; id: string; }
 
 // ── DEFAULTS ───────────────────────────────────────────────────────────────
 export const DEFAULT_THEME: DesignTheme = {
-    background: "#f8f9fb", contentWidth: 600,
+    background: "#f8f9fb", 
+    headerBackground: "#ffffff",
+    bodyBackground: "#ffffff",
+    footerBackground: "#f8f9fb",
+    headerPadding: 40,
+    footerPadding: 40,
+    contentWidth: 600,
     fontFamily: "'Inter', Arial, sans-serif", primaryColor: "#6366F1",
     borderRadius: 8, paragraphColor: "#475569",
 };

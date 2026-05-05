@@ -56,7 +56,18 @@ def _render_image(props: Dict[str, Any]) -> str:
     src = _esc(props.get("src", props.get("url", "")))
     alt = _esc(props.get("alt", "Image"))
     width = props.get("width", "")
-    width_attr = f'width="{width}px"' if width and str(width) != "100%" else ""
+    
+    # Sanitize width: force numeric or percentage
+    width_val = str(width).lower()
+    if not width_val or width_val in ["auto", "fit-content"]:
+        width_attr = ""
+    else:
+        # If numeric, add px
+        if width_val.isdigit():
+            width_attr = f'width="{width_val}px"'
+        else:
+            width_attr = f'width="{width_val}"'
+
     return (
         f'<mj-image align="{align}" src="{src}" alt="{alt}" {width_attr} '
         f'padding="10px 0px" />'
@@ -216,6 +227,20 @@ def _render_layout(props: Dict[str, Any]) -> str:
     )
 
 
+def _render_shape(props: Dict[str, Any]) -> str:
+    bg = props.get("backgroundColor", "#cccccc")
+    width = props.get("width", 100)
+    height = props.get("height", 100)
+    radius = props.get("borderRadius", 0)
+    align = props.get("align", "center")
+    
+    style = (
+        f"width:{width}px; height:{height}px; background-color:{bg}; "
+        f"border-radius:{radius}px; margin:0 auto;"
+    )
+    return f'<mj-raw><div style="{style}"></div></mj-raw>'
+
+
 BLOCK_RENDERERS: Dict[str, Any] = {
     "text":    _render_text,
     "image":   _render_image,
@@ -228,6 +253,7 @@ BLOCK_RENDERERS: Dict[str, Any] = {
     "floating-text": _render_floating_text,
     "floating-image": _render_floating_image,
     "layout":  _render_layout,
+    "shape":   _render_shape,
 }
 
 
@@ -317,7 +343,7 @@ def compile_mjml_to_html(mjml_string: str) -> str:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(mjml_string)
         result = subprocess.run(
-            ["npx", "-y", "mjml", tmp_path, "-s"],
+            ["mjml", tmp_path, "-s"],
             capture_output=True,
             text=True,
             shell=os.name == "nt"
