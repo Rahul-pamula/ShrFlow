@@ -1818,8 +1818,8 @@ graph TD
 **WHY:** This is the operating model for how a tenant workspace is actually run after onboarding. It brings workspace settings, member administration, franchise creation, export controls, and governance into one parent phase because all five depend on the same tenant boundary, role model, invitation flow, and audit layer.
 
 ### Phase 8 Parent Architecture Flow
-MIND MAP https://notebooklm.google.com/notebook/92453ebd-4bc6-4655-b7b5-40283155cfbe/artifact/6c91f72e-acba-4d9e-a195-a5d32f6b625c?utm_source=nlm_web_share&utm_medium=google_oo&utm_campaign=art_share_2&utm_content=&utm_smc=nlm_web_share_google_oo_art_share_2_
-
+MIND MAP
+https://notebooklm.google.com/notebook/92453ebd-4bc6-4655-b7b5-40283155cfbe?authuser=5
 ```mermaid
 graph TD
     classDef owner fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff,font-weight:bold,rx:5px,ry:5px;
