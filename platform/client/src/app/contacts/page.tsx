@@ -22,7 +22,9 @@ import {
     Tag,
     ShieldOff,
     ArrowUp,
-    Zap
+    ArrowLeft,
+    Zap,
+    AlertCircle
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { can } from "@/utils/permissions";
@@ -45,6 +47,7 @@ interface Contact {
     last_name: string | null;
     custom_fields: Record<string, string> | null;
     tags?: string[];
+    full_name: string | null;
     created_at: string;
 }
 
@@ -88,12 +91,13 @@ function deriveImportCounts(job: any, fallbackTotal: number) {
     const total = Number(job?.total_rows ?? job?.total_items ?? fallbackTotal ?? 0);
 
     if (job?.processed_rows !== undefined || job?.failed_rows !== undefined) {
-        const success = Number(job?.processed_rows ?? 0);
+        const processed = Number(job?.processed_rows ?? 0);
         const failed = Number(job?.failed_rows ?? 0);
+        const success = Math.max(0, processed - failed);
         return {
             total,
-            success: Math.max(0, Math.min(success, total)),
-            failed: Math.max(0, Math.min(failed, total)),
+            success: Math.min(success, total),
+            failed: Math.min(failed, total),
         };
     }
 
@@ -126,7 +130,7 @@ function ErrorRow({ err, idx, batchId, token, colors, onResolved }: {
     const [email, setEmail] = useState(err.email || "");
     const [firstName, setFirstName] = useState(err.first_name || "");
     const [lastName, setLastName] = useState(err.last_name || "");
-    const [saving, setSaving] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [resolved, setResolved] = useState(false);
 
     const handleResolve = async () => {
@@ -134,29 +138,37 @@ function ErrorRow({ err, idx, batchId, token, colors, onResolved }: {
             error("Email, first name, and last name are all required.");
             return;
         }
-        setSaving(true);
+        setLoading(true);
         try {
             const res = await fetch(`${API_BASE}/contacts/resolve-error`, {
                 method: "POST",
-                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    batch_id: batchId, 
-                    error_index: idx, 
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    batch_id: batchId,
                     email,
                     first_name: firstName,
-                    last_name: lastName
+                    last_name: lastName,
+                    full_name: err.full_name,
+                    error_index: idx
                 })
             });
+
             if (res.ok) {
                 setResolved(true);
                 success(`${email} added successfully.`);
-                setTimeout(onResolved, 500);
+                setTimeout(onResolved, 800);
             } else {
                 const data = await res.json();
-                error(data.detail || "Failed to add contact");
+                error(data.detail || "Failed to add contact.");
             }
-        } catch { error("Error resolving contact"); }
-        setSaving(false);
+        } catch (err) {
+            error("Connection error.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     if (resolved) {
@@ -171,9 +183,9 @@ function ErrorRow({ err, idx, batchId, token, colors, onResolved }: {
 
     return (
         <tr className="border-t border-[var(--danger-border)]">
-            <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{err.row || "—"}</td>
+            <td className="px-3 py-2 text-xs text-[var(--text-muted)] font-mono">{err.row || idx + 1}</td>
             <td className="px-2 py-2">
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1.5">
                     <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (Required)" className="h-8 text-xs" />
                     <div className="flex gap-1">
                         <div className="flex-1">
@@ -183,21 +195,28 @@ function ErrorRow({ err, idx, batchId, token, colors, onResolved }: {
                             <Input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last Name *" className="h-8 text-xs" />
                         </div>
                     </div>
+                    {err.details && (
+                        <div className="text-[10px] text-[var(--text-muted)] italic px-1 opacity-80">
+                            Context: {err.details}
+                        </div>
+                    )}
                 </div>
             </td>
 
-            <td className="px-3 py-2 text-[11px] text-[var(--danger)]">{err.reason}</td>
+            <td className="px-3 py-2 text-[11px] text-[var(--danger)] font-medium leading-relaxed">{err.reason}</td>
             <td className="px-2 py-2">
-                <Button
+                <button 
                     onClick={handleResolve}
-                    disabled={saving || !email.trim() || !firstName.trim() || !lastName.trim()}
-                    size="sm"
-                    variant="success"
-                    isLoading={saving}
-                    className="h-8 text-[11px]"
+                    disabled={loading || !email}
+                    className={`flex h-8 w-8 items-center justify-center rounded-[var(--radius)] border transition-all ${loading ? 'opacity-50' : 'hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)]'}`}
+                    title="Add Contact"
                 >
-                    <Plus className="h-3 w-3" /> Add
-                </Button>
+                    {loading ? (
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    ) : (
+                        <Plus className="h-4 w-4" />
+                    )}
+                </button>
             </td>
         </tr>
     );
@@ -225,10 +244,13 @@ function BatchStatusBadge({ status }: { status: string }) {
     return <Badge variant="info" className="gap-1"><Loader2 className="h-3.5 w-3.5 animate-spin" />Importing</Badge>;
 }
 
-function UploadMetric({ label, value, tone = "default" }: { label: string; value: React.ReactNode; tone?: "default" | "success" | "accent" | "danger" }) {
+function UploadMetric({ label, value, tone = "default", onClick }: { label: string; value: React.ReactNode; tone?: "default" | "success" | "accent" | "danger"; onClick?: () => void }) {
     const toneClass = tone === "success" ? "text-[var(--success)]" : tone === "accent" ? "text-[var(--accent)]" : tone === "danger" ? "text-[var(--danger)]" : "text-[var(--text-primary)]";
     return (
-        <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)] p-4">
+        <div 
+            onClick={onClick}
+            className={`rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)] p-4 transition-all ${onClick ? 'cursor-pointer hover:border-[var(--accent)] hover:shadow-md' : ''}`}
+        >
             <div className="text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">{label}</div>
             <div className={`mt-2 text-xl font-semibold ${toneClass}`}>{value}</div>
         </div>
@@ -291,6 +313,7 @@ export default function ContactsPage() {
     const [batchSearch, setBatchSearch] = useState("");
     const [batchDomainFilter, setBatchDomainFilter] = useState<string | null>(null);
     const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
+    const [showFailedList, setShowFailedList] = useState(false);
 
     // Modals
     const [showUpload, setShowUpload] = useState(false);
@@ -602,6 +625,7 @@ export default function ContactsPage() {
                     email_col: emailCol,
                     first_name_col: getMappedCol("first_name") || null,
                     last_name_col: getMappedCol("last_name") || null,
+                    full_name_col: getMappedCol("full_name") || null,
                     custom_mappings: Object.keys(customMappings).length > 0 ? customMappings : null
                 })
             });
@@ -815,6 +839,7 @@ export default function ContactsPage() {
         
         // 1. Instantly show the expanded row (loading state)
         setExpandedBatch(batch.id);
+        setShowFailedList(false);
         setBatchDomainsLoading(true);
         setBatchContactsLoading(true);
         setBatchSearch("");
@@ -1414,10 +1439,20 @@ export default function ContactsPage() {
                                             <td colSpan={7} className="border-b border-[var(--border)] px-8 py-6">
                                                 <div className="fade-in space-y-5">
                                                     <div className="grid gap-4 md:grid-cols-4">
-                                                        <UploadMetric label="New Contacts" value={b.imported_count || 0} tone="success" />
+                                                        <UploadMetric 
+                                                            label="New Contacts" 
+                                                            value={b.imported_count || 0} 
+                                                            tone="success" 
+                                                            onClick={() => setShowFailedList(false)}
+                                                        />
                                                         <UploadMetric label="Updated" value={getBatchMeta(b).updated || 0} tone="accent" />
                                                         <UploadMetric label="Duplicates" value={getBatchMeta(b).skipped_duplicates || 0} />
-                                                        <UploadMetric label="Failed" value={b.failed_count || 0} tone="danger" />
+                                                        <UploadMetric 
+                                                            label="Failed" 
+                                                            value={b.failed_count || 0} 
+                                                            tone="danger" 
+                                                            onClick={() => b.failed_count > 0 && setShowFailedList(true)}
+                                                        />
                                                     </div>
 
                                                     {batchDomains.some(d => d.suggested_domain) && (
@@ -1445,88 +1480,112 @@ export default function ContactsPage() {
                                                         ))}
                                                     </div>
 
-                                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "32px" }}>
-                                                        {/* Left Column: Contact List & Search */}
-                                                        <div>
-                                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                                                                <h3 style={{ fontSize: "14px", fontWeight: 600, margin: 0 }}>Imported Contacts</h3>
-                                                                <div style={{ position: "relative", width: "240px" }}>
-                                                                    <Search style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", width: "14px", height: "14px", color: "var(--text-muted)" }} />
-                                                                    <input 
-                                                                        placeholder="Search this batch..."
-                                                                        value={batchSearch}
-                                                                        onChange={(e) => setBatchSearch(e.target.value)}
-                                                                        style={{ 
-                                                                            width: "100%", padding: "6px 10px 6px 32px", fontSize: "12px",
-                                                                            backgroundColor: "rgba(0,0,0,0.2)", border: `1px solid ${colors.border}`,
-                                                                            borderRadius: "6px", color: "white", outline: "none"
-                                                                        }}
-                                                                    />
+                                                    <div className="fade-in">
+                                                        {!showFailedList ? (
+                                                            /* Left Column: Contact List & Search */
+                                                            <div>
+                                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                                                                    <h3 style={{ fontSize: "14px", fontWeight: 600, margin: 0 }}>Imported Contacts ({b.imported_count})</h3>
+                                                                    <div style={{ position: "relative", width: "240px" }}>
+                                                                        <Search style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", width: "14px", height: "14px", color: "var(--text-muted)" }} />
+                                                                        <input 
+                                                                            placeholder="Search this batch..."
+                                                                            value={batchSearch}
+                                                                            onChange={(e) => setBatchSearch(e.target.value)}
+                                                                            style={{ 
+                                                                                width: "100%", padding: "6px 10px 6px 32px", fontSize: "12px",
+                                                                                backgroundColor: "rgba(0,0,0,0.2)", border: `1px solid ${colors.border}`,
+                                                                                borderRadius: "6px", color: "white", outline: "none"
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+
+                                                                <div style={{ 
+                                                                    maxHeight: "400px", 
+                                                                    overflowY: "auto", 
+                                                                    border: `1px solid ${colors.border}`, 
+                                                                    borderRadius: "8px",
+                                                                    backgroundColor: "var(--bg-card)"
+                                                                }}>
+                                                                    {batchContactsLoading ? (
+                                                                        <div style={{ padding: "40px", textAlign: "center" }}><Loader2 className="spinner" /></div>
+                                                                    ) : batchContacts.length === 0 ? (
+                                                                        <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)", fontSize: "13px" }}>No contacts found.</div>
+                                                                    ) : (
+                                                                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                                                                            <thead style={{ position: "sticky", top: 0, backgroundColor: "var(--bg-card)", zIndex: 10 }}>
+                                                                                <tr style={{ textAlign: "left", color: "var(--text-muted)", borderBottom: `1px solid ${colors.border}` }}>
+                                                                                    <th style={{ padding: "10px 16px" }}>Email</th>
+                                                                                    <th style={{ padding: "10px 16px" }}>Name</th>
+                                                                                    <th style={{ padding: "10px 16px" }}>Status</th>
+                                                                                    <th style={{ padding: "10px 16px", textAlign: "right" }}>Actions</th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody>
+                                                                                {batchContacts.map((c) => (
+                                                                                    <tr key={c.id} style={{ borderBottom: `1px solid rgba(255,255,255,0.03)` }}>
+                                                                                        <td style={{ padding: "10px 16px", color: "var(--accent)", fontWeight: 500 }}>
+                                                                                            <Link href={`/contacts/${c.id}`} style={{ color: "var(--accent)", textDecoration: "none" }}>
+                                                                                                {c.email}
+                                                                                            </Link>
+                                                                                        </td>
+                                                                                        <td style={{ padding: "10px 16px" }}>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            {c.first_name || ""} {c.last_name || ""}
+                                                                                            {c.full_name && !c.last_name && (
+                                                                                                <span title="Imported with Full Name only (Split failed)">
+                                                                                                    <AlertCircle className="h-3.5 w-3.5 text-[var(--warning)]" />
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </td>
+                                                                                        <td style={{ padding: "10px 16px" }}>
+                                                                                            <span style={{ 
+                                                                                                padding: "2px 8px", borderRadius: "100px", fontSize: "10px", fontWeight: 700,
+                                                                                                backgroundColor: "rgba(34, 197, 94, 0.1)", color: "var(--success)"
+                                                                                            }}>SUBSCRIBED</span>
+                                                                                        </td>
+                                                                                        <td style={{ padding: "10px 16px", textAlign: "right" }}>
+                                                                                            <Link href={`/contacts/${c.id}`} style={{ color: "var(--accent)", textDecoration: "none", fontSize: "12px", fontWeight: 600 }}>
+                                                                                                Edit
+                                                                                            </Link>
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                ))}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    )}
                                                                 </div>
                                                             </div>
+                                                        ) : (
+                                                            /* Right Column: Error Resolver (Full Width) */
+                                                            <div className="fade-in">
+                                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                                                                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                                                                        <button 
+                                                                            onClick={() => setShowFailedList(false)}
+                                                                            className="rounded-[var(--radius)] p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
+                                                                        >
+                                                                            <ArrowLeft className="h-4 w-4" />
+                                                                        </button>
+                                                                        <h3 style={{ fontSize: "14px", fontWeight: 600, margin: 0 }}>
+                                                                            Failed Contacts ({b.failed_count})
+                                                                        </h3>
+                                                                    </div>
+                                                                    <span style={{ fontSize: "11px", color: "var(--danger)", fontWeight: 600 }}>Action Required</span>
+                                                                </div>
 
-                                                            <div style={{ maxHeight: "300px", overflowY: "auto", border: `1px solid ${colors.border}`, borderRadius: "8px" }}>
-                                                                {batchContactsLoading ? (
-                                                                    <div style={{ padding: "40px", textAlign: "center" }}><Loader2 className="spinner" /></div>
-                                                                ) : batchContacts.length === 0 ? (
-                                                                    <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)", fontSize: "13px" }}>No contacts found.</div>
-                                                                ) : (
-                                                                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                                                                <div style={{ maxHeight: "400px", overflowY: "auto", border: `1px solid ${colors.border}`, borderRadius: "8px" }}>
+                                                                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
                                                                         <thead style={{ position: "sticky", top: 0, backgroundColor: "var(--bg-card)", zIndex: 10 }}>
                                                                             <tr style={{ textAlign: "left", color: "var(--text-muted)", borderBottom: `1px solid ${colors.border}` }}>
-                                                                                <th style={{ padding: "10px 16px" }}>Email</th>
-                                                                                <th style={{ padding: "10px 16px" }}>Name</th>
-                                                                                <th style={{ padding: "10px 16px" }}>Status</th>
-                                                                                <th style={{ padding: "10px 16px", textAlign: "right" }}>Actions</th>
+                                                                                <th style={{ padding: "8px 16px" }}>Context</th>
+                                                                                <th style={{ padding: "8px 16px" }}>Email & Resolution</th>
+                                                                                <th style={{ padding: "8px 16px" }}>Error Detail</th>
+                                                                                <th style={{ padding: "8px 16px", textAlign: "right" }}>Action</th>
                                                                             </tr>
                                                                         </thead>
-                                                                        <tbody>
-                                                                            {batchContacts.map((c) => (
-                                                                                <tr key={c.id} style={{ borderBottom: `1px solid rgba(255,255,255,0.03)` }}>
-                                                                                    <td style={{ padding: "10px 16px", color: "var(--accent)", fontWeight: 500 }}>
-                                                                                        <Link href={`/contacts/${c.id}`} style={{ color: "var(--accent)", textDecoration: "none" }}>
-                                                                                            {c.email}
-                                                                                        </Link>
-                                                                                    </td>
-                                                                                    <td style={{ padding: "10px 16px" }}>{c.first_name || ""} {c.last_name || ""}</td>
-                                                                                    <td style={{ padding: "10px 16px" }}>
-                                                                                        <span style={{ 
-                                                                                            padding: "2px 8px", borderRadius: "100px", fontSize: "10px", fontWeight: 700,
-                                                                                            backgroundColor: "rgba(34, 197, 94, 0.1)", color: "var(--success)"
-                                                                                        }}>SUBSCRIBED</span>
-                                                                                    </td>
-                                                                                    <td style={{ padding: "10px 16px", textAlign: "right" }}>
-                                                                                        <Link href={`/contacts/${c.id}`} style={{ color: "var(--accent)", textDecoration: "none", fontSize: "12px", fontWeight: 600 }}>
-                                                                                            Edit
-                                                                                        </Link>
-                                                                                    </td>
-                                                                                </tr>
-                                                                            ))}
-                                                                        </tbody>
-                                                                    </table>
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Right Column: Error Resolver */}
-                                                        <div>
-                                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                                                                <h3 style={{ fontSize: "14px", fontWeight: 600, margin: 0 }}>
-                                                                    Failed Contacts {b.failed_count > 0 && `(${b.failed_count})`}
-                                                                </h3>
-                                                                {b.failed_count > 0 && (
-                                                                    <span style={{ fontSize: "11px", color: "var(--danger)", fontWeight: 600 }}>Action Required</span>
-                                                                )}
-                                                            </div>
-
-                                                            {b.failed_count === 0 ? (
-                                                                <div style={{ padding: "32px 20px", textAlign: "center", backgroundColor: "rgba(34, 197, 94, 0.03)", borderRadius: "8px", border: "1px dashed rgba(34, 197, 94, 0.2)" }}>
-                                                                    <CheckCircle2 style={{ width: "24px", height: "24px", color: "var(--success)", margin: "0 auto 8px" }} />
-                                                                    <p style={{ margin: 0, fontSize: "13px", color: "var(--text-muted)" }}>100% Success Rate!</p>
-                                                                </div>
-                                                            ) : (
-                                                                <div style={{ maxHeight: "300px", overflowY: "auto", border: `1px solid ${colors.border}`, borderRadius: "8px" }}>
-                                                                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
                                                                         <tbody>
                                                                             {(b.errors || []).map((err: any, idx: number) => (
                                                                                 <ErrorRow 
@@ -1538,8 +1597,8 @@ export default function ContactsPage() {
                                                                         </tbody>
                                                                     </table>
                                                                 </div>
-                                                            )}
-                                                        </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </td>
@@ -1719,13 +1778,16 @@ export default function ContactsPage() {
                         {uploadStep === 2 && (
                             <div>
                                 <p className="mb-3 text-sm text-[var(--text-muted)]">
-                                    Map each file column to a contact field. <strong>Email, First Name, and Last Name are required.</strong>
+                                    Map each file column to a contact field. <strong>Email and Name (either Full Name OR First+Last) are required.</strong>
                                 </p>
                                 <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
                                     {headers.map((col) => {
                                         const mapping = columnMappings[col] || "skip";
                                         const isCustom = mapping.startsWith("custom:");
                                         const customName = isCustom ? mapping.replace("custom:", "") : "";
+
+                                        const hasFullName = !!getMappedCol("full_name");
+                                        const hasFirstOrLast = !!getMappedCol("first_name") || !!getMappedCol("last_name");
 
                                         return (
                                             <div key={col} className={`rounded-[var(--radius)] border px-3 py-2 ${mapping !== "skip" ? 'border-[var(--border)] bg-[var(--bg-hover)]' : 'border-transparent bg-transparent'}`}>
@@ -1740,7 +1802,6 @@ export default function ContactsPage() {
                                                             if (val === "skip") {
                                                                 delete newMappings[col];
                                                             } else if (val === "custom") {
-                                                                // Set custom with default name from column header
                                                                 newMappings[col] = `custom:${col.toLowerCase().replace(/\s+/g, "_")}`;
                                                             } else {
                                                                 // Standard field — ensure uniqueness
@@ -1757,8 +1818,15 @@ export default function ContactsPage() {
                                                     >
                                                         <option value="skip">⊘ Skip</option>
                                                         <option value="email" disabled={!!getMappedCol("email") && getMappedCol("email") !== col}>📧 Email (required)</option>
-                                                        <option value="first_name" disabled={!!getMappedCol("first_name") && getMappedCol("first_name") !== col}>👤 First Name (required)</option>
-                                                        <option value="last_name" disabled={!!getMappedCol("last_name") && getMappedCol("last_name") !== col}>👤 Last Name (required)</option>
+                                                        <option value="full_name" disabled={(!!getMappedCol("full_name") && getMappedCol("full_name") !== col) || hasFirstOrLast}>
+                                                            👤 Full Name {hasFirstOrLast ? " (Disabled: First/Last mapped)" : ""}
+                                                        </option>
+                                                        <option value="first_name" disabled={(!!getMappedCol("first_name") && getMappedCol("first_name") !== col) || hasFullName}>
+                                                            👤 First Name {hasFullName ? " (Disabled: Full Name mapped)" : ""}
+                                                        </option>
+                                                        <option value="last_name" disabled={(!!getMappedCol("last_name") && getMappedCol("last_name") !== col) || hasFullName}>
+                                                            👤 Last Name {hasFullName ? " (Disabled: Full Name mapped)" : ""}
+                                                        </option>
                                                         <option value="custom">📋 Custom Field</option>
                                                     </select>
                                                 </div>
@@ -1767,7 +1835,7 @@ export default function ContactsPage() {
                                                         <Input
                                                             type="text"
                                                             value={customName}
-                                                            placeholder="Enter field name (e.g. phone, company)"
+                                                            placeholder="Enter field name"
                                                             onChange={(e) => {
                                                                 const newMappings = { ...columnMappings };
                                                                 const fieldName = e.target.value.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
@@ -1776,22 +1844,19 @@ export default function ContactsPage() {
                                                             }}
                                                             className="h-8 text-xs"
                                                         />
-                                                        <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-                                                            Stored as: <code className="rounded bg-[var(--bg-hover)] px-1 py-0.5 text-[11px]">{customName || "..."}</code>
-                                                        </p>
                                                     </div>
                                                 )}
                                             </div>
                                         );
                                     })}
                                 </div>
-                                {(!emailCol || !getMappedCol("first_name") || !getMappedCol("last_name")) && (
+                                {(!emailCol || (!getMappedCol("full_name") && (!getMappedCol("first_name") || !getMappedCol("last_name")))) && (
                                     <p className="mt-2 text-xs text-[var(--danger)]">
-                                        ⚠ You must map Email, First Name, and Last Name columns.
+                                        ⚠ You must map Email and either Full Name OR First + Last Name.
                                     </p>
                                 )}
                                 <Button 
-                                    disabled={!emailCol || !getMappedCol("first_name") || !getMappedCol("last_name")} 
+                                    disabled={!emailCol || (!getMappedCol("full_name") && (!getMappedCol("first_name") || !getMappedCol("last_name")))} 
                                     onClick={() => setUploadStep(3)}
                                     fullWidth
                                     className="mt-3"

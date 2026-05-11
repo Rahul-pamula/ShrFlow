@@ -159,7 +159,7 @@ class ContactService:
         offset = (page - 1) * limit
         
         query = db.client.table("contacts")\
-            .select("id, email, email_domain, first_name, last_name, custom_fields, tags, status, created_at", count="exact")\
+            .select("id, email, email_domain, first_name, last_name, full_name, custom_fields, tags, status, created_at", count="exact")\
             .eq("tenant_id", tenant_id)
 
         from utils.jwt_middleware import apply_data_isolation
@@ -249,26 +249,41 @@ class ContactService:
                 })
                 continue
             
-            if not first_name or not last_name:
-                missing_fields = []
-                if not first_name: missing_fields.append("First Name")
-                if not last_name: missing_fields.append("Last Name")
-                
-                invalid_contacts.append({
-                    "row": idx + 1,
-                    "email": email,
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "reason": f"Required fields missing: {', '.join(missing_fields)}"
-                })
-                continue
+            # Validation Rule: hasEmail && (hasFullName || (hasFirstName && hasLastName))
+            has_full_name = bool(contact.get("full_name") and str(contact.get("full_name")).strip())
+            has_first = bool(first_name and str(first_name).strip())
+            has_last = bool(last_name and str(last_name).strip())
+
+            # If it's a "Full Name" import, we only care that they HAVE a full name.
+            # If the split failed (no last name), we still allow it.
+            if has_full_name:
+                # Ensure first_name has at least the full name if it's empty
+                if not has_first:
+                    first_name = contact.get("full_name")
+                # Last name can be empty
+            else:
+                # Traditional import: must have both first and last name
+                if not has_first or not has_last:
+                    missing_fields = []
+                    if not has_first: missing_fields.append("First Name")
+                    if not has_last: missing_fields.append("Last Name")
+                    
+                    invalid_contacts.append({
+                        "row": idx + 1,
+                        "email": email,
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "reason": f"Required fields missing: {', '.join(missing_fields)}"
+                    })
+                    continue
 
             row = {
                 "tenant_id": tenant_id,
                 "email": email.lower(),
                 "email_domain": ContactService.extract_email_domain(email),
                 "first_name": first_name,
-                "last_name": last_name
+                "last_name": last_name,
+                "full_name": contact.get("full_name")
             }
             if "created_by_user_id" in contact:
                 row["created_by_user_id"] = contact["created_by_user_id"]
@@ -467,6 +482,7 @@ class ContactService:
             "email_domain": ContactService.extract_email_domain(normalized_email),
             "first_name": first_name_val,
             "last_name": last_name_val,
+            "full_name": custom_fields.get("full_name") if custom_fields else None,
             "custom_fields": custom_fields or {}
         }
 

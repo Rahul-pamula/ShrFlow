@@ -1,16 +1,15 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import LayoutWrapper from "@/components/layout/LayoutWrapper";
 import { ToastProvider } from "@/components/ui";
 import { ThemeProvider } from "@/components/ui/ThemeProvider";
 
-const inter = Inter({
-    subsets: ["latin"],
-    display: "swap",
+// Browser-based font loading to bypass Docker build restrictions
+const inter = {
+    className: "",
     variable: "--font-inter",
-});
+};
 
 export const metadata: Metadata = {
     title: "ShrFlow",

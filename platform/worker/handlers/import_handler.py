@@ -16,6 +16,7 @@ class ImportHandler:
         email_col = payload.get("email_col", "email")
         first_name_col = payload.get("first_name_col")
         last_name_col = payload.get("last_name_col")
+        full_name_col = payload.get("full_name_col")
         custom_mappings = payload.get("custom_mappings", {})
 
         def get_val(row_dict, col_name):
@@ -26,6 +27,25 @@ class ImportHandler:
                 if str(k).lower().strip() == target:
                     return v
             return ""
+
+        def split_full_name(full_name: str):
+            if not full_name:
+                return "", ""
+            parts = full_name.strip().split(" ", 1)
+            f_name = parts[0]
+            l_name = parts[1] if len(parts) > 1 else ""
+            return f_name, l_name
+
+        def get_row_context(row_dict, exclude_cols):
+            context = []
+            for k, v in row_dict.items():
+                # Skip common or already mapped columns to avoid redundancy
+                if str(k).lower().strip() in [str(c).lower().strip() for c in exclude_cols if c]:
+                    continue
+                val = str(v).strip() if v else ""
+                if val and val.lower() != "nan" and val.lower() != "none":
+                    context.append(f"{k}: {val}")
+            return ", ".join(context[:3])
 
         logger.info(f"[{job_id}] Starting Robust Contact Import pipeline")
 
@@ -61,11 +81,25 @@ class ImportHandler:
             for row_index, row in enumerate(raw_rows, start=1):
                 raw_email = get_val(row, email_col)
                 normalized_email = str(raw_email).strip().lower() if raw_email else ""
+                raw_full_name = str(get_val(row, full_name_col)).strip() if full_name_col else ""
 
                 if not normalized_email:
                     failed_rows += 1
                     msg = "Missing or blank email address."
-                    errors_for_ui.append({"email": "—", "reason": msg, "row": row_index})
+                    
+                    # Try to get some names for context even if not mapped
+                    f_name = str(get_val(row, first_name_col)).strip() if first_name_col else ""
+                    l_name = str(get_val(row, last_name_col)).strip() if last_name_col else ""
+                    
+                    errors_for_ui.append({
+                        "email": "—", 
+                        "first_name": f_name,
+                        "last_name": l_name,
+                        "full_name": raw_full_name or None,
+                        "reason": msg, 
+                        "row": row_index,
+                        "details": get_row_context(row, [email_col, first_name_col, last_name_col, full_name_col])
+                    })
                     rejections_buffer.append({"job_id": job_id, "tenant_id": tenant_id, "row_data": row, "error_reason": msg})
                     
                     if len(rejections_buffer) >= chunk_size:
@@ -80,11 +114,18 @@ class ImportHandler:
                         if str(val).strip():
                             custom_data[custom_key] = str(val).strip()
 
+                if raw_full_name:
+                    f_name, l_name = split_full_name(raw_full_name)
+                else:
+                    f_name = str(get_val(row, first_name_col)).strip() if first_name_col else ""
+                    l_name = str(get_val(row, last_name_col)).strip() if last_name_col else ""
+
                 contact = {
                     "email": normalized_email,
                     "email_domain": ContactService.extract_email_domain(normalized_email),
-                    "first_name": str(get_val(row, first_name_col)).strip() if first_name_col else "",
-                    "last_name": str(get_val(row, last_name_col)).strip() if last_name_col else "",
+                    "first_name": f_name,
+                    "last_name": l_name,
+                    "full_name": raw_full_name or None,
                     "custom_fields": custom_data,
                     "tenant_id": tenant_id
                 }
@@ -171,6 +212,18 @@ class ImportHandler:
         contacts = [item[1] for item in chunk]
         errors_for_ui = []
         
+        # Build exclusion list for context
+        exclude_cols = ["email", "first_name", "last_name", "full_name", "tenant_id", "import_batch_id"]
+
+        def get_row_context(row_dict):
+            context = []
+            for k, v in row_dict.items():
+                if str(k).lower() in exclude_cols: continue
+                val = str(v).strip() if v else ""
+                if val and val.lower() != "nan" and val.lower() != "none":
+                    context.append(f"{k}: {val}")
+            return ", ".join(context[:3])
+
         try:
             res = ContactService.bulk_upsert(tenant_id, contacts, import_batch_id=job_id)
             
@@ -179,13 +232,29 @@ class ImportHandler:
                 rejection_records = []
                 for err in errors:
                     reason = err.get("reason", "Unknown bulk upsert error") if isinstance(err, dict) else str(err)
-                    row_raw = err.get("raw", {}) if isinstance(err, dict) else {}
                     
-                    errors_for_ui.append({
-                        "email": row_raw.get("email", "Unknown"),
-                        "reason": reason,
-                        "row": "—"
-                    })
+                    # bulk_upsert returns 1-indexed "row" which is the index in the chunk
+                    idx_in_chunk = err.get("row", 0) - 1
+                    
+                    if 0 <= idx_in_chunk < len(chunk):
+                        abs_row_idx, contact_obj, raw_row = chunk[idx_in_chunk]
+                        errors_for_ui.append({
+                            "email": err.get("email") or contact_obj.get("email") or "Unknown",
+                            "first_name": err.get("first_name") or contact_obj.get("first_name") or "",
+                            "last_name": err.get("last_name") or contact_obj.get("last_name") or "",
+                            "full_name": contact_obj.get("full_name"),
+                            "reason": reason,
+                            "row": abs_row_idx,
+                            "details": get_row_context(raw_row)
+                        })
+                    else:
+                        errors_for_ui.append({
+                            "email": err.get("email") or "Unknown",
+                            "first_name": err.get("first_name") or "",
+                            "last_name": err.get("last_name") or "",
+                            "reason": reason,
+                            "row": "—"
+                        })
 
                     rejection_records.append({
                         "job_id": job_id,
@@ -201,12 +270,15 @@ class ImportHandler:
         except Exception as e:
             logger.error(f"Chunk failure: {e}")
             error_records = []
-            for (idx, _, raw) in chunk:
+            for (abs_idx, _, raw) in chunk:
                 msg = f"Chunk completely failed: {str(e)}"
                 errors_for_ui.append({
-                    "email": raw.get("email", "Unknown"),
+                    "email": raw.get("email") or "Unknown",
+                    "first_name": raw.get("first_name") or "",
+                    "last_name": raw.get("last_name") or "",
                     "reason": msg,
-                    "row": idx
+                    "row": abs_idx,
+                    "details": get_row_context(raw)
                 })
                 error_records.append({
                     "job_id": job_id,

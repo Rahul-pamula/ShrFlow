@@ -10,7 +10,7 @@ import logging
 from services.contact_service import ContactService
 from services.batch_service import BatchService
 from services.import_service import process_csv_import
-from utils.jwt_middleware import require_active_tenant
+from utils.jwt_middleware import require_active_tenant, apply_data_isolation
 from utils.permissions import require_permission, verify_jwt_token, JWTPayload
 from utils.file_parser import parse_file
 from utils.rabbitmq_client import mq_client
@@ -45,6 +45,7 @@ class UpdateContactRequest(BaseModel):
     email: str
     first_name: str
     last_name: str
+    full_name: Optional[str] = None
     custom_fields: Dict[str, str] = {}
 
 
@@ -84,6 +85,7 @@ class ImportProcessRequest(BaseModel):
     email_col: str
     first_name_col: Optional[str] = None
     last_name_col: Optional[str] = None
+    full_name_col: Optional[str] = None
     custom_mappings: Optional[Dict[str, str]] = None
 
 
@@ -158,7 +160,7 @@ async def preview_csv(
         if len(contents) > MAX_FILE_SIZE:
             raise HTTPException(status_code=400, detail="File too large. Maximum size is 2MB.")
 
-        df = parse_file(contents, file.filename)
+        df = parse_file(contents, file.filename or "unknown.csv")
         headers = list(df.columns)
         preview = df.head(5).to_dict(orient="records")
 
@@ -347,9 +349,10 @@ async def process_import_signal(
         # Check if it exists but is already processing
         existing = db.client.table("import_jobs").select("status").eq("id", job_id).execute()
         if existing.data:
+            job_status = str(existing.data[0].get("status", "unknown")) if existing.data and isinstance(existing.data[0], dict) else "unknown"
             return ImportProcessResponse(
                 job_id=job_id,
-                status=existing.data[0]["status"],
+                status=job_status,
                 message="Job is already further in the pipeline."
             )
         raise HTTPException(status_code=404, detail="Import job not found or not in 'initializing' state.")
@@ -368,15 +371,17 @@ async def process_import_signal(
 
     # 3. Publish to RabbitMQ
     try:
+        job_data = job_result.data[0] if isinstance(job_result.data, list) and len(job_result.data) > 0 else {}
         task_payload = {
             "task_type": "contact_import",
             "job_id": job_id,
             "tenant_id": tenant_id,
-            "project_id": job.get("project_id"),
-            "file_key": job["file_key"],
+            "project_id": job_data.get("project_id"),
+            "file_key": job_data.get("file_key", ""),
             "email_col": request.email_col,
             "first_name_col": request.first_name_col,
             "last_name_col": request.last_name_col,
+            "full_name_col": request.full_name_col,
             "custom_mappings": request.custom_mappings
         }
         await mq_client.publish_background_task(task_payload, routing_key="task.import")
@@ -428,7 +433,7 @@ async def get_job_status(
 async def bulk_delete_contacts(
     body: BulkDeleteRequest,
     tenant_id: str = Depends(require_active_tenant),
-    _ = Depends(require_permission("contacts:import"))
+    jwt_payload: JWTPayload = Depends(require_permission("contacts:import"))
 ):
     """Delete multiple selected contacts"""
     if not body.contact_ids:
@@ -443,7 +448,8 @@ async def bulk_delete_contacts(
         .eq("tenant_id", tenant_id)\
         .in_("id", body.contact_ids)\
         .execute()
-    batch_ids = {row.get("import_batch_id") for row in (batch_ids.data or []) if row.get("import_batch_id")}
+    batch_ids_list = batch_ids.data if isinstance(batch_ids.data, list) else []
+    batch_ids_set = {row.get("import_batch_id") for row in batch_ids_list if isinstance(row, dict) and row.get("import_batch_id")}
 
     deleted_count = ContactService.delete_bulk(tenant_id, body.contact_ids)
     
@@ -459,8 +465,9 @@ async def bulk_delete_contacts(
 
     # Recalc affected batches
     from services.batch_service import BatchService
-    for b_id in batch_ids:
-        BatchService.recalc_batch_counts(tenant_id, b_id)
+    for b_id in batch_ids_set:
+        if b_id:
+            BatchService.recalc_batch_counts(tenant_id, str(b_id))
 
     return {"deleted_count": deleted_count}
 
@@ -479,9 +486,12 @@ async def get_all_tags(tenant_id: str = Depends(require_active_tenant)):
             .execute()
         
         all_tags = set()
-        for row in res.data or []:
-            if row.get("tags"):
-                all_tags.update(row["tags"])
+        data = res.data if isinstance(res.data, list) else []
+        for row in data:
+            if isinstance(row, dict) and row.get("tags"):
+                tags = row["tags"]
+                if isinstance(tags, list):
+                    all_tags.update(tags)
         
         return sorted(list(all_tags))
     except Exception as e:
@@ -510,7 +520,8 @@ async def bulk_tag_contacts(
         .execute()
     
     updates = []
-    for row in res.data or []:
+    for row in (res.data if isinstance(res.data, list) else []):
+        if not isinstance(row, dict): continue
         current_tags = set(row.get("tags") or [])
         new_tags = set(body.tags)
         
@@ -520,7 +531,7 @@ async def bulk_tag_contacts(
             updated_tags = list(current_tags.difference(new_tags))
             
         updates.append({
-            "id": row["id"],
+            "id": row.get("id"),
             "tenant_id": tenant_id,
             "tags": updated_tags
         })
@@ -533,7 +544,10 @@ async def bulk_tag_contacts(
 
 
 @router.delete("/all")
-async def delete_all_contacts(tenant_id: str = Depends(require_active_tenant), _ = Depends(require_permission("contacts:import"))):
+async def delete_all_contacts(
+    tenant_id: str = Depends(require_active_tenant), 
+    jwt_payload: JWTPayload = Depends(require_permission("contacts:import"))
+):
     """Delete ALL contacts for tenant (reset)"""
     deleted_count = ContactService.delete_all(tenant_id)
 
@@ -583,6 +597,7 @@ class ResolveErrorRequest(BaseModel):
     email: str
     first_name: str
     last_name: str
+    full_name: Optional[str] = None
 
 
 @router.post("/resolve-error")
@@ -606,12 +621,14 @@ async def resolve_error(
         .single()\
         .execute()
 
-    if not batch_result.data:
+    if not batch_result.data or not isinstance(batch_result.data, dict):
         raise HTTPException(status_code=404, detail="Batch not found")
 
-    errors = batch_result.data.get("errors", [])
-    if isinstance(errors, str):
-        errors = json_lib.loads(errors)
+    errors_val = batch_result.data.get("errors", [])
+    if isinstance(errors_val, str):
+        errors = json_lib.loads(errors_val)
+    else:
+        errors = errors_val
 
     if body.error_index < 0 or body.error_index >= len(errors):
         raise HTTPException(status_code=400, detail="Invalid error index")
@@ -634,6 +651,7 @@ async def resolve_error(
         "email_domain": ContactService.extract_email_domain(email),
         "first_name": first_name,
         "last_name": last_name,
+        "full_name": body.full_name,
         "import_batch_id": body.batch_id,
         "created_by_user_id": jwt_payload.user_id
     }
