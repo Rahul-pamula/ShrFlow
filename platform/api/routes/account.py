@@ -101,6 +101,7 @@ async def switch_account_workspace(
     _set_refresh_cookie(response, refresh_token)
     AccountService.set_last_active_tenant_id(jwt_payload.user_id, body.tenant_id)
 
+    user_res = db.client.table("users").select("*").eq("id", jwt_payload.user_id).execute()
     user_res_data = cast(List[Dict[str, Any]], user_res.data or [])
     user = user_res_data[0] if user_res_data else {}
 
