@@ -12,8 +12,8 @@ Features:
 
 from fastapi import APIRouter, HTTPException, Header, status, Depends
 from pydantic import BaseModel, Field
-from typing import Optional, List
-from datetime import datetime
+from typing import Optional, List, Dict, Any, cast
+from datetime import datetime, timezone
 from utils.jwt_middleware import require_authenticated_user, JWTPayload
 from utils.permissions import require_permission
 
@@ -36,19 +36,19 @@ class OnboardingStatusResponse(BaseModel):
 
 class BasicInfoRequest(BaseModel):
     """Stage 2: Basic tenant profile"""
-    organization_name: str = Field(..., min_length=1, max_length=200)
-    country: str = Field(..., min_length=2, max_length=2)  # ISO country code
+    organization_name: str = Field(min_length=1, max_length=200)
+    country: str = Field(min_length=2, max_length=2)  # ISO country code
     timezone: str = Field(default="UTC")
 
 
 class ComplianceRequest(BaseModel):
     """Stage 3: Business address (REQUIRED for sending)"""
-    address_line1: str = Field(..., min_length=1, max_length=200)
+    address_line1: str = Field(min_length=1, max_length=200)
     address_line2: Optional[str] = Field(None, max_length=200)
-    city: str = Field(..., min_length=1, max_length=100)
+    city: str = Field(min_length=1, max_length=100)
     state: Optional[str] = Field(None, max_length=100)
-    country: str = Field(..., min_length=2, max_length=2)
-    zip: str = Field(..., min_length=1, max_length=20)
+    country: str = Field(min_length=2, max_length=2)
+    zip: str = Field(min_length=1, max_length=20)
 
 
 class IntentRequest(BaseModel):
@@ -91,21 +91,23 @@ async def get_onboarding_status(jwt_payload: JWTPayload = Depends(require_permis
     
     # Get tenant
     tenant_result = db.client.table("tenants").select("*").eq("id", tenant_id).execute()
+    tenant_data_list = cast(List[Dict[str, Any]], tenant_result.data or [])
     
-    if not tenant_result.data:
+    if not tenant_data_list:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found"
         )
     
-    tenant = tenant_result.data[0]
+    tenant = tenant_data_list[0]
     
     # Get onboarding progress
     progress_result = db.client.table("onboarding_progress").select("*").eq(
         "tenant_id", tenant_id
     ).execute()
+    progress_data_list = cast(List[Dict[str, Any]], progress_result.data or [])
     
-    if not progress_result.data:
+    if not progress_data_list:
         # Create progress record if it doesn't exist
         db.client.table("onboarding_progress").insert({
             "tenant_id": tenant_id,
@@ -120,7 +122,7 @@ async def get_onboarding_status(jwt_payload: JWTPayload = Depends(require_permis
             "stage_intent": False
         }
     else:
-        progress = progress_result.data[0]
+        progress = progress_data_list[0]
     
     # Determine completed stages
     completed_stages = []
@@ -151,13 +153,14 @@ async def get_onboarding_status(jwt_payload: JWTPayload = Depends(require_permis
             .eq("status", "pending")\
             .execute()
         
-        if inv_res.data:
-            invite = inv_res.data[0]
+        inv_res_data = cast(List[Dict[str, Any]], inv_res.data or [])
+        if inv_res_data:
+            invite = inv_res_data[0]
             invite_data = {
                 "id": invite["id"],
                 "token": invite["token"],
                 "role": invite["role"],
-                "workspace_name": invite.get("tenants", {}).get("company_name") or "Your Team",
+                "workspace_name": cast(Dict[str, Any], invite.get("tenants", {})).get("company_name") or "Your Team",
                 "inviter_id": invite.get("inviter_id")
             }
     except Exception as e:
@@ -204,13 +207,13 @@ async def update_basic_info(
             "organization_name": request.organization_name,
             "country": request.country,
             "timezone": request.timezone,
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }).eq("id", tenant_id).execute()
         
         # Update progress
         db.client.table("onboarding_progress").update({
             "stage_basic_info": True,
-            "basic_info_completed_at": datetime.utcnow().isoformat()
+            "basic_info_completed_at": datetime.now(timezone.utc).isoformat()
         }).eq("tenant_id", tenant_id).execute()
         
         return OnboardingResponse(
@@ -253,13 +256,13 @@ async def update_compliance(
             "business_state": request.state,
             "business_country": request.country,
             "business_zip": request.zip,
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }).eq("id", tenant_id).execute()
         
         # Update progress
         db.client.table("onboarding_progress").update({
             "stage_compliance": True,
-            "compliance_completed_at": datetime.utcnow().isoformat()
+            "compliance_completed_at": datetime.now(timezone.utc).isoformat()
         }).eq("tenant_id", tenant_id).execute()
         
         return OnboardingResponse(
@@ -304,7 +307,7 @@ async def update_intent(
         
         # Update tenant
         update_data = {
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }
         
         if request.business_type:
@@ -319,7 +322,7 @@ async def update_intent(
         # Update progress
         db.client.table("onboarding_progress").update({
             "stage_intent": True,
-            "intent_completed_at": datetime.utcnow().isoformat()
+            "intent_completed_at": datetime.now(timezone.utc).isoformat()
         }).eq("tenant_id", tenant_id).execute()
         
         return OnboardingResponse(
@@ -371,8 +374,8 @@ async def complete_onboarding(jwt_payload: JWTPayload = Depends(require_permissi
         print("DEBUG: Updating tenant status to active...", flush=True)
         response = db.client.table("tenants").update({
             "status": "active",
-            "onboarding_completed_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat()
+            "onboarding_completed_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }).eq("id", tenant_id).execute()
         print(f"DEBUG: Tenant update response: {response}", flush=True)
         
@@ -380,7 +383,7 @@ async def complete_onboarding(jwt_payload: JWTPayload = Depends(require_permissi
         try:
             print("DEBUG: Attempting to update legacy onboarding_progress...", flush=True)
             db.client.table("onboarding_progress").update({
-                "completed_at": datetime.utcnow().isoformat()
+                "completed_at": datetime.now(timezone.utc).isoformat()
             }).eq("tenant_id", tenant_id).execute()
         except Exception as e:
             print(f"DEBUG: Legacy table update failed (ignoring): {e}", flush=True)
@@ -450,7 +453,7 @@ async def save_workspace(
             "company_name": request.workspace_name,
             "organization_name": request.workspace_name,
             "user_role": request.user_role,
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }).eq("id", user.tenant_id).execute()
         
         return {"status": "success", "message": "Workspace info saved"}
@@ -474,7 +477,7 @@ async def save_use_case(
     try:
         db.client.table("tenants").update({
             "primary_use_case": request.primary_use_case,
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }).eq("id", user.tenant_id).execute()
         
         return {"status": "success", "message": "Use case saved"}
@@ -498,7 +501,7 @@ async def save_integrations(
     try:
         db.client.table("tenants").update({
             "integration_sources": request.integration_sources,
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }).eq("id", user.tenant_id).execute()
         
         return {"status": "success", "message": "Integrations saved"}
@@ -522,7 +525,7 @@ async def save_scale(
     try:
         db.client.table("tenants").update({
             "expected_scale": request.expected_scale,
-            "updated_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }).eq("id", user.tenant_id).execute()
         
         return {"status": "success", "message": "Scale info saved"}

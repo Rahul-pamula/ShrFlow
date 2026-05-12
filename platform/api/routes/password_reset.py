@@ -11,6 +11,7 @@ import secrets
 import os
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Request, status
+from typing import List, Dict, Any, cast, Optional
 from pydantic import BaseModel, EmailStr
 
 router = APIRouter(prefix="/auth", tags=["Password Reset"])
@@ -57,9 +58,10 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
     # Look up user (we still return 200 if not found — prevents enumeration)
     user_result = db.client.table("users").select("id, email").eq("email", body.email).execute()
 
-    if user_result.data:
-        user = user_result.data[0]
-        user_id = user["id"]
+    user_res_data = cast(List[Dict[str, Any]], user_result.data or [])
+    if user_res_data:
+        user = user_res_data[0]
+        user_id = str(user.get("id", ""))
 
         # Delete any existing unused tokens for this user
         db.client.table("password_reset_tokens").delete().eq("user_id", user_id).is_("used_at", "null").execute()
@@ -121,13 +123,14 @@ async def reset_password(body: ResetPasswordRequest):
     # Find valid token
     token_result = db.client.table("password_reset_tokens").select("*").eq("token", body.token).execute()
 
-    if not token_result.data:
+    token_res_data = cast(List[Dict[str, Any]], token_result.data or [])
+    if not token_res_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired reset link. Please request a new one."
         )
 
-    token_row = token_result.data[0]
+    token_row = token_res_data[0]
 
     # Check if already used
     if token_row.get("used_at"):
@@ -184,8 +187,9 @@ async def send_verification(body: ForgotPasswordRequest):
 
     user_result = db.client.table("users").select("id, email_verified").eq("email", body.email).execute()
 
-    if user_result.data:
-        user = user_result.data[0]
+    user_res_data = cast(List[Dict[str, Any]], user_result.data or [])
+    if user_res_data:
+        user = user_res_data[0]
 
         if user.get("email_verified"):
             return {"message": "Email is already verified."}
@@ -220,10 +224,11 @@ async def verify_email(token: str):
 
     token_result = db.client.table("email_verification_tokens").select("*").eq("token", token).execute()
 
-    if not token_result.data:
+    token_res_data = cast(List[Dict[str, Any]], token_result.data or [])
+    if not token_res_data:
         raise HTTPException(status_code=400, detail="Invalid verification link.")
 
-    token_row = token_result.data[0]
+    token_row = token_res_data[0]
 
     if token_row.get("used_at"):
         raise HTTPException(status_code=400, detail="This link has already been used.")

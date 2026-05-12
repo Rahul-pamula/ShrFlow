@@ -4,6 +4,7 @@ GET  /unsubscribe?token={token}  → verify token, mark contact unsubscribed, re
 POST /unsubscribe                → same but JSON response (for API use)
 """
 from fastapi import APIRouter, HTTPException, Query
+from typing import List, Dict, Any, cast, Optional
 from fastapi.responses import RedirectResponse
 from utils.unsub_token import verify_unsub_token
 from utils.supabase_client import db
@@ -22,8 +23,9 @@ def _record_unsubscribe_event(contact_id: str, campaign_id: str, tenant_id: str)
             .eq("campaign_id", campaign_id)\
             .eq("subscriber_id", contact_id)\
             .execute()
-        if res.data:
-            dispatch_id = res.data[0]["id"]
+        res_data = cast(List[Dict[str, Any]], res.data or [])
+        if res_data:
+            dispatch_id = res_data[0].get("id")
             db.client.table("email_events").insert({
                 "tenant_id": tenant_id,
                 "dispatch_id": dispatch_id,
@@ -56,13 +58,14 @@ async def unsubscribe_via_link(token: str = Query(...)):
         .eq("id", contact_id)\
         .execute()
 
-    if not res.data:
+    res_data = cast(List[Dict[str, Any]], res.data or [])
+    if not res_data:
         logger.warning(f"[UNSUB] contact_id={contact_id} not found or already unsubscribed")
     else:
         logger.info(f"[UNSUB] contact_id={contact_id} unsubscribed from campaign={campaign_id}")
-        tenant_id = res.data[0].get("tenant_id")
+        tenant_id = res_data[0].get("tenant_id")
         if tenant_id:
-            _record_unsubscribe_event(contact_id, campaign_id, tenant_id)
+            _record_unsubscribe_event(contact_id, campaign_id, str(tenant_id))
 
     # Redirect to frontend confirmation page
     return RedirectResponse(url=f"{FRONTEND_BASE}/unsubscribe?status=success", status_code=302)
@@ -81,10 +84,11 @@ async def unsubscribe_api(token: str = Query(...)):
         .eq("id", contact_id)\
         .execute()
         
-    if res.data:
-        tenant_id = res.data[0].get("tenant_id")
+    res_data = cast(List[Dict[str, Any]], res.data or [])
+    if res_data:
+        tenant_id = res_data[0].get("tenant_id")
         if tenant_id:
-            _record_unsubscribe_event(contact_id, campaign_id, tenant_id)
+            _record_unsubscribe_event(contact_id, campaign_id, str(tenant_id))
 
     return {"message": "Successfully unsubscribed", "contact_id": contact_id}
 
@@ -109,10 +113,11 @@ async def resubscribe(req: ResubscribeRequest):
         .eq("status", "unsubscribed")\
         .execute()
 
-    if not res.data:
+    res_data = cast(List[Dict[str, Any]], res.data or [])
+    if not res_data:
         return {"message": "No unsubscribed contact found with that email.", "resubscribed": 0}
 
-    ids = [c["id"] for c in res.data]
+    ids = [str(c.get("id")) for c in res_data]
     for cid in ids:
         db.client.table("contacts").update({
             "status": "subscribed",

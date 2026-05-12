@@ -12,7 +12,7 @@ import os
 from fastapi import APIRouter, Request, Query, HTTPException
 from fastapi.responses import Response, RedirectResponse
 from utils.supabase_client import db
-from typing import Optional
+from typing import List, Dict, Any, cast, Optional
 import logging
 
 # Rate limiting
@@ -141,9 +141,10 @@ def _record_event(
                 .order("created_at", desc=True)\
                 .limit(1)\
                 .execute()
-            if recent_open.data:
+            recent_open_res_data = cast(List[Dict[str, Any]], recent_open.data or [])
+            if recent_open_res_data:
                 import datetime
-                open_ts = recent_open.data[0]["created_at"]
+                open_ts = str(recent_open_res_data[0].get("created_at", ""))
                 # Parse open time and check if click happened < 2 seconds after open
                 try:
                     from datetime import timezone

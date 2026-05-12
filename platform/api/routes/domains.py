@@ -4,7 +4,7 @@ Interfaces directly with AWS SES via boto3 to generate DKIM/SPF DNS records.
 Includes a mock-fallback for local testing if AWS keys aren't in .env.
 """
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any, cast
 from pydantic import BaseModel
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -59,7 +59,9 @@ async def list_domains(
         .eq("tenant_id", target_tenant_id)\
         .order("created_at", desc=True)\
         .execute()
-    return {"data": res.data}
+    
+    region = os.getenv("AWS_REGION", "us-east-1")
+    return {"data": cast(List[Dict[str, Any]], res.data or []), "region": region}
 
 @router.post("/")
 async def add_domain(
@@ -89,6 +91,47 @@ async def add_domain(
     existing = db.client.table("domains").select("id").eq("domain_name", domain).eq("tenant_id", tenant_id).execute()
     if existing.data:
         raise HTTPException(status_code=400, detail="Domain is already registered in your workspace.")
+        
+    # Check if domain already exists GLOBALLLY and is verified
+    global_existing = db.client.table("domains")\
+        .select("id, tenant_id, status")\
+        .eq("domain_name", domain)\
+        .eq("status", "verified")\
+        .execute()
+    
+    if global_existing.data:
+        # It's already verified by someone else. Offer franchise request.
+        ge_data = cast(List[Dict[str, Any]], global_existing.data or [])
+        other_tenant_id = cast(str, ge_data[0].get("tenant_id"))
+        
+        # Get owner email
+        owner_res = db.client.table("tenant_users")\
+            .select("user_id")\
+            .eq("tenant_id", other_tenant_id)\
+            .eq("role", "owner")\
+            .execute()
+        
+        owner_email = "the workspace owner"
+        owner_data = cast(List[Dict[str, Any]], owner_res.data or [])
+        if owner_data:
+            user_res = db.client.table("users")\
+                .select("email")\
+                .eq("id", cast(str, owner_data[0].get("user_id")))\
+                .execute()
+            user_data = cast(List[Dict[str, Any]], user_res.data or [])
+            if user_data:
+                owner_email = cast(str, user_data[0].get("email", "the workspace owner"))
+
+        raise HTTPException(
+            status_code=409, 
+            detail={
+                "message": "This domain is already verified by another organization.",
+                "owner_email": owner_email,
+                "parent_tenant_id": other_tenant_id,
+                "domain_id": cast(str, ge_data[0].get("id")),
+                "can_request_franchise": True
+            }
+        )
         
     mail_from = f"bounces.{domain}"
     dkim_tokens = []
@@ -121,15 +164,19 @@ async def add_domain(
             "mail_from_domain": mail_from,
             "status": "pending"
         }).execute()
+        inserted_data = cast(List[Dict[str, Any]], inserted.data or [])
+        new_domain_data = inserted_data[0] if inserted_data else {}
+        new_domain_id = str(new_domain_data.get("id")) if new_domain_data.get("id") else None
+
         await write_log(
             tenant_id=tenant_id,
             user_id=jwt_payload.user_id,
             action="domain_added",
             resource_type="domain",
-            resource_id=inserted.data[0]["id"] if inserted.data and len(inserted.data) > 0 else None,
+            resource_id=new_domain_id,
             metadata={"domain": domain}
         )
-        return {"status": "success", "data": inserted.data[0]}
+        return {"status": "success", "data": new_domain_data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save domain in database: {str(e)}")
 
@@ -192,7 +239,8 @@ async def verify_domain(
         metadata={"status": new_status, "domain": domain_name}
     )
     
-    return {"status": "success", "verification_status": new_status, "data": updated.data[0]}
+    updated_data = cast(List[Dict[str, Any]], updated.data or [])
+    return {"status": "success", "verification_status": new_status, "data": updated_data[0] if updated_data else {}}
 
 
 @router.delete("/{domain_id}")

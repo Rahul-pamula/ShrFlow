@@ -75,14 +75,32 @@ export default function WorkspaceRequestsPage() {
         if (!token) return;
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE}/team/workspace-requests`, {
+            // 1. Fetch standard workspace requests (billing, etc.)
+            const res1 = await fetch(`${API_BASE}/team/workspace-requests`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.detail || 'Failed to load requests.');
-            }
-            setRequests(await res.json());
+            const data1 = res1.ok ? await res1.json() : [];
+
+            // 2. Fetch franchise requests (incoming + outgoing)
+            const res2 = await fetch(`${API_BASE}/team/franchise-requests?mode=${isOwner ? 'incoming' : 'outgoing'}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data2 = res2.ok ? await res2.json() : [];
+
+            // Normalize franchise requests to match the UI model
+            const normalizedFranchise = data2.map((f: any) => ({
+                id: f.id,
+                request_type: 'franchise_request',
+                status: f.status,
+                created_at: f.created_at,
+                notes: f.domains?.domain_name ? `Access to ${f.domains.domain_name}` : 'Franchise Request',
+                requester_email: f.users?.email,
+                requester_name: f.users?.full_name,
+                target_workspace: f.tenants?.company_name,
+                is_franchise_infra: true, // Internal flag for routing actions
+            }));
+
+            setRequests([...data1, ...normalizedFranchise]);
         } catch (fetchError: any) {
             console.error(fetchError);
             error(fetchError.message || 'Could not load workspace requests.');
@@ -123,7 +141,13 @@ export default function WorkspaceRequestsPage() {
         if (!pendingApprove) return;
         setActionBusy(true);
         try {
-            const res = await fetch(`${API_BASE}/team/workspace-requests/${pendingApprove.id}/approve`, {
+            // Check if it's a franchise infra request or a standard workspace request
+            const isFranchise = (pendingApprove as any).is_franchise_infra;
+            const endpoint = isFranchise 
+                ? `${API_BASE}/team/franchise-requests/${pendingApprove.id}/approve`
+                : `${API_BASE}/team/workspace-requests/${pendingApprove.id}/approve`;
+
+            const res = await fetch(endpoint, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
             });
@@ -145,7 +169,12 @@ export default function WorkspaceRequestsPage() {
         if (!pendingReject) return;
         setActionBusy(true);
         try {
-            const res = await fetch(`${API_BASE}/team/workspace-requests/${pendingReject.id}/reject`, {
+            const isFranchise = (pendingReject as any).is_franchise_infra;
+            const endpoint = isFranchise 
+                ? `${API_BASE}/team/franchise-requests/${pendingReject.id}/reject`
+                : `${API_BASE}/team/workspace-requests/${pendingReject.id}/reject`;
+
+            const res = await fetch(endpoint, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
             });
@@ -160,6 +189,21 @@ export default function WorkspaceRequestsPage() {
             error(rejectError.message || 'Could not reject request.');
         } finally {
             setActionBusy(false);
+        }
+    };
+
+    const handleCancel = async (id: string) => {
+        if (!confirm('Are you sure you want to cancel this request?')) return;
+        try {
+            const res = await fetch(`${API_BASE}/team/franchise-requests/${id}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error('Failed to cancel request.');
+            success('Request cancelled.');
+            fetchRequests();
+        } catch (err: any) {
+            error(err.message);
         }
     };
 
@@ -256,6 +300,16 @@ export default function WorkspaceRequestsPage() {
                                                 Reject
                                             </Button>
                                         </div>
+                                    )}
+                                    {!isOwner && req.status === 'pending' && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-[var(--text-muted)] hover:text-[var(--danger)]"
+                                            onClick={() => handleCancel(req.id)}
+                                        >
+                                            Cancel
+                                        </Button>
                                     )}
                                 </div>
                             ))

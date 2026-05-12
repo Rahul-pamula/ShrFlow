@@ -3,8 +3,9 @@ Contacts API Routes
 Handles contact listing, stats, CSV/Excel upload, and lifecycle management.
 """
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Response
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any, cast
 from pydantic import BaseModel
+from datetime import datetime, timezone
 import pandas as pd
 import logging
 from services.contact_service import ContactService
@@ -345,11 +346,13 @@ async def process_import_signal(
         .eq("status", "initializing")\
         .execute()
     
-    if not job_result.data:
+    res_data_list = cast(List[Dict[str, Any]], job_result.data or [])
+    if not res_data_list:
         # Check if it exists but is already processing
         existing = db.client.table("import_jobs").select("status").eq("id", job_id).execute()
-        if existing.data:
-            job_status = str(existing.data[0].get("status", "unknown")) if existing.data and isinstance(existing.data[0], dict) else "unknown"
+        existing_data = cast(List[Dict[str, Any]], existing.data or [])
+        if existing_data:
+            job_status = str(existing_data[0].get("status", "unknown"))
             return ImportProcessResponse(
                 job_id=job_id,
                 status=job_status,
@@ -357,7 +360,7 @@ async def process_import_signal(
             )
         raise HTTPException(status_code=404, detail="Import job not found or not in 'initializing' state.")
 
-    job = job_result.data[0]
+    job = res_data_list[0]
 
     # 2. Update status to 'pending'
     try:
@@ -371,7 +374,7 @@ async def process_import_signal(
 
     # 3. Publish to RabbitMQ
     try:
-        job_data = job_result.data[0] if isinstance(job_result.data, list) and len(job_result.data) > 0 else {}
+        job_data = cast(Dict[str, Any], job)
         task_payload = {
             "task_type": "contact_import",
             "job_id": job_id,
@@ -413,12 +416,14 @@ async def get_job_status(
     try:
         # Direct fetch by ID is safe as job_ids are UUID4, but we scope by tenant_id for absolute isolation
         res = db.client.table("import_jobs").select("*").eq("id", job_id).eq("tenant_id", tenant_id).execute()
-        if res.data:
-            return res.data[0]
+        res_data = cast(List[Dict[str, Any]], res.data or [])
+        if res_data:
+            return res_data[0]
             
         res_legacy = db.client.table("jobs").select("*").eq("id", job_id).eq("tenant_id", tenant_id).execute()
-        if res_legacy.data:
-            return res_legacy.data[0]
+        res_legacy_data = cast(List[Dict[str, Any]], res_legacy.data or [])
+        if res_legacy_data:
+            return res_legacy_data[0]
 
 
         raise HTTPException(status_code=404, detail="Job not found")
@@ -520,8 +525,7 @@ async def bulk_tag_contacts(
         .execute()
     
     updates = []
-    for row in (res.data if isinstance(res.data, list) else []):
-        if not isinstance(row, dict): continue
+    for row in cast(List[Dict[str, Any]], res.data or []):
         current_tags = set(row.get("tags") or [])
         new_tags = set(body.tags)
         
@@ -624,11 +628,12 @@ async def resolve_error(
     if not batch_result.data or not isinstance(batch_result.data, dict):
         raise HTTPException(status_code=404, detail="Batch not found")
 
-    errors_val = batch_result.data.get("errors", [])
+    batch_data = cast(Dict[str, Any], batch_result.data)
+    errors_val = batch_data.get("errors", [])
     if isinstance(errors_val, str):
-        errors = json_lib.loads(errors_val)
+        errors = cast(List[Any], json_lib.loads(errors_val))
     else:
-        errors = errors_val
+        errors = cast(List[Any], errors_val)
 
     if body.error_index < 0 or body.error_index >= len(errors):
         raise HTTPException(status_code=400, detail="Invalid error index")
@@ -661,7 +666,8 @@ async def resolve_error(
 
     # Remove the error from the list
     errors.pop(body.error_index)
-    new_failed = max(0, (batch_result.data.get("failed_count", 1)) - 1)
+    failed_count = int(batch_data.get("failed_count", 1))
+    new_failed = max(0, failed_count - 1)
 
     db.client.table("import_batches")\
         .update({
@@ -802,8 +808,8 @@ async def export_contacts_async(
         
         # 2. Schedule the background task
         from services.export_service import process_csv_export
-        batch_id = payload.batch_id if payload else None
-        background_tasks.add_task(process_csv_export, job_id=job_id, tenant_id=tenant_id, batch_id=batch_id)
+        batch_id_arg: Optional[str] = payload.batch_id if payload else None
+        background_tasks.add_task(process_csv_export, job_id=job_id, tenant_id=tenant_id, batch_id=batch_id_arg)
         
         return {
             "status": "accepted",
@@ -865,14 +871,15 @@ async def delete_contact(contact_id: str, tenant_id: str = Depends(require_activ
             .eq("tenant_id", tenant_id)\
             .execute()
 
-        if len(result.data) == 0:
+        if not result.data:
             raise HTTPException(status_code=404, detail="Contact not found")
 
         # Recalc batch counts if this contact was part of a batch
-        batch_id = existing.data.get("import_batch_id") if existing.data else None
+        existing_data = cast(Dict[str, Any], existing.data) if existing.data else {}
+        batch_id = existing_data.get("import_batch_id")
         if batch_id:
             from services.batch_service import BatchService
-            BatchService.recalc_batch_counts(tenant_id, batch_id)
+            BatchService.recalc_batch_counts(tenant_id, str(batch_id))
 
         return {"status": "success", "message": "Contact deleted"}
     except HTTPException:

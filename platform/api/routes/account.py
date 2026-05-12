@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from typing import List, Dict, Any, cast, Optional
 from pydantic import BaseModel
 
 from services.account_service import AccountService
@@ -64,7 +65,8 @@ async def switch_account_workspace(
         .eq("tenant_id", body.tenant_id)
         .execute()
     )
-    if not link.data:
+    link_res_data = cast(List[Dict[str, Any]], link.data or [])
+    if not link_res_data:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not a member of this workspace.",
@@ -77,12 +79,13 @@ async def switch_account_workspace(
         .limit(1)
         .execute()
     )
-    if not tenant.data:
+    tenant_res_data = cast(List[Dict[str, Any]], tenant.data or [])
+    if not tenant_res_data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found.")
 
-    role = link.data[0]["role"]
-    isolation_model = link.data[0].get("isolation_model", "team")
-    tenant_status = tenant.data[0].get("status", "active")
+    role = link_res_data[0].get("role", "member")
+    isolation_model = link_res_data[0].get("isolation_model", "team")
+    tenant_status = tenant_res_data[0].get("status", "active")
 
     new_token = create_access_token(
         {
@@ -98,14 +101,8 @@ async def switch_account_workspace(
     _set_refresh_cookie(response, refresh_token)
     AccountService.set_last_active_tenant_id(jwt_payload.user_id, body.tenant_id)
 
-    user_res = (
-        db.client.table("users")
-        .select("full_name, email_verified, user_status, deletion_scheduled_at")
-        .eq("id", jwt_payload.user_id)
-        .limit(1)
-        .execute()
-    )
-    user = user_res.data[0] if user_res.data else {}
+    user_res_data = cast(List[Dict[str, Any]], user_res.data or [])
+    user = user_res_data[0] if user_res_data else {}
 
     return _build_auth_response(
         user_id=jwt_payload.user_id,

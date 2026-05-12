@@ -43,6 +43,7 @@ export default function FranchiseSettingsPage() {
 
     const [franchises, setFranchises] = useState<Franchise[]>([]);
     const [domains, setDomains] = useState<any[]>([]);
+    const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [workspaceName, setWorkspaceName] = useState('');
@@ -56,15 +57,26 @@ export default function FranchiseSettingsPage() {
     const stats = useMemo(() => ([
         { label: 'Franchises', value: franchises.length.toString(), icon: <Store className="h-5 w-5" /> },
         { label: 'Active', value: franchises.filter((item) => item.status === 'active').length.toString(), icon: <CheckCircle2 className="h-5 w-5" /> },
-        { label: 'Pending Invites', value: franchises.filter((item) => item.status === 'pending_invite').length.toString(), icon: <UserPlus className="h-5 w-5" /> },
-    ]), [franchises]);
+        { label: 'Requests', value: incomingRequests.length.toString(), icon: <UserPlus className="h-5 w-5" /> },
+    ]), [franchises, incomingRequests]);
 
     useEffect(() => {
         if (token) {
             fetchFranchises();
             fetchDomains();
+            fetchRequests();
         }
     }, [token]);
+
+    const fetchRequests = async () => {
+        if (!token) return;
+        try {
+            const res = await fetch(`${API_BASE}/team/franchise-requests`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.ok) setIncomingRequests(await res.json());
+        } catch (err) { console.error('Failed to fetch requests', err); }
+    };
 
     const fetchFranchises = async () => {
         if (!token) return;
@@ -86,6 +98,41 @@ export default function FranchiseSettingsPage() {
         }
     };
 
+    const handleApproveRequest = async (requestId: string) => {
+        setActionBusy(true);
+        try {
+            const res = await fetch(`${API_BASE}/team/franchise-requests/${requestId}/approve`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.ok) {
+                success('Franchise created from request.');
+                fetchRequests();
+                fetchFranchises();
+            } else {
+                const d = await res.json();
+                error(d.detail || 'Approval failed');
+            }
+        } catch { error('Network error'); } finally { setActionBusy(false); }
+    };
+
+    const handleRejectRequest = async (requestId: string) => {
+        setActionBusy(true);
+        try {
+            const res = await fetch(`${API_BASE}/team/franchise-requests/${requestId}/reject`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.ok) {
+                success('Request rejected.');
+                fetchRequests();
+            } else {
+                const d = await res.json();
+                error(d.detail || 'Rejection failed');
+            }
+        } catch { error('Network error'); } finally { setActionBusy(false); }
+    };
+
     const fetchDomains = async () => {
         if (!token) return;
         try {
@@ -93,10 +140,11 @@ export default function FranchiseSettingsPage() {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (res.ok) {
-                const data = await res.json();
+                const response = await res.json();
+                const data = response.data || [];
                 const verified = data.filter((d: any) => d.status === 'verified');
                 setDomains(verified);
-                if (verified.length > 0) {
+                if (verified.length > 0 && !selectedDomainId) {
                     setSelectedDomainId(verified[0].id);
                 }
             }
@@ -229,6 +277,47 @@ export default function FranchiseSettingsPage() {
                 description="Each franchise is its own workspace. Suspending or deleting it affects its internal members, campaigns, contacts, and settings without changing the parent workspace."
                 icon={<AlertTriangle className="mt-0.5 h-4 w-4" />}
             />
+
+            {incomingRequests.length > 0 && (
+                <SectionCard 
+                    title="Incoming Franchise Requests" 
+                    description="Other users have requested to join your organization as a franchise workspace using your verified domains."
+                >
+                    <div className="divide-y divide-[var(--border)] rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)]">
+                        {incomingRequests.map((req) => (
+                            <div key={req.id} className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-sm font-semibold text-[var(--text-primary)]">{req.users?.email}</p>
+                                        <Badge variant="warning">Pending Review</Badge>
+                                    </div>
+                                    <p className="text-xs text-[var(--text-muted)]">Requesting access to: <span className="font-semibold text-[var(--text-primary)]">{req.domains?.domain_name}</span></p>
+                                    <p className="text-[10px] text-[var(--text-muted)]">Requested {new Date(req.created_at).toLocaleDateString()}</p>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <Button 
+                                        size="sm" 
+                                        onClick={() => handleApproveRequest(req.id)}
+                                        isLoading={actionBusy}
+                                    >
+                                        Approve
+                                    </Button>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm"
+                                        className="text-[var(--danger)]"
+                                        onClick={() => handleRejectRequest(req.id)}
+                                        disabled={actionBusy}
+                                    >
+                                        Reject
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </SectionCard>
+            )}
 
             <SectionCard title="Child Workspaces" description="Every franchise has its own owner and operating boundary. The parent workspace governs lifecycle, not day-to-day data access.">
                 <div className="divide-y divide-[var(--border)] rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-primary)]">

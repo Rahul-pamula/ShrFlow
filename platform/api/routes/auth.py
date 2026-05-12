@@ -11,6 +11,8 @@ Security Features:
 - Immutable audit logging
 """
 
+import logging
+from typing import List, Dict, Any, cast, Optional
 from fastapi import APIRouter, HTTPException, Depends, status, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
@@ -22,12 +24,12 @@ import hashlib
 import base64
 import time
 import secrets
-from typing import Optional
 import uuid
 import os
 import httpx
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+logger = logging.getLogger(__name__)
 
 # Rate limiter (standard slowapi for non-auth routes)
 from utils.rate_limiter import limiter, enforce_auth_rate_limit
@@ -67,8 +69,9 @@ def get_verified_domain_tenant(email: str) -> Optional[str]:
             return None
             
         res = db.client.table("domains").select("tenant_id").eq("domain_name", domain).eq("status", "verified").execute()
-        if res.data and len(res.data) > 0:
-            return res.data[0]["tenant_id"]
+        res_data = cast(List[Dict[str, Any]], res.data or [])
+        if res_data:
+            return res_data[0]["tenant_id"]
     except Exception:
         pass
     return None
@@ -81,23 +84,26 @@ async def notify_workspace_owners(tenant_id: str, requester_email: str):
     try:
         # Get workspace name
         t_res = db.client.table("tenants").select("company_name").eq("id", tenant_id).execute()
-        workspace_name = t_res.data[0].get("company_name", "Your Team") if t_res.data else "Your Team"
+        t_data = cast(List[Dict[str, Any]], t_res.data or [])
+        workspace_name = t_data[0].get("company_name", "Your Team") if t_data else "Your Team"
         
         # Get owners/managers (legacy rows may still be stored as admin)
         owners_res = db.client.table("tenant_users").select("user_id").eq("tenant_id", tenant_id).in_("role", ["owner", "admin"]).execute()
-        if not owners_res.data:
+        owners_data = cast(List[Dict[str, Any]], owners_res.data or [])
+        if not owners_data:
             return
             
-        owner_ids = [o["user_id"] for o in owners_res.data]
+        owner_ids = [o["user_id"] for o in owners_data]
         users_res = db.client.table("users").select("email").in_("id", owner_ids).execute()
+        users_data = cast(List[Dict[str, Any]], users_res.data or [])
         
         # Dispatch emails
-        emails = [u["email"] for u in (users_res.data or []) if u.get("email")]
+        emails = [u["email"] for u in users_data if u.get("email")]
         for email in emails:
-            await send_access_request_notification(email, requester_email, workspace_name)
+            await send_access_request_notification(cast(str, email), requester_email, cast(str, workspace_name))
             
     except Exception as e:
-        print(f"[JIT Notification Error] {e}")
+        logger.error(f"[JIT Notification Error] {e}")
 
 
 # === Pydantic Models ===
@@ -112,8 +118,8 @@ class SignupRequest(BaseModel):
                    Pass any non-empty string in dev (CAPTCHA_ENABLED=false).
     """
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=100)
-    full_name: str = Field(..., min_length=1, max_length=200)
+    password: str = Field(min_length=8, max_length=100)
+    full_name: str = Field(min_length=1, max_length=200)
     tenant_name: Optional[str] = None
     captcha_token: str = Field(
         default="",
@@ -137,7 +143,7 @@ class LoginRequest(BaseModel):
 class VerifyOtpRequest(BaseModel):
     """Request to verify an email OTP"""
     email: EmailStr
-    otp: str = Field(..., min_length=6, max_length=6)
+    otp: str = Field(min_length=6, max_length=6)
 
 
 class AuthResponse(BaseModel):
@@ -163,7 +169,7 @@ class SwitchWorkspaceRequest(BaseModel):
 
 class ThemeUpdateRequest(BaseModel):
     """Request to update the user's theme preference"""
-    theme: str = Field(..., description="Must be one of: light, dark, system")
+    theme: str = Field(description="Must be one of: light, dark, system")
 
 
 # === Helper Functions ===
@@ -187,9 +193,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode = data.copy()
     
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     
     # Ensure token_version is present in payload (default to 1 if not provided)
     if "token_version" not in to_encode:
@@ -205,7 +211,7 @@ def _create_refresh_token(user_id: str, tenant_id: str) -> str:
     from utils.supabase_client import db
     token = secrets.token_urlsafe(64)
     token_hash = hashlib.sha256(token.encode()).hexdigest()
-    expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     
     db.client.table("refresh_tokens").insert({
         "user_id": user_id,
@@ -252,9 +258,10 @@ def _build_auth_response(*, user_id: str, tenant_id: str, token: str, role: str,
     ws_type = "primary"
     workspace_name = "Workspace"
     
-    if tenant_res.data:
-        ws_type = tenant_res.data[0].get("workspace_type", "primary")
-        workspace_name = tenant_res.data[0].get("company_name", "Workspace")
+    tenant_data = cast(List[Dict[str, Any]], tenant_res.data or [])
+    if tenant_data:
+        ws_type = cast(str, tenant_data[0].get("workspace_type", "primary"))
+        workspace_name = cast(str, tenant_data[0].get("company_name", "Workspace"))
         
     mapped_type = "FRANCHISE" if ws_type == "franchise" else "MAIN"
 
@@ -358,7 +365,7 @@ async def signup(request: Request, body_request: SignupRequest, response: Respon
             "full_name": body_request.full_name,
             "email_verified": False,
             "is_active": True,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
         user_repo.create_user(user_data)
         
@@ -391,7 +398,7 @@ async def signup(request: Request, body_request: SignupRequest, response: Respon
                 "email": body_request.email,
                 "status": "onboarding",
                 "onboarding_required": True,
-                "created_at": datetime.utcnow().isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat()
             })
 
             # Link user to tenant as owner
@@ -399,7 +406,7 @@ async def signup(request: Request, body_request: SignupRequest, response: Respon
                 "tenant_id": tenant_id,
                 "user_id": user_id,
                 "role": "owner",
-                "joined_at": datetime.utcnow().isoformat()
+                "joined_at": datetime.now(timezone.utc).isoformat()
             })
 
             # Create onboarding progress tracker
@@ -554,6 +561,11 @@ async def login(request: Request, body_request: LoginRequest, response: Response
 
             tenant_status = "pending_join"
     else:
+        if not preferred_workspace:
+             raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Preferred workspace not resolved"
+            )
         tenant_id = preferred_workspace["tenant_id"]
         role = tenant_user["role"]
     
@@ -635,17 +647,19 @@ async def get_current_user(jwt_payload: JWTPayload = Depends(require_authenticat
         "id, email, full_name, email_verified, is_active, created_at, last_login_at, theme_preference, user_status, deletion_scheduled_at"
     ).eq("id", jwt_payload.user_id).execute()
 
-    if not user_result.data:
+    user_data_list = cast(List[Dict[str, Any]], user_result.data or [])
+    if not user_data_list:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    user = user_result.data[0]
+    user = user_data_list[0]
 
     # Fetch tenant name for workspace context
     try:
         tenant_result = db.client.table("tenants").select("workspace_name, company_name, workspace_type").eq("id", jwt_payload.tenant_id).execute()
-        if tenant_result.data:
-            workspace_name = tenant_result.data[0].get("workspace_name") or tenant_result.data[0].get("company_name") or "My Workspace"
-            workspace_type = tenant_result.data[0].get("workspace_type", "MAIN")
+        tenant_data = cast(List[Dict[str, Any]], tenant_result.data or [])
+        if tenant_data:
+            workspace_name = tenant_data[0].get("workspace_name") or tenant_data[0].get("company_name") or "My Workspace"
+            workspace_type = cast(str, tenant_data[0].get("workspace_type", "MAIN"))
         else:
             workspace_name = "My Workspace"
             workspace_type = "MAIN"
@@ -697,10 +711,11 @@ async def verify_otp(body: VerifyOtpRequest):
     # 2. Check tokens table
     res = db.client.table("email_verification_tokens").select("*").eq("user_id", user["id"]).eq("token", body.otp).execute()
     
-    if not res.data:
+    res_data = cast(List[Dict[str, Any]], res.data or [])
+    if not res_data:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification code")
         
-    token_record = res.data[0]
+    token_record = res_data[0]
     expires_at = datetime.fromisoformat(token_record["expires_at"].replace("Z", "+00:00"))
     
     if datetime.now(timezone.utc) > expires_at:
@@ -773,10 +788,11 @@ async def update_theme_preference(
 
     # Idempotency: fetch current value, skip write if unchanged
     user_result = db.client.table("users").select("theme_preference").eq("id", jwt_payload.user_id).execute()
-    if not user_result.data:
+    user_data_list = cast(List[Dict[str, Any]], user_result.data or [])
+    if not user_data_list:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    current = user_result.data[0].get("theme_preference") or "system"
+    current = user_data_list[0].get("theme_preference") or "system"
     if current == body.theme:
         return {"status": "no_change", "theme_preference": current}
 
@@ -804,7 +820,7 @@ async def get_user_workspaces(jwt_payload: JWTPayload = Depends(require_authenti
         return []
 
 class CreateWorkspaceRequest(BaseModel):
-    company_name: str = Field(..., min_length=2, max_length=100)
+    company_name: str = Field(min_length=2, max_length=100)
 
 @router.post("/workspaces", response_model=AuthResponse)
 async def create_new_workspace(
@@ -874,7 +890,8 @@ async def create_new_workspace(
     
     # 6. Fetch user details for response contract
     user_res = db.client.table("users").select("full_name, email_verified, user_status, deletion_scheduled_at").eq("id", jwt_payload.user_id).execute()
-    user_data = user_res.data[0] if user_res.data else {}
+    user_res_data = cast(List[Dict[str, Any]], user_res.data or [])
+    user_data = user_res_data[0] if user_res_data else {}
     
     return _build_auth_response(
         user_id=jwt_payload.user_id,
@@ -902,21 +919,23 @@ async def switch_workspace(
     # Verify the user is actually a member of the requested tenant
     link = db.client.table("tenant_users").select("role, isolation_model").eq("user_id", jwt_payload.user_id).eq("tenant_id", body.tenant_id).execute()
     
-    if not link.data:
+    link_data = cast(List[Dict[str, Any]], link.data or [])
+    if not link_data:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not a member of this workspace."
         )
         
-    role = link.data[0]["role"]
-    isolation_model = link.data[0].get("isolation_model", "team")
+    role = link_data[0]["role"]
+    isolation_model = link_data[0].get("isolation_model", "team")
     
     # Get tenant status to ensure it's not suspended
     tenant = db.client.table("tenants").select("status").eq("id", body.tenant_id).execute()
-    if not tenant.data:
+    tenant_data = cast(List[Dict[str, Any]], tenant.data or [])
+    if not tenant_data:
         raise HTTPException(status_code=404, detail="Workspace not found.")
         
-    tenant_status = tenant.data[0]["status"]
+    tenant_status = tenant_data[0]["status"]
     
     # Generate new JWT token scoped to this tenant
     token_data = {
@@ -936,7 +955,8 @@ async def switch_workspace(
     AccountService.set_last_active_tenant_id(jwt_payload.user_id, body.tenant_id)
     
     user_res = db.client.table("users").select("full_name, email_verified").eq("id", jwt_payload.user_id).execute()
-    user_data = user_res.data[0] if user_res.data else {}
+    user_res_data = cast(List[Dict[str, Any]], user_res.data or [])
+    user_data = user_res_data[0] if user_res_data else {}
 
     return _build_auth_response(
         user_id=jwt_payload.user_id,
@@ -967,11 +987,12 @@ async def refresh_token(request: Request, response: Response):
     except Exception:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    if not res.data:
+    token_record_list = cast(List[Dict[str, Any]], res.data or [])
+    if not token_record_list:
         response.delete_cookie("refresh_token", path="/")
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-    token_record = res.data[0]
+    token_record = token_record_list[0]
     
     if token_record.get("revoked"):
         response.delete_cookie("refresh_token", path="/")
@@ -991,20 +1012,23 @@ async def refresh_token(request: Request, response: Response):
 
     # Get user to construct payload and fetch fresh role/tenant_status
     user_res = db.client.table("users").select("email, email_verified, is_active, token_version").eq("id", user_id).execute()
-    if not user_res.data or not user_res.data[0].get("is_active"):
+    user_data_list = cast(List[Dict[str, Any]], user_res.data or [])
+    if not user_data_list or not user_data_list[0].get("is_active"):
         response.delete_cookie("refresh_token", path="/")
         raise HTTPException(status_code=401, detail="User account disabled or not found")
-    user = user_res.data[0]
+    user = user_data_list[0]
 
     tenant_user_res = db.client.table("tenant_users").select("role, isolation_model").eq("user_id", user_id).eq("tenant_id", tenant_id).execute()
-    if not tenant_user_res.data:
+    tenant_user_data_list = cast(List[Dict[str, Any]], tenant_user_res.data or [])
+    if not tenant_user_data_list:
         response.delete_cookie("refresh_token", path="/")
         raise HTTPException(status_code=401, detail="User is no longer in this tenant")
     
-    tenant_user = tenant_user_res.data[0]
+    tenant_user = tenant_user_data_list[0]
 
     tenant_res = db.client.table("tenants").select("status").eq("id", tenant_id).execute()
-    tenant_status = tenant_res.data[0]["status"] if tenant_res.data else "active"
+    tenant_data_list = cast(List[Dict[str, Any]], tenant_res.data or [])
+    tenant_status = tenant_data_list[0]["status"] if tenant_data_list else "active"
 
     token_data = {
         "user_id": user_id,
@@ -1020,7 +1044,8 @@ async def refresh_token(request: Request, response: Response):
     _set_refresh_cookie(response, new_refresh_token)
 
     full_name_res = db.client.table("users").select("full_name").eq("id", user_id).execute()
-    full_name = full_name_res.data[0].get("full_name") if full_name_res.data else None
+    full_name_data = cast(List[Dict[str, Any]], full_name_res.data or [])
+    full_name = full_name_data[0].get("full_name") if full_name_data else None
 
     return _build_auth_response(
         user_id=user_id,
@@ -1263,16 +1288,18 @@ async def process_oauth_user(email: str, full_name: str, provider: str):
     # 1. Check if user exists
     user_result = db.client.table("users").select("*").eq("email", email).execute()
     
-    if user_result.data:
+    user_data_list = cast(List[Dict[str, Any]], user_result.data or [])
+    
+    if user_data_list:
         # EXISTING USER -> log them in
-        user = user_result.data[0]
+        user = user_data_list[0]
         
         if not user.get("is_active", True):
             return RedirectResponse(f"{FRONTEND_CALLBACK_URL}?error=AccountDisabled")
             
         # If they use OAuth, we trust the provider and mark them as verified locally
         if not user.get("email_verified"):
-            db.client.table("users").update({"email_verified": True}).eq("id", user["id"]).execute()
+            db.client.table("users").update({"email_verified": True}).eq("id", user.get("id")).execute()
             user["email_verified"] = True
             
         # Production Hardening: Priority Workspace Selection
@@ -1282,30 +1309,106 @@ async def process_oauth_user(email: str, full_name: str, provider: str):
             "tenant_id, role, isolation_model, joined_at, tenants!inner(status, workspace_type, onboarding_required)"
         ).eq("user_id", user["id"]).execute()
         
-        memberships = tenant_user_result.data or []
+        memberships = cast(List[Dict[str, Any]], tenant_user_result.data or [])
         print(f"DEBUG: Found {len(memberships)} memberships for user {email}")
         for m in memberships:
             # Safely get status, handling both object and list (Supabase can be tricky with joins)
             t_data = m.get("tenants")
             if isinstance(t_data, list): t_data = t_data[0] if t_data else {}
-            status = t_data.get("status")
-            print(f"DEBUG: Membership: tenant_id={m['tenant_id']}, role={m['role']}, status={status}, joined_at={m.get('joined_at')}")
+            status = cast(Dict[str, Any], t_data).get("status")
+            tenant_id = m.get("tenant_id")
+            role = m.get("role")
+            joined_at = m.get("joined_at")
+            print(f"DEBUG: Membership: tenant_id={tenant_id}, role={role}, status={status}, joined_at={joined_at}")
 
         if not memberships:
-            # Check waiting room
+            # 1. Check waiting room / join requests
             join_req_result = db.client.table("join_requests").select("tenant_id, status").eq("user_id", user["id"]).execute()
-            if not join_req_result.data:
-                return RedirectResponse(f"{FRONTEND_CALLBACK_URL}?error=NoTenantFound")
-                
-            join_req = join_req_result.data[0]
-            tenant_id = join_req["tenant_id"]
-            role = "pending"
-            tenant_status = "pending_join"
-            mapped_type = "MAIN"
-            onboarding_required = False
+            join_req_data_list = cast(List[Dict[str, Any]], join_req_result.data or [])
             
-            if join_req["status"] == "blocked":
-                return RedirectResponse(f"{FRONTEND_CALLBACK_URL}?error=AccountBlocked")
+            if join_req_data_list:
+                join_req = join_req_data_list[0]
+                if join_req["status"] == "blocked":
+                    return RedirectResponse(f"{FRONTEND_CALLBACK_URL}?error=AccountBlocked")
+                
+                tenant_id = join_req["tenant_id"]
+                role = "pending"
+                tenant_status = "pending_join"
+                mapped_type = "MAIN"
+                onboarding_required = False
+            else:
+                # 2. No memberships and no join requests -> Check invitations or create new tenant
+                # This handles users who exist but were never assigned a workspace or were removed.
+                
+                # Check for pending team invitations
+                invite_res = db.client.table("team_invitations").select("tenant_id, role, isolation_model").eq("email", email).eq("status", "pending").execute()
+                invite_data_list = cast(List[Dict[str, Any]], invite_res.data or [])
+                pending_invite = invite_data_list[0] if invite_data_list else None
+                
+                if pending_invite:
+                    tenant_id = pending_invite["tenant_id"]
+                    role = pending_invite["role"]
+                    isolation_model = pending_invite.get("isolation_model", "team")
+                    db.client.table("tenant_users").insert({
+                        "tenant_id": tenant_id,
+                        "user_id": user["id"],
+                        "role": role,
+                        "isolation_model": isolation_model,
+                        "joined_at": datetime.now(timezone.utc).isoformat()
+                    }).execute()
+                    db.client.table("team_invitations").update({"status": "accepted"}).eq("email", email).eq("tenant_id", tenant_id).execute()
+                    tenant_status = "active"
+                    mapped_type = "MAIN"
+                    onboarding_required = False
+                else:
+                    # Check for JIT domain discovery
+                    jit_tenant_id = get_verified_domain_tenant(email)
+                    if jit_tenant_id:
+                        tenant_id = jit_tenant_id
+                        db.client.table("join_requests").insert({
+                            "user_id": user["id"],
+                            "tenant_id": tenant_id,
+                            "status": "pending",
+                            "risk_score": "Low Risk"
+                        }).execute()
+                        await notify_workspace_owners(tenant_id, email)
+                        tenant_status = "pending_join"
+                        role = "pending"
+                        mapped_type = "MAIN"
+                        onboarding_required = False
+                    else:
+                        # Fallback: Create isolated tenant
+                        tenant_id = str(uuid.uuid4())
+                        db.client.table("tenants").insert({
+                            "id": tenant_id,
+                            "email": email,
+                            "status": "onboarding",
+                            "onboarding_required": True,
+                            "created_at": datetime.now(timezone.utc).isoformat()
+                        }).execute()
+                        db.client.table("tenant_users").insert({
+                            "tenant_id": tenant_id,
+                            "user_id": user["id"],
+                            "role": "owner",
+                            "joined_at": datetime.now(timezone.utc).isoformat()
+                        }).execute()
+                        
+                        try:
+                            db.client.table("onboarding_progress").insert({
+                                "tenant_id": tenant_id,
+                                "stage_basic_info": False,
+                                "stage_compliance": False,
+                                "stage_intent": False,
+                                "started_at": datetime.now(timezone.utc).isoformat()
+                            }).execute()
+                        except Exception: pass
+                        
+                        tenant_status = "onboarding"
+                        role = "owner"
+                        mapped_type = "MAIN"
+                        onboarding_required = True
+                        AccountService.set_last_active_tenant_id(user["id"], tenant_id)
+                        AccountService.log_workspace_creation(user["id"], tenant_id, None)
         else:
             preferred_workspace = AccountService.resolve_preferred_workspace(user["id"])
             tenant_user = next((membership for membership in memberships if membership["tenant_id"] == preferred_workspace["tenant_id"]), memberships[0]) if preferred_workspace else memberships[0]
@@ -1313,18 +1416,18 @@ async def process_oauth_user(email: str, full_name: str, provider: str):
             role = tenant_user["role"]
             isolation_model = tenant_user.get("isolation_model", "team")
 
-            tenant_data = tenant_user["tenants"]
+            tenant_data = cast(Dict[str, Any], tenant_user.get("tenants", {}))
             if isinstance(tenant_data, list):
                 tenant_data = tenant_data[0] if tenant_data else {}
 
-            tenant_status = tenant_data.get("status", "active")
-            mapped_type = tenant_data.get("workspace_type", "MAIN")
-            onboarding_required = tenant_status == "onboarding" or tenant_data.get("onboarding_required", False)
+            tenant_status = cast(str, tenant_data.get("status", "active"))
+            mapped_type = cast(str, tenant_data.get("workspace_type", "MAIN"))
+            onboarding_required = tenant_status == "onboarding" or bool(tenant_data.get("onboarding_required", False))
 
             print(f"DEBUG: Selected tenant_id={tenant_id}, status={tenant_status}")
-            AccountService.set_last_active_tenant_id(user["id"], tenant_id)
+            AccountService.set_last_active_tenant_id(cast(str, user.get("id")), tenant_id)
         
-        user_id = user["id"]
+        user_id = cast(str, user.get("id"))
     else:
         # NEW USER -> create their account and an isolated tenant automatically
         user_id = str(uuid.uuid4())
@@ -1342,7 +1445,7 @@ async def process_oauth_user(email: str, full_name: str, provider: str):
             "email_verified": True, # OAuth emails are inherently verified
             "is_active": True,
             "token_version": 1,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
         
         # Check for Enterprise JIT Auto-Discovery OR Team Invitations
@@ -1350,7 +1453,8 @@ async def process_oauth_user(email: str, full_name: str, provider: str):
         
         # Check for pending team invitations (PRIORITY over auto-creating a new workspace)
         invite_res = db.client.table("team_invitations").select("tenant_id, role, isolation_model").eq("email", email).eq("status", "pending").execute()
-        pending_invite = invite_res.data[0] if invite_res.data else None
+        invite_data_list = cast(List[Dict[str, Any]], invite_res.data or [])
+        pending_invite = invite_data_list[0] if invite_data_list else None
         
         if pending_invite:
             # User was invited! Link them to that workspace instead of creating a ghost one.
@@ -1364,7 +1468,7 @@ async def process_oauth_user(email: str, full_name: str, provider: str):
                 "user_id": user_id,
                 "role": role,
                 "isolation_model": isolation_model,
-                "joined_at": datetime.utcnow().isoformat()
+                "joined_at": datetime.now(timezone.utc).isoformat()
             }).execute()
             
             # Update invite status
@@ -1399,18 +1503,19 @@ async def process_oauth_user(email: str, full_name: str, provider: str):
                 "email": email,
                 "status": "onboarding",
                 "onboarding_required": True,
-                "created_at": datetime.utcnow().isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat()
             }).execute()
             
-            if tenant_result.data:
-                tenant_id = tenant_result.data[0]["id"]
+            tenant_data = cast(List[Dict[str, Any]], tenant_result.data or [])
+            if tenant_data:
+                tenant_id = tenant_data[0]["id"]
             
             try:
                 db.client.table("tenant_users").insert({
                     "tenant_id": tenant_id,
                     "user_id": user_id,
                     "role": "owner",
-                    "joined_at": datetime.utcnow().isoformat()
+                    "joined_at": datetime.now(timezone.utc).isoformat()
                 }).execute()
             except Exception:
                 pass
@@ -1421,7 +1526,7 @@ async def process_oauth_user(email: str, full_name: str, provider: str):
                     "stage_basic_info": False,
                     "stage_compliance": False,
                     "stage_intent": False,
-                    "started_at": datetime.utcnow().isoformat()
+                    "started_at": datetime.now(timezone.utc).isoformat()
                 }).execute()
             except Exception:
                 pass
@@ -1435,6 +1540,11 @@ async def process_oauth_user(email: str, full_name: str, provider: str):
 
     # Generate Secure JWT
     isolation_model = locals().get("isolation_model", "team")
+    token_version = 1
+    existing_user = locals().get('user')
+    if isinstance(existing_user, dict):
+        token_version = existing_user.get("token_version", 1)
+
     token_data = {
         "user_id": user_id,
         "tenant_id": tenant_id,
@@ -1444,14 +1554,14 @@ async def process_oauth_user(email: str, full_name: str, provider: str):
         "tenant_status": tenant_status,
         "workspace_type": mapped_type,
         "onboarding_required": onboarding_required,
-        "token_version": user.get("token_version", 1) if 'user' in locals() else 1
+        "token_version": token_version
     }
     
     access_token = create_access_token(token_data)
     
     # Update last login timestamp
     db.client.table("users").update({
-        "last_login_at": datetime.utcnow().isoformat()
+        "last_login_at": datetime.now(timezone.utc).isoformat()
     }).eq("id", user_id).execute()
     
     # Finally, redirect back to NEXT.JS with the secure JWT parameter

@@ -64,20 +64,22 @@ async def create_campaign(request: Request, campaign: CampaignCreate, tenant_id:
     
     # 1. Verify Tenant Status
     tenant_result = db.client.table("tenants").select("status").eq("id", tenant_id).execute()
-    if not tenant_result.data or not isinstance(tenant_result.data, list) or len(tenant_result.data) == 0:
+    tenant_res_data = cast(List[Dict[str, Any]], tenant_result.data or [])
+    if not tenant_res_data:
         raise HTTPException(status_code=403, detail="Access denied.")
     
-    tenant_data = tenant_result.data[0]
-    if not isinstance(tenant_data, dict) or tenant_data.get("status") != "active":
+    tenant_data = tenant_res_data[0]
+    if tenant_data.get("status") != "active":
         raise HTTPException(status_code=403, detail="Access denied.")
     
     # 1.5 Verify Domain
     domain_result = db.client.table("domains").select("status, domain_name").eq("id", str(campaign.domain_id)).eq("tenant_id", tenant_id).execute()
-    if not domain_result.data or not isinstance(domain_result.data, list) or len(domain_result.data) == 0:
+    domain_res_data = cast(List[Dict[str, Any]], domain_result.data or [])
+    if not domain_res_data:
         raise HTTPException(status_code=400, detail="Domain not found or does not belong to your workspace.")
     
-    domain_data = domain_result.data[0]
-    if not isinstance(domain_data, dict) or domain_data.get("status") != "verified":
+    domain_data = domain_res_data[0]
+    if domain_data.get("status") != "verified":
         raise HTTPException(status_code=400, detail="Access denied.")
         
     campaign_id = str(uuid.uuid4())
@@ -172,12 +174,11 @@ async def archive_campaign(campaign_id: str, tenant_id: str = Depends(require_ac
     from utils.supabase_client import db
 
     result = db.client.table("campaigns").select("status, created_by_user_id, is_archived").eq("id", campaign_id).eq("tenant_id", tenant_id).execute()
-    if not result.data:
+    res_data = cast(List[Dict[str, Any]], result.data or [])
+    if not res_data:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    campaign = result.data[0]
-    if not isinstance(campaign, dict):
-        raise HTTPException(status_code=404, detail="Campaign not found")
+    campaign = res_data[0]
         
     if jwt_payload.role == "creator" and campaign.get("created_by_user_id") != jwt_payload.user_id:
         raise HTTPException(status_code=403, detail="You can only archive campaigns that you created.")
@@ -195,10 +196,11 @@ async def unarchive_campaign(campaign_id: str, tenant_id: str = Depends(require_
     from utils.supabase_client import db
 
     result = db.client.table("campaigns").select("status, created_by_user_id, is_archived").eq("id", campaign_id).eq("tenant_id", tenant_id).execute()
-    if not result.data:
+    res_data = cast(List[Dict[str, Any]], result.data or [])
+    if not res_data:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    campaign = cast(Dict[str, Any], result.data[0])
+    campaign = res_data[0]
     if jwt_payload.role == "creator" and campaign.get("created_by_user_id") != jwt_payload.user_id:
         raise HTTPException(status_code=403, detail="You can only restore campaigns that you created.")
     if not campaign.get("is_archived"):
@@ -219,7 +221,8 @@ async def get_campaign(campaign_id: str, tenant_id: str = Depends(require_active
     if not result.data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    return cast(Dict[str, Any], result.data[0])
+    res_data = cast(List[Dict[str, Any]], result.data or [])
+    return res_data[0]
 
 @router.get("/{campaign_id}/dispatch")
 async def get_campaign_dispatch(campaign_id: str, tenant_id: str = Depends(require_active_tenant), jwt_payload: JWTPayload = Depends(require_permission("campaign:manage"))):
@@ -246,9 +249,10 @@ async def update_campaign_patch(campaign_id: str, campaign: CampaignUpdate, tena
     
     # 1. Verify ownership and state
     record = db.client.table("campaigns").select("created_by_user_id, status").eq("id", campaign_id).eq("tenant_id", tenant_id).execute()
-    if not record.data: raise HTTPException(status_code=404, detail="Campaign not found")
+    record_res_data = cast(List[Dict[str, Any]], record.data or [])
+    if not record_res_data: raise HTTPException(status_code=404, detail="Campaign not found")
     
-    record_data = cast(Dict[str, Any], record.data[0])
+    record_data = record_res_data[0]
     current_status = record_data.get("status", "draft")
 
     # 2. Prevent Editing of Non-Draft Campaigns (Fix 4)
@@ -266,8 +270,8 @@ async def update_campaign_patch(campaign_id: str, campaign: CampaignUpdate, tena
     # Verify domain if it's being updated
     if "domain_id" in update_data:
         domain_result = db.client.table("domains").select("status").eq("id", str(update_data["domain_id"])).eq("tenant_id", tenant_id).execute()
-        domain_data = cast(Dict[str, Any], domain_result.data[0])
-        if not domain_result.data or domain_data.get("status") != "verified":
+        domain_res_data = cast(List[Dict[str, Any]], domain_result.data or [])
+        if not domain_res_data or domain_res_data[0].get("status") != "verified":
             raise HTTPException(status_code=400, detail="Domain not found or is not verified.")
         update_data["domain_id"] = str(update_data["domain_id"])
         
@@ -275,11 +279,12 @@ async def update_campaign_patch(campaign_id: str, campaign: CampaignUpdate, tena
         update_data["scheduled_at"] = update_data["scheduled_at"].isoformat()
     
     result = db.client.table("campaigns").update(update_data).eq("id", campaign_id).eq("tenant_id", tenant_id).execute()
+    res_data = cast(List[Dict[str, Any]], result.data or [])
     
-    if not result.data:
+    if not res_data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    return {"status": "updated", "campaign": result.data[0]}
+    return {"status": "updated", "campaign": res_data[0]}
 
 @router.delete("/{campaign_id}")
 async def delete_campaign(campaign_id: str, tenant_id: str = Depends(require_active_tenant), jwt_payload: JWTPayload = Depends(require_permission("campaign:manage"))):
@@ -288,10 +293,11 @@ async def delete_campaign(campaign_id: str, tenant_id: str = Depends(require_act
     
     # Check current status and ownership
     result = db.client.table("campaigns").select("status, created_by_user_id").eq("id", campaign_id).eq("tenant_id", tenant_id).execute()
-    if not result.data:
+    res_data = cast(List[Dict[str, Any]], result.data or [])
+    if not res_data:
         raise HTTPException(status_code=404, detail="Campaign not found")
         
-    campaign_data = cast(Dict[str, Any], result.data[0])
+    campaign_data = res_data[0]
     if jwt_payload.role == "creator" and campaign_data.get("created_by_user_id") != jwt_payload.user_id:
         raise HTTPException(status_code=403, detail="You can only delete campaigns that you created.")    
         
@@ -333,10 +339,11 @@ async def update_campaign_put(campaign_id: str, body: dict, tenant_id: str = Dep
 
     # Verify ownership and status
     result = db.client.table("campaigns").select("status, created_by_user_id").eq("id", campaign_id).eq("tenant_id", tenant_id).execute()
-    if not result.data:
+    res_data = cast(List[Dict[str, Any]], result.data or [])
+    if not res_data:
         raise HTTPException(status_code=404, detail="Campaign not found")
         
-    campaign_data = cast(Dict[str, Any], result.data[0])
+    campaign_data = res_data[0]
     if jwt_payload.role == "creator" and campaign_data.get("created_by_user_id") != jwt_payload.user_id:
         raise HTTPException(status_code=403, detail="You can only edit campaigns that you created.")
 
@@ -352,7 +359,8 @@ async def update_campaign_put(campaign_id: str, body: dict, tenant_id: str = Dep
     if "from_prefix" in body: update_fields["from_prefix"] = body["from_prefix"]
     if "domain_id" in body: 
         domain_result = db.client.table("domains").select("status").eq("id", str(body["domain_id"])).eq("tenant_id", tenant_id).execute()
-        if not domain_result.data or cast(Dict[str, Any], domain_result.data[0]).get("status") != "verified":
+        domain_res_data = cast(List[Dict[str, Any]], domain_result.data or [])
+        if not domain_res_data or domain_res_data[0].get("status") != "verified":
             raise HTTPException(status_code=403, detail="Access denied.")
         update_fields["domain_id"] = str(body["domain_id"])
     if "scheduled_at" in body: update_fields["scheduled_at"] = body["scheduled_at"]
@@ -424,10 +432,11 @@ async def send_campaign(request: Request, campaign_id: str, send_request: SendRe
     
     # 1. Fetch Campaign with Domain info
     campaign_res = db.client.table("campaigns").select("*, domains(domain_name)").eq("id", campaign_id).eq("tenant_id", tenant_id).execute()
-    if not campaign_res.data:
+    camp_res_data = cast(List[Dict[str, Any]], campaign_res.data or [])
+    if not camp_res_data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    campaign = cast(Dict[str, Any], campaign_res.data[0])
+    campaign = camp_res_data[0]
     
     # STATE MACHINE: only 'approved' or 'paused' campaigns may be sent
     # 'paused' is allowed because a paused campaign was already approved before it started sending
@@ -466,8 +475,9 @@ async def send_campaign(request: Request, campaign_id: str, send_request: SendRe
     ).eq("id", tenant_id).execute()
 
     daily_sent = 0
-    if tenant_res.data:
-        t = tenant_res.data[0]
+    tenant_res_data = cast(List[Dict[str, Any]], tenant_res.data or [])
+    if tenant_res_data:
+        t = tenant_res_data[0]
         if isinstance(t, dict):
             limit = t.get("daily_send_limit") or 1000
             today = date.today().isoformat()
@@ -523,10 +533,10 @@ async def send_campaign(request: Request, campaign_id: str, send_request: SendRe
         
         # We need to fetch current emails_sent_this_cycle to update it manually without RPC
         cycle_res = db.client.table("tenants").select("emails_sent_this_cycle").eq("id", tenant_id).execute()
-        cycle_data = cast(Dict[str, Any], cycle_res.data[0])
+        cycle_res_data = cast(List[Dict[str, Any]], cycle_res.data or [])
         current_cycle = 0
-        if cycle_res.data and cycle_data.get("emails_sent_this_cycle"):
-            current_cycle = int(cast(Any, cycle_data["emails_sent_this_cycle"]))
+        if cycle_res_data and cycle_res_data[0].get("emails_sent_this_cycle"):
+            current_cycle = int(cast(Any, cycle_res_data[0]["emails_sent_this_cycle"]))
             
         db.client.table("tenants").update({
             "daily_sent_count": current_daily + len(contacts),
@@ -538,8 +548,9 @@ async def send_campaign(request: Request, campaign_id: str, send_request: SendRe
         usage_res = db.client.table("tenants").select(
             "email, emails_sent_this_cycle, plans(name, max_monthly_emails)"
         ).eq("id", tenant_id).execute()
-        if usage_res.data:
-            t = cast(Dict[str, Any], usage_res.data[0])
+        usage_res_data = cast(List[Dict[str, Any]], usage_res.data or [])
+        if usage_res_data:
+            t = usage_res_data[0]
             plan = cast(Dict[str, Any], t.get("plans") or {})
             limit = int(plan.get("max_monthly_emails") or 1000)
             used = int(t.get("emails_sent_this_cycle") or 0)
@@ -660,12 +671,13 @@ async def preview_campaign(campaign_id: str, sample_contact: Optional[dict] = No
     
     query = db.client.table("campaigns").select("*").eq("id", campaign_id).eq("tenant_id", tenant_id)
     query = apply_data_isolation(query, jwt_payload)
-    campaign = query.execute()
+    result = query.execute()
+    res_data = cast(List[Dict[str, Any]], result.data or [])
     
-    if not campaign.data:
+    if not res_data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    campaign_data = campaign.data[0]
+    campaign_data = res_data[0]
     
     contact = sample_contact or {
         "email": "preview@example.com",
@@ -704,12 +716,13 @@ async def send_test_email(campaign_id: str, request: TestEmailRequest, tenant_id
     
     query = db.client.table("campaigns").select("*").eq("id", campaign_id).eq("tenant_id", tenant_id)
     query = apply_data_isolation(query, jwt_payload)
-    campaign = query.execute()
+    result = query.execute()
+    res_data = cast(List[Dict[str, Any]], result.data or [])
     
-    if not campaign.data:
+    if not res_data:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    camp = campaign.data[0]
+    camp = res_data[0]
     sample_contact = {"email": request.recipient_email, "first_name": "Test", "last_name": "User"}
 
     body_html = str(camp.get("body_html", ""))
@@ -754,10 +767,11 @@ async def duplicate_campaign(request: Request, campaign_id: str, tenant_id: str 
     
     # 1. Fetch original campaign
     result = db.client.table("campaigns").select("*").eq("id", campaign_id).eq("tenant_id", tenant_id).execute()
-    if not result.data:
+    res_data = cast(List[Dict[str, Any]], result.data or [])
+    if not res_data:
         raise HTTPException(status_code=404, detail="Campaign not found")
         
-    original = cast(Dict[str, Any], result.data[0])
+    original = res_data[0]
     
     # 2. Prepare new data
     new_campaign_id = str(uuid.uuid4())
@@ -805,11 +819,12 @@ async def reject_campaign_review(
     
     # 1. Fetch Campaign
     campaign_res = db.client.table("campaigns").select("name, created_by_user_id, status").eq("id", campaign_id).eq("tenant_id", tenant_id).execute()
-    if not campaign_res.data:
+    camp_res_data = cast(List[Dict[str, Any]], campaign_res.data or [])
+    if not camp_res_data:
         raise HTTPException(status_code=404, detail="Campaign not found.")
     
     # 2. Update Status (Atomic)
-    campaign_data = cast(Dict[str, Any], campaign_res.data[0])
+    campaign_data = camp_res_data[0]
     # 2. Update Status (Atomic)
     validate_campaign_transition(str(campaign_data.get("status", "unknown")), "draft")
     res = db.client.table("campaigns").update({"status": "draft"}).eq("id", campaign_id).eq("status", "awaiting_review").execute()
@@ -923,24 +938,27 @@ async def request_campaign_review(
         workspace_name = "your workspace"
         try:
             creator_res = db.client.table("users").select("full_name, email").eq("id", jwt_payload.user_id).execute()
-            if creator_res.data:
-                creator_row = cast(Dict[str, Any], creator_res.data[0])
+            creator_res_data = cast(List[Dict[str, Any]], creator_res.data or [])
+            if creator_res_data:
+                creator_row = creator_res_data[0]
                 creator_name = str(creator_row.get("full_name") or creator_row.get("email") or "A team member")
         except Exception:
             pass
 
         try:
             role_res = db.client.table("tenant_users").select("role").eq("user_id", jwt_payload.user_id).eq("tenant_id", tenant_id).execute()
-            if role_res.data:
-                role_row = cast(Dict[str, Any], role_res.data[0])
+            role_res_data = cast(List[Dict[str, Any]], role_res.data or [])
+            if role_res_data:
+                role_row = role_res_data[0]
                 creator_role = str(role_row.get("role", "Creator")).capitalize()
         except Exception:
             pass
 
         try:
             ws_res = db.client.table("tenants").select("workspace_name").eq("id", tenant_id).execute()
-            if ws_res.data:
-                ws_row = cast(Dict[str, Any], ws_res.data[0])
+            ws_res_data = cast(List[Dict[str, Any]], ws_res.data or [])
+            if ws_res_data:
+                ws_row = ws_res_data[0]
                 workspace_name = str(ws_row.get("workspace_name") or ws_row.get("company_name") or "your workspace")
         except Exception:
             pass

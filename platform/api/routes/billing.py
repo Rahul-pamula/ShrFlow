@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Dict, Any, cast, Optional
 from datetime import datetime, timedelta, timezone
 from utils.supabase_client import db
 from utils.jwt_middleware import require_active_tenant, JWTPayload
@@ -27,18 +27,20 @@ def _get_tenant_billing(tenant_id: str) -> dict:
         "scheduled_plan_id, scheduled_plan_effective_at, "
         "plans!tenants_plan_id_fkey(id, name, price_monthly, max_monthly_emails, max_contacts, max_users, max_domains, allow_custom_domain)"
     ).eq("id", tenant_id).execute()
-    if not res.data:
+    res_data = cast(List[Dict[str, Any]], res.data or [])
+    if not res_data:
         raise HTTPException(status_code=404, detail="Tenant billing profile not found")
-    return res.data[0]
+    return res_data[0]
 
 
 def _get_plan(plan_id: str) -> dict:
     res = db.client.table("plans").select(
         "id, name, price_monthly, max_monthly_emails, max_contacts, max_users, max_domains, allow_custom_domain"
     ).eq("id", plan_id).execute()
-    if not res.data:
+    res_data = cast(List[Dict[str, Any]], res.data or [])
+    if not res_data:
         raise HTTPException(status_code=404, detail="Plan not found")
-    return res.data[0]
+    return res_data[0]
 
 
 @router.get("/plan")
@@ -69,8 +71,9 @@ async def get_current_plan(
         sp_res = db.client.table("plans").select(
             "id, name, price_monthly, max_monthly_emails, max_contacts"
         ).eq("id", tenant["scheduled_plan_id"]).execute()
-        if sp_res.data:
-            scheduled_plan = sp_res.data[0]
+        sp_res_data = cast(List[Dict[str, Any]], sp_res.data or [])
+        if sp_res_data:
+            scheduled_plan = sp_res_data[0]
 
     # All plans (for pricing table)
     all_plans_res = db.client.table("plans").select(

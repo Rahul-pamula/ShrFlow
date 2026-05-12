@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Copy, Plus, Activity, RefreshCw, Globe, CheckCircle2, ShieldAlert, X, Lock, ChevronDown, ChevronUp } from 'lucide-react';
+import { Copy, Plus, Activity, RefreshCw, Globe, CheckCircle2, ShieldAlert, X, Lock, ChevronDown, ChevronUp, Clock } from 'lucide-react';
 import { can } from '@/utils/permissions';
 import { useRouter } from 'next/navigation';
 import { useToast, Badge, Button, ConfirmModal, EmptyState, InlineAlert, InspectorPanel, KeyValueList, PageHeader, SectionCard, StatCard, PageLoader } from '@/components/ui';
@@ -73,6 +73,8 @@ export default function DomainSettingsPage() {
         }
     }, [user, router]);
 
+    const [region, setRegion] = useState('us-east-1');
+
     const fetchDomains = async () => {
         if (!token) return;
         try {
@@ -83,6 +85,7 @@ export default function DomainSettingsPage() {
                 const data = await res.json();
                 const nextDomains = data.data || [];
                 setDomains(nextDomains);
+                if (data.region) setRegion(data.region);
                 setSelectedDomain((current: any) => current ? nextDomains.find((entry: any) => entry.id === current.id) || nextDomains[0] || null : nextDomains[0] || null);
             }
         } catch {
@@ -115,6 +118,7 @@ export default function DomainSettingsPage() {
             selectedDomain={selectedDomain} 
             setSelectedDomain={setSelectedDomain}
             refresh={fetchDomains}
+            region={region}
         />
     );
 }
@@ -255,19 +259,60 @@ function FranchiseDomainView({ domains }: any) {
 /* ============================================================
    MAIN MANAGEMENT VIEW (Full Access Fork)
    ============================================================ */
-function MainDomainManagement({ domains, selectedDomain, setSelectedDomain, refresh }: any) {
+function MainDomainManagement({ domains, selectedDomain, setSelectedDomain, refresh, region }: any) {
     const { token, user } = useAuth();
     const { success, error, info } = useToast();
     const [showAddModal, setShowAddModal] = useState(false);
     const [newDomain, setNewDomain] = useState('');
     const [adding, setAdding] = useState(false);
+    const [conflictInfo, setConflictInfo] = useState<any>(null);
+    const [requesting, setRequesting] = useState(false);
     const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
     const [expandedId, setExpandedId] = useState<string | null>(domains[0]?.id || null);
     const [showDnsRecords, setShowDnsRecords] = useState(false);
+    const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+    const [requestedWorkspaceName, setRequestedWorkspaceName] = useState('');
+
+    useEffect(() => {
+        if (token) fetchPendingRequests();
+    }, [token]);
+
+    const fetchPendingRequests = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/team/franchise-requests?mode=outgoing`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setPendingRequests(data.filter((r: any) => r.status === 'pending'));
+            }
+        } catch (err) {
+            console.error('Failed to fetch pending franchise requests', err);
+        }
+    };
+
+    const handleCancelRequest = async (id: string) => {
+        if (!confirm('Withdraw this franchise request?')) return;
+        try {
+            const res = await fetch(`${API_BASE}/team/franchise-requests/${id}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.ok) {
+                success('Request withdrawn.');
+                fetchPendingRequests();
+            } else {
+                error('Failed to withdraw request.');
+            }
+        } catch (err) {
+            error('Network error');
+        }
+    };
 
     const handleAddDomain = async (e: React.FormEvent) => {
         e.preventDefault();
         setAdding(true);
+        setConflictInfo(null);
         try {
             const res = await fetch(`${API_BASE}/domains/`, {
                 method: 'POST',
@@ -279,11 +324,41 @@ function MainDomainManagement({ domains, selectedDomain, setSelectedDomain, refr
                 setShowAddModal(false);
                 setNewDomain('');
                 refresh();
+            } else if (res.status === 409) {
+                const data = await res.json();
+                setConflictInfo(data.detail);
             } else {
                 const d = await res.json();
                 error(d.detail || 'Failed');
             }
         } catch { error('Error'); } finally { setAdding(false); }
+    };
+
+    const handleRequestFranchise = async () => {
+        if (!conflictInfo) return;
+        setRequesting(true);
+        try {
+            const res = await fetch(`${API_BASE}/team/franchise-requests`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ 
+                    parent_tenant_id: conflictInfo.parent_tenant_id,
+                    domain_id: conflictInfo.domain_id,
+                    requested_workspace_name: requestedWorkspaceName.trim() || undefined
+                }),
+            });
+            if (res.ok) {
+                success('Request sent to organization owner.');
+                setShowAddModal(false);
+                setConflictInfo(null);
+                setNewDomain('');
+                setRequestedWorkspaceName('');
+                fetchPendingRequests(); // Refresh the pending alert
+            } else {
+                const d = await res.json();
+                error(d.detail || 'Failed to send request');
+            }
+        } catch { error('Network error'); } finally { setRequesting(false); }
     };
 
     const handleVerify = async (domain: any) => {
@@ -329,6 +404,31 @@ function MainDomainManagement({ domains, selectedDomain, setSelectedDomain, refr
 
     return (
         <div className="mx-auto max-w-6xl space-y-8 pb-20">
+            {/* Pending Requests Alert */}
+            {pendingRequests.length > 0 && (
+                <div className="space-y-3">
+                    {pendingRequests.map((req) => (
+                        <InlineAlert
+                            key={req.id}
+                            variant="warning"
+                            title="Franchise Request Pending"
+                            description={`You have requested franchise access for ${req.domains?.domain_name || 'this domain'}. The organization owner (${req.tenants?.company_name || 'Main Workspace'}) must approve this before you can start sending.`}
+                            icon={<Clock className="h-4 w-4 mt-0.5" />}
+                            action={
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="bg-white/10 hover:bg-white/20 text-current border-none"
+                                    onClick={() => handleCancelRequest(req.id)}
+                                >
+                                    Withdraw Request
+                                </Button>
+                            }
+                        />
+                    ))}
+                </div>
+            )}
+
             {/* Metrics & Header */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_320px]">
                 <div className="flex flex-col justify-center">
@@ -371,6 +471,7 @@ function MainDomainManagement({ domains, selectedDomain, setSelectedDomain, refr
                     {domains.map((domain: any) => {
                         const isExpanded = expandedId === domain.id;
                         const statusVariant = domain.status === 'verified' ? 'success' : domain.status === 'failed' ? 'danger' : 'warning';
+                        const mailFromSubdomain = domain.mail_from_domain?.split('.')[0] || 'bounces';
                         
                         return (
                             <div 
@@ -426,7 +527,7 @@ function MainDomainManagement({ domains, selectedDomain, setSelectedDomain, refr
                                                 </div>
                                                 <div className="p-4 rounded-[var(--radius-lg)] bg-[var(--bg-hover)]/40 border border-[var(--border)] flex items-center justify-between">
                                                     <div>
-                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">DKIM Setup</p>
+                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Infrastructure Setup</p>
                                                         <p className={`text-lg font-bold ${domain.status === 'verified' ? 'text-[var(--success)]' : 'text-[var(--warning)]'}`}>
                                                             {domain.status === 'verified' ? 'Healthy' : 'Pending'}
                                                         </p>
@@ -459,13 +560,16 @@ function MainDomainManagement({ domains, selectedDomain, setSelectedDomain, refr
                                                 </div>
 
                                                 {(domain.status !== 'verified' || showDnsRecords) && (
-                                                    <div className="grid gap-6 animate-in fade-in slide-in-from-top-4 duration-500">
+                                                    <div className="grid gap-8 animate-in fade-in slide-in-from-top-4 duration-500">
                                                         <div className="space-y-3">
-                                                            <p className="text-xs font-medium text-[var(--text-muted)] px-1">DKIM CNAME Records</p>
+                                                            <div className="flex items-center justify-between px-1">
+                                                                <p className="text-xs font-bold text-[var(--text-primary)]">1. DKIM Authentication</p>
+                                                                <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-tighter">Identity Proof</span>
+                                                            </div>
                                                             <DnsTable
                                                                 rows={(domain.dkim_tokens || []).map((token: string) => ({
                                                                     type: 'CNAME',
-                                                                    host: `${token}._domainkey`,
+                                                                    host: `${token}._domainkey.${domain.domain_name}`,
                                                                     value: `${token}.dkim.amazonses.com`,
                                                                 }))}
                                                                 onCopy={copyToClipboard}
@@ -473,9 +577,36 @@ function MainDomainManagement({ domains, selectedDomain, setSelectedDomain, refr
                                                         </div>
 
                                                         <div className="space-y-3">
-                                                            <p className="text-xs font-medium text-[var(--text-muted)] px-1">SPF TXT Record</p>
+                                                            <div className="flex items-center justify-between px-1">
+                                                                <p className="text-xs font-bold text-[var(--text-primary)]">2. Custom MAIL FROM (DMARC Compliance)</p>
+                                                                <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-tighter">Alignment & Bounce Handling</span>
+                                                            </div>
                                                             <DnsTable
-                                                                rows={[{ type: 'TXT', host: '@', value: 'v=spf1 include:amazonses.com ~all' }]}
+                                                                includePriority
+                                                                rows={[
+                                                                    { 
+                                                                        type: 'MX', 
+                                                                        host: `${mailFromSubdomain}.${domain.domain_name}`, 
+                                                                        value: `feedback-smtp.${region}.amazonses.com`,
+                                                                        priority: '10'
+                                                                    },
+                                                                    { 
+                                                                        type: 'TXT', 
+                                                                        host: `${mailFromSubdomain}.${domain.domain_name}`, 
+                                                                        value: 'v=spf1 include:amazonses.com ~all' 
+                                                                    }
+                                                                ]}
+                                                                onCopy={copyToClipboard}
+                                                            />
+                                                        </div>
+
+                                                        <div className="space-y-3">
+                                                            <div className="flex items-center justify-between px-1">
+                                                                <p className="text-xs font-bold text-[var(--text-primary)]">3. Root SPF (Safety Fallback)</p>
+                                                                <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-tighter">Permission</span>
+                                                            </div>
+                                                            <DnsTable
+                                                                rows={[{ type: 'TXT', host: domain.domain_name, value: 'v=spf1 include:amazonses.com ~all' }]}
                                                                 onCopy={copyToClipboard}
                                                             />
                                                         </div>
@@ -532,23 +663,91 @@ function MainDomainManagement({ domains, selectedDomain, setSelectedDomain, refr
 
             {showAddModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-                    <div className="w-full max-w-md rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-6 shadow-2xl">
-                        <div className="mb-4 flex items-center justify-between">
-                            <h3 className="text-lg font-semibold">Connect Domain</h3>
-                            <button onClick={() => setShowAddModal(false)}><X className="h-5 w-5" /></button>
+                    <div className="w-full max-w-md rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="mb-6 flex items-center justify-between">
+                            <h3 className="text-xl font-black text-[var(--text-primary)]">
+                                {conflictInfo ? 'Managed Domain Found' : 'Connect Domain'}
+                            </h3>
+                            <button 
+                                onClick={() => {
+                                    setShowAddModal(false);
+                                    setConflictInfo(null);
+                                }}
+                                className="rounded-full p-1 hover:bg-[var(--bg-hover)] transition-colors"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
                         </div>
-                        <form onSubmit={handleAddDomain} className="space-y-4">
-                            <input
-                                type="text"
-                                value={newDomain}
-                                onChange={(e) => setNewDomain(e.target.value)}
-                                placeholder="example.com"
-                                className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-input)] px-3 py-2 text-sm"
-                            />
-                            <Button type="submit" disabled={adding} fullWidth>
-                                {adding ? 'Generating...' : 'Add Domain'}
-                            </Button>
-                        </form>
+
+                        {conflictInfo ? (
+                            <div className="space-y-6">
+                                <div className="p-4 rounded-[var(--radius-lg)] bg-[var(--accent)]/5 border border-[var(--accent)]/20 flex gap-4">
+                                    <div className="flex-shrink-0 mt-1">
+                                        <Lock className="h-5 w-5 text-[var(--accent)]" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-sm font-bold text-[var(--text-primary)]">Shared Infrastructure</p>
+                                        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                                            The domain <span className="font-semibold text-[var(--text-primary)]">{newDomain}</span> is already verified by <span className="font-semibold text-[var(--text-primary)]">{conflictInfo.owner_email}</span>.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-6">
+                                    <p className="text-sm text-[var(--text-muted)] text-center px-2">
+                                        You can request a franchise workspace to send emails using this verified infrastructure instantly.
+                                    </p>
+                                    
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] ml-1">Proposed Workspace Name</label>
+                                        <input
+                                            type="text"
+                                            value={requestedWorkspaceName}
+                                            onChange={(e) => setRequestedWorkspaceName(e.target.value)}
+                                            placeholder={`${newDomain.split('.')[0]} Franchise`}
+                                            className="w-full rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-hover)] px-4 py-3 text-sm font-medium text-[var(--text-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
+                                        />
+                                    </div>
+
+                                    <Button 
+                                        className="w-full h-12 shadow-lg shadow-[var(--accent)]/20" 
+                                        onClick={handleRequestFranchise}
+                                        isLoading={requesting}
+                                    >
+                                        Request Franchise Access
+                                    </Button>
+
+                                    <div className="text-center">
+                                        <button 
+                                            onClick={() => {
+                                                setConflictInfo(null);
+                                                setNewDomain('');
+                                            }}
+                                            className="text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                                        >
+                                            Try another domain
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleAddDomain} className="space-y-5">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] px-1">Domain Name</label>
+                                    <input
+                                        type="text"
+                                        value={newDomain}
+                                        onChange={(e) => setNewDomain(e.target.value)}
+                                        placeholder="example.com"
+                                        className="w-full rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-input)] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] transition-all"
+                                        autoFocus
+                                    />
+                                </div>
+                                <Button type="submit" disabled={adding} fullWidth className="h-11">
+                                    {adding ? 'Analyzing...' : 'Add Domain'}
+                                </Button>
+                            </form>
+                        )}
                     </div>
                 </div>
             )}

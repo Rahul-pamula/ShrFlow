@@ -5,11 +5,11 @@ Handles profile, organization, and API key management.
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Dict, Any, cast
 import uuid
 import hashlib
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
@@ -60,10 +60,11 @@ async def get_profile(claims: JWTPayload = Depends(require_permission("settings:
         "id, email, full_name, timezone, created_at"
     ).eq("id", claims.user_id).execute()
 
-    if not result.data:
+    res_data = cast(List[Dict[str, Any]], result.data or [])
+    if not res_data:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return result.data[0]
+    return res_data[0]
 
 
 @router.patch("/profile")
@@ -75,7 +76,8 @@ async def update_profile(body: ProfileUpdate, claims: JWTPayload = Depends(requi
         raise HTTPException(status_code=400, detail="Nothing to update")
 
     result = db.client.table("users").update(updates).eq("id", claims.user_id).execute()
-    return {"message": "Profile updated", "data": result.data[0] if result.data else {}}
+    res_data = cast(List[Dict[str, Any]], result.data or [])
+    return {"message": "Profile updated", "data": res_data[0] if res_data else {}}
 
 
 # ── Organization ───────────────────────────────────────────────────────
@@ -89,10 +91,11 @@ async def get_organization(claims: JWTPayload = Depends(require_permission("sett
         "business_state, business_zip, business_country, created_at"
     ).eq("id", claims.tenant_id).execute()
 
-    if not result.data:
+    res_data = cast(List[Dict[str, Any]], result.data or [])
+    if not res_data:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    return result.data[0]
+    return res_data[0]
 
 
 @router.patch("/organization")
@@ -104,6 +107,7 @@ async def update_organization(body: OrganizationUpdate, claims: JWTPayload = Dep
         raise HTTPException(status_code=400, detail="Nothing to update")
 
     result = db.client.table("tenants").update(updates).eq("id", claims.tenant_id).execute()
+    res_data = cast(List[Dict[str, Any]], result.data or [])
     
     await write_log(
         tenant_id=claims.tenant_id,
@@ -114,7 +118,9 @@ async def update_organization(body: OrganizationUpdate, claims: JWTPayload = Dep
         metadata=updates
     )
     
-    return {"message": "Organization updated", "data": result.data[0] if result.data else {}}
+    res_data = cast(List[Dict[str, Any]], result.data or [])
+    
+    return {"message": "Organization updated", "data": res_data[0] if res_data else {}}
 
 
 @router.patch("/organization/isolation-model")
@@ -231,7 +237,7 @@ async def create_api_key(body: ApiKeyCreate, claims: JWTPayload = Depends(requir
         "name": body.name,
         "key_hash": key_hash,
         "key_prefix": key_prefix,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }).execute()
 
     return {
@@ -247,7 +253,7 @@ async def revoke_api_key(key_id: str, claims: JWTPayload = Depends(require_permi
 
     """Revoke (soft-delete) an API key by setting revoked_at"""
     result = db.client.table("api_keys").update({
-        "revoked_at": datetime.utcnow().isoformat()
+        "revoked_at": datetime.now(timezone.utc).isoformat()
     }).eq("id", key_id).eq("tenant_id", claims.tenant_id).execute()
 
     if not result.data:
@@ -278,7 +284,7 @@ async def get_audit_history(
         query = query.ilike("action", f"{action_prefix}%")
 
     result = query.execute()
-    entries = result.data or []
+    entries = cast(List[Dict[str, Any]], result.data or [])
 
     user_ids = [entry["user_id"] for entry in entries if entry.get("user_id")]
     users_by_id = {}
@@ -319,7 +325,7 @@ async def get_export_history(
         .limit(limit)
         .execute()
     )
-    team_exports = team_export_res.data or []
+    team_exports = cast(List[Dict[str, Any]], team_export_res.data or [])
 
     contact_jobs_res = (
         db.client.table("jobs")
@@ -330,7 +336,7 @@ async def get_export_history(
         .limit(limit)
         .execute()
     )
-    contact_jobs = contact_jobs_res.data or []
+    contact_jobs = cast(List[Dict[str, Any]], contact_jobs_res.data or [])
 
     user_ids = [entry["user_id"] for entry in team_exports if entry.get("user_id")]
     users_by_id = {}
@@ -447,13 +453,14 @@ async def leave_or_delete_workspace(
         .eq("tenant_id", tenant_id)\
         .execute()
         
-    if not membership_res.data:
+    res_data = cast(List[Dict[str, Any]], membership_res.data or [])
+    if not res_data:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
             detail="You are not a member of this workspace."
         )
         
-    user_role = membership_res.data[0]["role"].lower()
+    user_role = cast(str, res_data[0].get("role", "creator")).lower()
     
     # 2. Logic for Non-Owners (Leave Workspace)
     if user_role != "owner":

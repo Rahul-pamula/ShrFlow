@@ -48,6 +48,7 @@ SUBJECTS = {
     "access_request": "Action Required: New Workspace Access Request",
     "sender_verification": "Verify your sender address — ShrFlow",
     "campaign_review": "📋 Campaign Review Requested — Action Required",
+    "franchise_request": "🏢 New Franchise Access Request — Action Required",
 }
 
 # SSL context for RabbitMQ (amqps://) connections

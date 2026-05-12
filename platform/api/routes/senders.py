@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from typing import List, Optional, Dict
+from typing import List, Dict, Any, cast, Optional
 from pydantic import BaseModel, EmailStr
 import os
 import secrets
@@ -58,8 +58,9 @@ async def list_sender_domains(
 
     if is_franchise:
         t_res = db.client.table("tenants").select("parent_tenant_id").eq("id", tenant_id).single().execute()
-        if t_res.data and t_res.data.get("parent_tenant_id"):
-            target_tenant_id = t_res.data.get("parent_tenant_id")
+        t_res_data = cast(Optional[Dict[str, Any]], t_res.data)
+        if t_res_data and t_res_data.get("parent_tenant_id"):
+            target_tenant_id = str(t_res_data.get("parent_tenant_id"))
 
     res = db.client.table("domains")\
         .select("id, domain_name, status, created_at")\
@@ -127,20 +128,23 @@ async def add_sender_identity(
     if jwt_payload.workspace_type == "FRANCHISE":
         # Get parent_tenant_id
         t_res = db.client.table("tenants").select("parent_tenant_id").eq("id", tenant_id).single().execute()
-        if t_res.data and t_res.data.get("parent_tenant_id"):
-            domain_tenant_id = t_res.data.get("parent_tenant_id")
+        t_res_data = cast(Optional[Dict[str, Any]], t_res.data)
+        if t_res_data and t_res_data.get("parent_tenant_id"):
+            domain_tenant_id = str(t_res_data.get("parent_tenant_id"))
             
     d_res = db.client.table("domains").select("status").eq("tenant_id", domain_tenant_id).eq("domain_name", domain_part).execute()
-    if not d_res.data or d_res.data[0]["status"] != "verified":
+    d_res_data = cast(List[Dict[str, Any]], d_res.data or [])
+    if not d_res_data or d_res_data[0].get("status") != "verified":
         raise HTTPException(status_code=403, detail="Access denied.")
 
     # 2. Check if already verified in DB
     existing = db.client.table("sender_identities").select("id, status").eq("tenant_id", tenant_id).eq("email", email).execute()
-    if existing.data:
-        if existing.data[0]["status"] == "verified":
+    existing_res_data = cast(List[Dict[str, Any]], existing.data or [])
+    if existing_res_data:
+        if existing_res_data[0].get("status") == "verified":
             raise HTTPException(status_code=400, detail="This sender email is already verified in your workspace.")
         # If pending, resend a fresh token below — delete the old one first
-        db.client.table("sender_identities").delete().eq("id", existing.data[0]["id"]).execute()
+        db.client.table("sender_identities").delete().eq("id", str(existing_res_data[0].get("id"))).execute()
 
     # 3. Generate a secure verification token
     token = secrets.token_urlsafe(48)
@@ -162,19 +166,22 @@ async def add_sender_identity(
     # 5. Send the verification email via our own SMTP
     await send_verification_email(email, token)
 
+    inserted_res_data = cast(List[Dict[str, Any]], inserted.data or [])
+    inserted_id = str(inserted_res_data[0].get("id")) if inserted_res_data else "unknown"
+
     await write_log(
         tenant_id=tenant_id,
         user_id=jwt_payload.user_id,
         action="sender.add",
         resource_type="sender_identity",
-        resource_id=inserted.data[0].get("id"),
+        resource_id=inserted_id,
         metadata={"email_domain": email.split("@")[1]},  # domain only — not PII
     )
 
     return {
         "status": "success",
         "message": f"A verification email has been sent to {email} from our centralized mail. Please check that inbox (or your Cloudflare forwarding destination) and click the link.",
-        "data": inserted.data[0]
+        "data": inserted_res_data[0] if inserted_res_data else {}
     }
 
 
@@ -185,12 +192,11 @@ async def confirm_sender_token(token: str):
     Public endpoint — no auth needed. Called when the user clicks the verification
     link inside the email. Marks the sender as verified.
     """
-    res = db.client.table("sender_identities").select("*").eq("verification_token", token).execute()
-    
-    if not res.data:
+    res_data = cast(List[Dict[str, Any]], res.data or [])
+    if not res_data:
         raise HTTPException(status_code=404, detail="Invalid or expired verification token.")
     
-    sender = res.data[0]
+    sender = res_data[0]
     
     # Check expiry
     expires_at = sender.get("token_expires_at")
@@ -241,12 +247,12 @@ async def resend_verification(
     jwt_payload: JWTPayload = Depends(require_permission("sender:manage"))
 ):
     """Resend the verification email with a fresh token."""
-    res = db.client.table("sender_identities").select("*").eq("id", sender_id).eq("tenant_id", tenant_id).execute()
-    if not res.data:
+    res_data = cast(List[Dict[str, Any]], res.data or [])
+    if not res_data:
         raise HTTPException(status_code=404, detail="Sender not found")
     
-    sender = res.data[0]
-    if sender["status"] == "verified":
+    sender = res_data[0]
+    if sender.get("status") == "verified":
         return {"status": "already_verified", "message": "This sender is already verified."}
     
     # Generate a new token
@@ -271,11 +277,11 @@ async def delete_sender(
     jwt_payload: JWTPayload = Depends(require_permission("sender:manage"))
 ):
     """Delete sender identity from DB."""
-    res = db.client.table("sender_identities").select("*").eq("id", sender_id).eq("tenant_id", tenant_id).execute()
-    if not res.data:
+    res_data = cast(List[Dict[str, Any]], res.data or [])
+    if not res_data:
         raise HTTPException(status_code=404, detail="Sender not found")
         
-    if jwt_payload.role == "creator" and getattr(jwt_payload, "isolation_model", "team") == "agency" and res.data[0]["user_id"] != jwt_payload.user_id:
+    if jwt_payload.role == "creator" and getattr(jwt_payload, "isolation_model", "team") == "agency" and res_data[0].get("user_id") != jwt_payload.user_id:
         raise HTTPException(status_code=403, detail="You can only delete your own sender identities.")
             
     db.client.table("sender_identities").delete().eq("id", sender_id).execute()

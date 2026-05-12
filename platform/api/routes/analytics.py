@@ -7,6 +7,7 @@ Endpoints:
   GET /analytics/campaigns/{id}/recipients → per-recipient event breakdown
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import List, Dict, Any, cast, Optional
 from utils.jwt_middleware import require_active_tenant, JWTPayload, apply_data_isolation
 from utils.permissions import require_permission
 from utils.supabase_client import db
@@ -36,10 +37,11 @@ async def get_campaign_analytics(
         .eq("tenant_id", tenant_id)\
         .execute()
 
-    if not camp_res.data:
+    camp_res_data = cast(List[Dict[str, Any]], camp_res.data or [])
+    if not camp_res_data:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    campaign = camp_res.data[0]
+    campaign = camp_res_data[0]
 
     # Count sent (DISPATCHED dispatch records)
     sent_res = db.client.table("campaign_dispatch")\
@@ -69,8 +71,11 @@ async def get_campaign_analytics(
     # This prevents double-counting if the same pixel fires twice (retry, proxy + user, etc.)
     seen = set()
     deduped_events = []
-    for e in events:
-        key = (e["dispatch_id"], e["event_type"])
+    for e in cast(List[Dict[str, Any]], events):
+        did = e.get("dispatch_id")
+        etype = e.get("event_type")
+        if not did or not etype: continue
+        key = (did, etype)
         if key not in seen:
             seen.add(key)
             deduped_events.append(e)
@@ -152,7 +157,7 @@ async def get_campaign_recipients(
         .eq("campaign_id", campaign_id)\
         .execute()
 
-    dispatches = {d["id"]: d for d in (dispatch_res.data or [])}
+    dispatches = {str(d.get("id")): d for d in cast(List[Dict[str, Any]], dispatch_res.data or []) if d.get("id")}
 
     # Tracking events
     events_q = db.client.table("email_events")\
@@ -161,9 +166,10 @@ async def get_campaign_recipients(
     events_res = events_q.execute()
 
     # Group events by dispatch_id
-    events_by_dispatch: dict = {}
-    for e in (events_res.data or []):
-        did = e["dispatch_id"]
+    events_by_dispatch: Dict[str, List[Dict[str, Any]]] = {}
+    for e in cast(List[Dict[str, Any]], events_res.data or []):
+        did = str(e.get("dispatch_id", ""))
+        if not did: continue
         if did not in events_by_dispatch:
             events_by_dispatch[did] = []
         events_by_dispatch[did].append(e)
@@ -178,10 +184,10 @@ async def get_campaign_recipients(
 
     recipients = []
     for did, d in dispatches.items():
-        contact = d.get("contacts") or {}
+        contact = cast(Dict[str, Any], d.get("contacts") or {})
         event_list = events_by_dispatch.get(did, [])
-        event_types = {e["event_type"] for e in event_list}
-        sources = {e.get("source", "unknown") for e in event_list}
+        event_types = {str(e.get("event_type", "")) for e in event_list}
+        sources = {str(e.get("source", "unknown")) for e in event_list}
         contact_id = d.get("subscriber_id")
         # Show unsubscribed = True only if event history has it AND contact is still unsubscribed now
         current_status = status_map.get(contact_id, "")
@@ -218,7 +224,7 @@ async def get_sender_health(
         .eq("tenant_id", tenant_id)\
         .execute()
 
-    camp_ids = [c["id"] for c in (camps_res.data or [])]
+    camp_ids = [str(c.get("id")) for c in cast(List[Dict[str, Any]], camps_res.data or []) if c.get("id")]
 
     if not camp_ids:
         return _health_response(sent=0, opens=0, clicks=0, bounces=0, spam=0)
@@ -243,12 +249,12 @@ async def get_sender_health(
         .eq("is_bot", False)\
         .execute()
 
-    events = events_res.data or []
+    events = cast(List[Dict[str, Any]], events_res.data or [])
     sent    = sent_res.count or 0
     failed  = failed_res.count or 0
-    opens   = sum(1 for e in events if e["event_type"] == "open")
-    clicks  = sum(1 for e in events if e["event_type"] == "click")
-    spam    = sum(1 for e in events if e["event_type"] == "spam")
+    opens   = sum(1 for e in events if e.get("event_type") == "open")
+    clicks  = sum(1 for e in events if e.get("event_type") == "click")
+    spam    = sum(1 for e in events if e.get("event_type") == "spam")
 
     return _health_response(sent, opens, clicks, failed, spam)
 

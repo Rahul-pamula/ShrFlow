@@ -3,7 +3,7 @@ import io
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List, Optional, Any, Dict, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from utils.rate_limiter import limiter
@@ -27,7 +27,8 @@ VALID_ISOLATION_MODELS = {"team", "agency"}
 
 def enforce_main_workspace(tenant_id: str):
     res = db.client.table("tenants").select("workspace_type").eq("id", tenant_id).single().execute()
-    if res.data and res.data.get("workspace_type") == "FRANCHISE":
+    data = cast(Dict[str, Any], res.data) if res.data else None
+    if data and data.get("workspace_type") == "FRANCHISE":
         raise HTTPException(status_code=403, detail="Access denied.")
 
 class InviteRequest(BaseModel):
@@ -52,6 +53,12 @@ class CreateFranchiseRequest(BaseModel):
     email: EmailStr
     workspace_name: str
     domain_id: str # FIX: Mandatory domain allocation for child franchises
+
+
+class FranchiseRequestInput(BaseModel):
+    parent_tenant_id: str
+    domain_id: str
+    requested_workspace_name: Optional[str] = None
 
 
 # Helper to check if current user is owner/manager
@@ -89,14 +96,16 @@ def _get_workspace_name(tenant_id: str) -> str:
     )
     if not tenant_res.data:
         return "Your Workspace"
-    return tenant_res.data[0].get("company_name") or "Your Workspace"
+    data = cast(List[Dict[str, Any]], tenant_res.data)
+    return data[0].get("company_name") or "Your Workspace"
 
 
 def _get_user_name(user_id: str, fallback: str) -> str:
     user_res = db.client.table("users").select("full_name").eq("id", user_id).execute()
-    if not user_res.data:
+    user_data = cast(List[Dict[str, Any]], user_res.data or [])
+    if not user_data:
         return fallback
-    return user_res.data[0].get("full_name") or fallback
+    return cast(str, user_data[0].get("full_name") or fallback)
 
 
 def _get_membership(tenant_id: str, user_id: str) -> Optional[dict]:
@@ -107,9 +116,10 @@ def _get_membership(tenant_id: str, user_id: str) -> Optional[dict]:
         .eq("user_id", user_id)
         .execute()
     )
-    if not res.data:
+    res_data = cast(List[Dict[str, Any]], res.data or [])
+    if not res_data:
         return None
-    return res.data[0]
+    return res_data[0]
 
 
 def _count_owners(tenant_id: str) -> int:
@@ -120,7 +130,8 @@ def _count_owners(tenant_id: str) -> int:
         .eq("role", "owner")
         .execute()
     )
-    return len(res.data or [])
+    res_data = cast(List[Dict[str, Any]], res.data or [])
+    return len(res_data)
 
 
 
@@ -132,20 +143,21 @@ async def get_team_members(
     """List all users in the current workspace."""
     # Since Supabase rest doesn't easily do clean many-to-many joins without RPC, we'll fetch both and map
     tu_res = db.client.table("tenant_users").select("user_id, role, isolation_model, joined_at").eq("tenant_id", tenant_id).execute()
-    members = tu_res.data or []
+    members = cast(List[Dict[str, Any]], tu_res.data or [])
     if not members:
         return []
 
     user_ids = [m["user_id"] for m in members]
     users_res = db.client.table("users").select("id, email, full_name, avatar_url, last_login_at").in_("id", user_ids).execute()
-    users_by_id = {u["id"]: u for u in (users_res.data or [])}
+    users_data = cast(List[Dict[str, Any]], users_res.data or [])
+    users_by_id = {u["id"]: u for u in users_data}
 
     result = []
     for m in members:
         u = users_by_id.get(m["user_id"], {})
         result.append({
             "user_id": m["user_id"],
-            "role": _normalize_public_role(m["role"]),
+            "role": _normalize_public_role(cast(Optional[str], m["role"])),
             "isolation_model": m.get("isolation_model", "team"),
             "joined_at": m["joined_at"],
             "email": u.get("email"),
@@ -181,11 +193,11 @@ async def export_team_members(
         query = query.eq("invited_by", invited_by)
         
     members_res = query.order("joined_at", desc=False).execute()
-    memberships = members_res.data or []
+    memberships = cast(List[Dict[str, Any]], members_res.data or [])
 
     if role:
         target_storage_role = _normalize_storage_role(role)
-        memberships = [member for member in memberships if member["role"] == target_storage_role]
+        memberships = [member for member in memberships if member.get("role") == target_storage_role]
 
     user_ids = [member["user_id"] for member in memberships]
     users_by_id = {}
@@ -196,7 +208,8 @@ async def export_team_members(
             .in_("id", user_ids)
             .execute()
         )
-        users_by_id = {user["id"]: user for user in (users_res.data or [])}
+        users_data = cast(List[Dict[str, Any]], users_res.data or [])
+        users_by_id = {user["id"]: user for user in users_data}
 
     import io
     import csv
@@ -207,7 +220,7 @@ async def export_team_members(
     writer.writerow(["First Name", "Last Name", "Email", "Role", "Date Joined"])
     
     for m in memberships:
-        u = users_by_id.get(m["user_id"], {})
+        u = cast(Dict[str, Any], users_by_id.get(m.get("user_id", ""), {}))
         full_name = (u.get("full_name") or "").strip()
         parts = full_name.split(None, 1) if full_name else ["", ""]
         first_name = parts[0] if parts else ""
@@ -216,7 +229,7 @@ async def export_team_members(
             first_name,
             last_name,
             u.get("email") or "",
-            _normalize_public_role(m["role"]),
+            _normalize_public_role(cast(Optional[str], m.get("role"))),
             m.get("joined_at") or "",
         ])
 
@@ -256,7 +269,7 @@ async def list_franchises(
         .order("created_at", desc=False)
         .execute()
     )
-    franchises = tenant_res.data or []
+    franchises = cast(List[Dict[str, Any]], tenant_res.data or [])
     if not franchises:
         return []
 
@@ -268,7 +281,7 @@ async def list_franchises(
         .eq("role", "owner")
         .execute()
     )
-    owner_links = owner_links_res.data or []
+    owner_links = cast(List[Dict[str, Any]], owner_links_res.data or [])
     owner_ids = [link["user_id"] for link in owner_links]
     owners_by_user_id = {}
     if owner_ids:
@@ -278,7 +291,8 @@ async def list_franchises(
             .in_("id", owner_ids)
             .execute()
         )
-        owners_by_user_id = {owner["id"]: owner for owner in (owners_res.data or [])}
+        owners_data = cast(List[Dict[str, Any]], owners_res.data or [])
+        owners_by_user_id = {owner["id"]: owner for owner in owners_data}
 
     pending_invites_res = (
         db.client.table("team_invitations")
@@ -287,8 +301,9 @@ async def list_franchises(
         .eq("invite_type", "franchise")
         .execute()
     )
+    pending_invites_data = cast(List[Dict[str, Any]], pending_invites_res.data or [])
     pending_invites_by_tenant = {
-        invite["franchise_tenant_id"]: invite for invite in (pending_invites_res.data or [])
+        invite["franchise_tenant_id"]: invite for invite in pending_invites_data
     }
 
     owner_by_tenant = {}
@@ -337,13 +352,14 @@ async def create_franchise(
         .eq("status", "verified")\
         .execute()
     
-    if not domain_res.data:
+    domain_data = cast(List[Dict[str, Any]], domain_res.data or [])
+    if not domain_data:
         raise HTTPException(
             status_code=400, 
             detail="You must select a verified domain from your workspace to allocate to the franchise."
         )
     
-    target_domain = domain_res.data[0]["domain_name"]
+    target_domain = domain_data[0]["domain_name"]
     workspace_name = body.workspace_name.strip()
     if len(workspace_name) < 2:
         raise HTTPException(status_code=400, detail="Workspace name is too short.")
@@ -356,8 +372,9 @@ async def create_franchise(
         .eq("invite_type", "franchise")
         .execute()
     )
-    for invite in existing_invite_res.data or []:
-        if _iso_to_dt(invite["expires_at"]) >= datetime.now(timezone.utc):
+    invite_data_list = cast(List[Dict[str, Any]], existing_invite_res.data or [])
+    for invite in invite_data_list:
+        if _iso_to_dt(cast(str, invite.get("expires_at", ""))) >= datetime.now(timezone.utc):
             raise HTTPException(status_code=400, detail="An active franchise invitation already exists for this email.")
 
     franchise_id = str(uuid.uuid4())
@@ -449,6 +466,250 @@ async def suspend_franchise(
     return {"message": "Franchise suspended."}
 
 
+@router.post("/franchise-requests")
+async def request_franchise(
+    body: FranchiseRequestInput,
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("domains:view"))
+):
+    """
+    Called by User B when they see User A owns the domain.
+    Creates a pending request and notifies User A.
+    """
+    from services.email_service import send_franchise_request_email
+    
+    # 1. Verify target domain exists and is verified
+    domain_res = db.client.table("domains").select("*").eq("id", body.domain_id).eq("status", "verified").execute()
+    domain_data_list = cast(List[Dict[str, Any]], domain_res.data or [])
+    if not domain_data_list:
+        raise HTTPException(status_code=404, detail="Target domain not found or not verified.")
+    
+    domain_data = domain_data_list[0]
+    domain_name = cast(str, domain_data.get("domain_name"))
+    
+    # 2. Check for duplicate pending requests
+    existing = db.client.table("franchise_requests")\
+        .select("id")\
+        .eq("requesting_user_id", jwt_payload.user_id)\
+        .eq("domain_id", body.domain_id)\
+        .eq("status", "pending")\
+        .execute()
+    if existing.data:
+        raise HTTPException(status_code=400, detail="A request for this domain is already pending review.")
+    
+    # 3. Create request
+    approval_token = secrets.token_urlsafe(32)
+    request_res = db.client.table("franchise_requests").insert({
+        "requesting_user_id": jwt_payload.user_id,
+        "target_tenant_id": body.parent_tenant_id,
+        "domain_id": body.domain_id,
+        "approval_token": approval_token,
+        "status": "pending",
+        "requested_workspace_name": body.requested_workspace_name
+    }).execute()
+    
+    if not request_res.data:
+        raise HTTPException(status_code=500, detail="Failed to create franchise request.")
+    
+    request_data = cast(List[Dict[str, Any]], request_res.data)
+    request_id = request_data[0]["id"]
+    
+    # 4. Notify Owner of Parent Tenant
+    owner_res = db.client.table("tenant_users")\
+        .select("user_id")\
+        .eq("tenant_id", body.parent_tenant_id)\
+        .eq("role", "owner")\
+        .execute()
+    
+    owner_data = cast(List[Dict[str, Any]], owner_res.data or [])
+    if owner_data:
+        owner_id = owner_data[0]["user_id"]
+        user_res = db.client.table("users").select("email").eq("id", owner_id).execute()
+        user_data = cast(List[Dict[str, Any]], user_res.data or [])
+        if user_data:
+            owner_email = cast(str, user_data[0]["email"])
+            await send_franchise_request_email(
+                to_email=owner_email,
+                requester_email=jwt_payload.email,
+                domain_name=domain_name,
+                request_id=request_id,
+                token=approval_token,
+                requested_workspace_name=body.requested_workspace_name
+            )
+            
+    return {"message": "Franchise request sent to organization owner.", "request_id": request_id}
+
+
+@router.get("/franchise-requests")
+async def list_franchise_requests(
+    mode: str = Query("incoming", pattern="^(incoming|outgoing)$"),
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("domains:view"))
+):
+    """
+    List franchise requests.
+    - incoming: requests waiting for this tenant's approval
+    - outgoing: requests sent by the current user
+    """
+    query = db.client.table("franchise_requests")\
+        .select("*, users!requesting_user_id(email, full_name), domains!domain_id(domain_name), tenants!target_tenant_id(company_name)")
+    
+    if mode == "outgoing":
+        query = query.eq("requesting_user_id", jwt_payload.user_id)
+    else:
+        # Default to incoming (requires manage permission)
+        query = query.eq("target_tenant_id", tenant_id).eq("status", "pending")
+        
+    res = query.order("created_at", desc=True).execute()
+    return cast(List[Dict[str, Any]], res.data or [])
+
+
+@router.post("/franchise-requests/{request_id}/approve")
+async def approve_request_authenticated(
+    request_id: str,
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("franchise:manage"))
+):
+    """Approve a request from the dashboard (requires login)."""
+    # 1. Validate request belongs to this tenant
+    req_res = db.client.table("franchise_requests").select("*").eq("id", request_id).eq("target_tenant_id", tenant_id).eq("status", "pending").execute()
+    if not req_res.data:
+        raise HTTPException(status_code=404, detail="Request not found or already processed.")
+    
+    # Reuse the logic by calling the approval function or just copy it
+    # For now, I'll use a helper or just duplicate for speed in this turn
+    req_data_list = cast(List[Dict[str, Any]], req_res.data or [])
+    if not req_data_list:
+        raise HTTPException(status_code=404, detail="Request not found or already processed.")
+    
+    req_data = req_data_list[0]
+    return await _execute_franchise_approval(req_data)
+
+
+@router.post("/franchise-requests/{request_id}/reject")
+async def reject_request_authenticated(
+    request_id: str,
+    tenant_id: str = Depends(require_active_tenant),
+    jwt_payload: JWTPayload = Depends(require_permission("franchise:manage"))
+):
+    """Reject a request from the dashboard (requires login)."""
+    db.client.table("franchise_requests").update({"status": "rejected"}).eq("id", request_id).eq("target_tenant_id", tenant_id).execute()
+    return {"message": "Request rejected."}
+
+
+@router.delete("/franchise-requests/{request_id}")
+async def cancel_franchise_request(
+    request_id: str,
+    jwt_payload: JWTPayload = Depends(require_authenticated_user)
+):
+    """
+    Cancel a franchise request.
+    Only the requester can cancel their own pending request.
+    """
+    # Verify ownership and status
+    res = db.client.table("franchise_requests")\
+        .select("id")\
+        .eq("id", request_id)\
+        .eq("requesting_user_id", jwt_payload.user_id)\
+        .eq("status", "pending")\
+        .execute()
+    
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Request not found or cannot be cancelled.")
+        
+    db.client.table("franchise_requests").delete().eq("id", request_id).execute()
+    return {"message": "Request cancelled successfully."}
+
+
+async def _execute_franchise_approval(req_data: dict):
+    """Common logic for request approval."""
+    requester_user_id = cast(str, req_data.get("requesting_user_id", ""))
+    parent_tenant_id = cast(str, req_data.get("target_tenant_id", ""))
+    domain_id = cast(str, req_data.get("domain_id", ""))
+    
+    # 2. Get Domain Info
+    domain_res = db.client.table("domains").select("*").eq("id", domain_id).execute()
+    domain_data_list = cast(List[Dict[str, Any]], domain_res.data or [])
+    if not domain_data_list:
+        raise HTTPException(status_code=404, detail="Domain not found.")
+    domain_data = domain_data_list[0]
+    
+    # 3. Get Requester Info
+    user_res = db.client.table("users").select("email").eq("id", requester_user_id).execute()
+    user_data_list = cast(List[Dict[str, Any]], user_res.data or [])
+    if not user_data_list:
+        raise HTTPException(status_code=404, detail="Requester not found.")
+    requester = user_data_list[0]
+    
+    # 4. Create Franchise
+    franchise_id = str(uuid.uuid4())
+    domain_name = cast(str, domain_data.get("domain_name", "Unknown"))
+    
+    # Use requested name if available, else default
+    workspace_name = req_data.get("requested_workspace_name") or f"{domain_name} Franchise"
+    now = datetime.now(timezone.utc).isoformat()
+    
+    db.client.table("tenants").insert({
+        "id": franchise_id,
+        "company_name": workspace_name,
+        "email": cast(str, requester.get("email", "")),
+        "status": "active",
+        "workspace_type": "franchise",
+        "franchise_status": "active",
+        "parent_tenant_id": parent_tenant_id,
+        "sending_domain": cast(str, domain_data.get("domain_name", "")),
+        "created_at": now,
+        "updated_at": now,
+    }).execute()
+    
+    db.client.table("tenant_users").insert({
+        "tenant_id": franchise_id,
+        "user_id": requester_user_id,
+        "role": "owner"
+    }).execute()
+    
+    db.client.table("domains").insert({
+        "tenant_id": franchise_id,
+        "domain_name": domain_data["domain_name"],
+        "dkim_tokens": domain_data["dkim_tokens"],
+        "mail_from_domain": domain_data["mail_from_domain"],
+        "status": "verified",
+        "created_at": now
+    }).execute()
+    
+    db.client.table("franchise_requests").update({"status": "approved"}).eq("id", req_data["id"]).execute()
+    return {"message": "Franchise created.", "franchise_id": franchise_id}
+
+
+@router.get("/franchise-requests/{request_id}/approve")
+async def approve_franchise_request(
+    request_id: str,
+    token: str = Query(...),
+):
+    """One-click approval from email (token-based)."""
+    req_res = db.client.table("franchise_requests").select("*").eq("id", request_id).eq("approval_token", token).eq("status", "pending").execute()
+    if not req_res.data:
+        already = db.client.table("franchise_requests").select("status").eq("id", request_id).execute()
+        already_data = cast(List[Dict[str, Any]], already.data or [])
+        if already_data and already_data[0]["status"] == "approved":
+             return Response(content="Already approved.", media_type="text/plain")
+        raise HTTPException(status_code=404, detail="Invalid request or token.")
+    
+    req_data = cast(List[Dict[str, Any]], req_res.data)[0]
+    await _execute_franchise_approval(req_data)
+    return Response(content="Successfully approved! The franchise has been created.", media_type="text/plain")
+
+
+@router.get("/franchise-requests/{request_id}/reject")
+async def reject_franchise_request(
+    request_id: str,
+    token: str = Query(...),
+):
+    """One-click rejection from email (token-based)."""
+    db.client.table("franchise_requests").update({"status": "rejected"}).eq("id", request_id).eq("approval_token", token).execute()
+    return Response(content="Request rejected.", media_type="text/plain")
+
+
 @router.post("/franchises/{franchise_id}/reactivate")
 async def reactivate_franchise(
     franchise_id: str,
@@ -532,23 +793,26 @@ async def delete_franchise(
 async def validate_invite(token: str):
     """Peek at an invite token to get the target email (no auth required, doesn't consume the token)."""
     res = db.client.table("team_invitations").select("email, role, isolation_model, expires_at, tenant_id").eq("token", token).execute()
-    if not res.data:
+    invite_data_list = cast(List[Dict[str, Any]], res.data or [])
+    if not invite_data_list:
         raise HTTPException(status_code=404, detail="Invalid or expired invitation token.")
     
-    invite = res.data[0]
+    invite = invite_data_list[0]
     
     # Check expiration
-    if datetime.fromisoformat(invite["expires_at"].replace('Z', '+00:00')) < datetime.now(timezone.utc):
+    expires_at_str = cast(str, invite.get("expires_at", ""))
+    if datetime.fromisoformat(expires_at_str.replace('Z', '+00:00')) < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Invitation has expired.")
     
-    target_tenant_id = invite.get("franchise_tenant_id") if invite.get("invite_type") == "franchise" else invite["tenant_id"]
+    target_tenant_id = cast(str, invite.get("franchise_tenant_id") if invite.get("invite_type") == "franchise" else invite.get("tenant_id"))
     # Get workspace name
     t_res = db.client.table("tenants").select("company_name").eq("id", target_tenant_id).execute()
-    workspace_name = t_res.data[0].get("company_name") or "the team" if t_res.data else "the team"
+    t_data_list = cast(List[Dict[str, Any]], t_res.data or [])
+    workspace_name = t_data_list[0].get("company_name") or "the team" if t_data_list else "the team"
     
     return {
-        "invited_email": invite["email"],
-        "role": _normalize_public_role(invite["role"]),
+        "invited_email": invite.get("email"),
+        "role": _normalize_public_role(cast(Optional[str], invite.get("role"))),
         "workspace_name": workspace_name,
         "invite_type": invite.get("invite_type", "team"),
     }
@@ -567,12 +831,13 @@ async def get_pending_invites(
         # Standard members only see invites they personally sent
         res = db.client.table("team_invitations").select("*").eq("tenant_id", tenant_id).eq("inviter_id", jwt_payload.user_id).eq("status", "pending").execute()
 
-    invites = res.data or []
+    invites = cast(List[Dict[str, Any]], res.data or [])
     inviter_ids = [invite["inviter_id"] for invite in invites if invite.get("inviter_id")]
     users_by_id = {}
     if inviter_ids:
         users_res = db.client.table("users").select("id, full_name").in_("id", inviter_ids).execute()
-        users_by_id = {user["id"]: user for user in (users_res.data or [])}
+        users_data_list = cast(List[Dict[str, Any]], users_res.data or [])
+        users_by_id = {user["id"]: user for user in users_data_list}
 
     for invite in invites:
         inviter = users_by_id.get(invite.get("inviter_id") or "", {})
@@ -717,10 +982,12 @@ async def send_invite(
 
     # Email Sending (outside transaction to avoid blocking DB)
     t_res = db.client.table("tenants").select("company_name").eq("id", tenant_id).execute()
-    workspace_name = t_res.data[0].get("company_name") or "Your Team"
+    t_res_data = cast(List[Dict[str, Any]], t_res.data or [])
+    workspace_name = t_res_data[0].get("company_name") or "Your Team" if t_res_data else "Your Team"
     
     inviter_res = db.client.table("users").select("full_name").eq("id", jwt_payload.user_id).execute()
-    inviter_name = inviter_res.data[0].get("full_name") or jwt_payload.email
+    inviter_res_data = cast(List[Dict[str, Any]], inviter_res.data or [])
+    inviter_name = inviter_res_data[0].get("full_name") or jwt_payload.email if inviter_res_data else jwt_payload.email
 
     await send_team_invite(body.email, inviter_name, workspace_name, token)
 
@@ -746,10 +1013,11 @@ async def resend_invite(
         .eq("tenant_id", tenant_id)
         .execute()
     )
-    if not invite_res.data:
+    invite_res_data = cast(List[Dict[str, Any]], invite_res.data or [])
+    if not invite_res_data:
         raise HTTPException(status_code=404, detail="Invitation not found.")
 
-    invite = invite_res.data[0]
+    invite = invite_res_data[0]
     if _normalize_public_role(jwt_payload.role) not in ["owner", "manager"] and invite.get("inviter_id") != jwt_payload.user_id:
         raise HTTPException(status_code=403, detail="You do not have permission to resend this invitation.")
 
@@ -794,10 +1062,11 @@ async def cancel_invite(
     """Cancel a pending invitation."""
     # Fetch the invite to check permissions
     res = db.client.table("team_invitations").select("id, inviter_id").eq("id", invite_id).eq("tenant_id", tenant_id).execute()
-    if not res.data:
+    res_data = cast(List[Dict[str, Any]], res.data or [])
+    if not res_data:
         raise HTTPException(status_code=404, detail="Invitation not found.")
         
-    invite = res.data[0]
+    invite = res_data[0]
     
     # Must be admin/owner, OR be the person who sent the invite
     if _normalize_public_role(jwt_payload.role) not in ["owner", "manager"] and jwt_payload.user_id != invite.get("inviter_id"):
@@ -827,10 +1096,11 @@ async def accept_invite(
     """Accept an invitation to join a workspace."""
     # Verify token
     res = db.client.table("team_invitations").select("*").eq("token", body.token).execute()
-    if not res.data:
+    invite_data_list = cast(List[Dict[str, Any]], res.data or [])
+    if not invite_data_list:
         raise HTTPException(status_code=404, detail="Invalid or expired invitation token.")
     
-    invite = res.data[0]
+    invite = invite_data_list[0]
     
     # Check expiration and status
     if invite.get("status") != "pending" or datetime.fromisoformat(invite["expires_at"].replace('Z', '+00:00')) < datetime.now(timezone.utc):
@@ -839,7 +1109,7 @@ async def accept_invite(
     if jwt_payload.email.lower() != invite["email"].lower():
         raise HTTPException(status_code=403, detail="This invitation was sent to a different email address.")
 
-    target_tenant_id = invite.get("franchise_tenant_id") if invite.get("invite_type") == "franchise" else invite["tenant_id"]
+    target_tenant_id = cast(str, invite.get("franchise_tenant_id") if invite.get("invite_type") == "franchise" else invite["tenant_id"])
 
     # Limit check at accept time
     can_add, stats = PlanService.check_user_limit(target_tenant_id, 1)
@@ -1049,23 +1319,24 @@ async def get_join_requests(
     """List pending Enterprise JIT access requests."""
         
     res = db.client.table("join_requests").select("*").eq("tenant_id", tenant_id).eq("status", "pending").execute()
-    requests = res.data or []
+    requests = cast(List[Dict[str, Any]], res.data or [])
     if not requests:
         return []
 
-    user_ids = [r["user_id"] for r in requests]
+    user_ids = [r.get("user_id") for r in requests]
     users_res = db.client.table("users").select("id, email, full_name, avatar_url").in_("id", user_ids).execute()
-    users_by_id = {u["id"]: u for u in (users_res.data or [])}
+    users_data_list = cast(List[Dict[str, Any]], users_res.data or [])
+    users_by_id = {u["id"]: u for u in users_data_list}
 
     result = []
     for r in requests:
-        u = users_by_id.get(r["user_id"], {})
+        u = users_by_id.get(r.get("user_id", ""), {})
         result.append({
-            "id": r["id"],
-            "user_id": r["user_id"],
-            "status": r["status"],
-            "risk_score": r["risk_score"],
-            "created_at": r["created_at"],
+            "id": r.get("id"),
+            "user_id": r.get("user_id"),
+            "status": r.get("status"),
+            "risk_score": r.get("risk_score"),
+            "created_at": r.get("created_at"),
             "email": u.get("email"),
             "full_name": u.get("full_name"),
             "avatar_url": u.get("avatar_url"),
@@ -1085,10 +1356,11 @@ async def approve_join_request(
         
     # Verify request
     req_res = db.client.table("join_requests").select("*").eq("id", request_id).eq("tenant_id", tenant_id).execute()
-    if not req_res.data:
+    join_req_data_list = cast(List[Dict[str, Any]], req_res.data or [])
+    if not join_req_data_list:
         raise HTTPException(status_code=404, detail="Request not found or unauthorized.")
         
-    join_req = req_res.data[0]
+    join_req = join_req_data_list[0]
     if join_req["status"] != "pending":
         raise HTTPException(status_code=400, detail="Request is already processed.")
         
@@ -1235,17 +1507,18 @@ async def list_workspace_requests(
         query = query.eq("status", status_filter)
 
     res = query.execute()
-    requests_list = res.data or []
+    requests_list = cast(List[Dict[str, Any]], res.data or [])
 
     # Enrich with requester name
-    user_ids = list({r["requested_by"] for r in requests_list if r.get("requested_by")})
+    user_ids = list({r.get("requested_by") for r in requests_list if r.get("requested_by")})
     users_by_id = {}
     if user_ids:
         users_res = db.client.table("users").select("id, email, full_name").in_("id", user_ids).execute()
-        users_by_id = {u["id"]: u for u in (users_res.data or [])}
+        users_data_list = cast(List[Dict[str, Any]], users_res.data or [])
+        users_by_id = {u["id"]: u for u in users_data_list}
 
     for r in requests_list:
-        requester = users_by_id.get(r.get("requested_by") or "", {})
+        requester = cast(Dict[str, Any], users_by_id.get(r.get("requested_by") or "", {}))
         r["requester_email"] = requester.get("email")
         r["requester_name"] = requester.get("full_name")
 
@@ -1267,7 +1540,7 @@ async def approve_workspace_request(
     if not res.data:
         raise HTTPException(status_code=404, detail="Request not found.")
 
-    req = res.data[0]
+    req = cast(List[Dict[str, Any]], res.data)[0]
     if req["status"] != "pending":
         raise HTTPException(status_code=400, detail="Request is already resolved.")
 
@@ -1308,7 +1581,7 @@ async def reject_workspace_request(
     if not res.data:
         raise HTTPException(status_code=404, detail="Request not found.")
 
-    req = res.data[0]
+    req = cast(List[Dict[str, Any]], res.data)[0]
     if req["status"] != "pending":
         raise HTTPException(status_code=400, detail="Request is already resolved.")
 
