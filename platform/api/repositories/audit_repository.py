@@ -13,6 +13,7 @@ import uuid
 import logging
 from datetime import datetime, timezone
 from typing import Optional
+import json
 
 logger = logging.getLogger("audit_repository")
 
@@ -32,6 +33,7 @@ class AuditRepository:
         metadata: Optional[dict] = None,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
+        expires_at: Optional[str] = None,
     ) -> None:
         """
         Append-only write to audit_logs.
@@ -58,17 +60,17 @@ class AuditRepository:
                 log_entry["resource_type"] = resource_type
             if resource_id:
                 log_entry["resource_id"] = resource_id
+            if expires_at:
+                log_entry["expires_at"] = expires_at
             if metadata:
-                # Sanitize: ensure metadata is a plain dict, not arbitrary objects
-                log_entry["metadata"] = {
-                    str(k): str(v) if not isinstance(v, (dict, list, int, float, bool)) else v
-                    for k, v in metadata.items()
-                }
+                # Sanitize: ensure metadata is a plain dict for JSONB
+                from typing import Any
+                log_entry["metadata"] = metadata  # type: ignore
             if ip_address:
                 log_entry["ip_address"] = ip_address
             if user_agent:
                 # Truncate user-agent to prevent bloat
-                log_entry["user_agent"] = str(user_agent)[:512]
+                log_entry["user_agent"] = user_agent[:512]
 
             self.db.table("audit_logs").insert(log_entry).execute()
 
