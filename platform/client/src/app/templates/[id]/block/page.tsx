@@ -683,7 +683,7 @@ export default function PremiumEmailBuilder() {
                     <button 
                         onClick={async () => {
                             await handleSave();
-                            router.push("/campaigns");
+                            router.push("/templates");
                         }} 
                         style={{ 
                             display: "flex", alignItems: "center", justifyContent: "center", 

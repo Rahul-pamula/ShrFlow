@@ -58,6 +58,103 @@ function DnsTable({
     );
 }
 
+function DNSSetupGuide() {
+    const [provider, setProvider] = useState<'godaddy' | 'namecheap' | 'cloudflare' | 'general'>('general');
+
+    const guides = {
+        godaddy: {
+            name: 'GoDaddy',
+            steps: [
+                'Log in to your GoDaddy Domain Portfolio.',
+                'Select your domain, then click "DNS".',
+                'Click "Add New Record".',
+                'Copy the Host and Value from our table and paste them into the corresponding fields.',
+                'Set TTL to "Default" or "1 Hour" and save.'
+            ]
+        },
+        namecheap: {
+            name: 'Namecheap',
+            steps: [
+                'Log in to your Namecheap account.',
+                'Go to "Domain List" and click "Manage" next to your domain.',
+                'Click the "Advanced DNS" tab.',
+                'Click "Add New Record".',
+                'Paste the Host and Value provided in the configuration above.',
+                'Click the green checkmark to save.'
+            ]
+        },
+        cloudflare: {
+            name: 'Cloudflare',
+            steps: [
+                'Log in to your Cloudflare dashboard and select your domain.',
+                'Click the "DNS" menu in the sidebar.',
+                'Click "Add record".',
+                'Select the Type, enter Name, and Content.',
+                'IMPORTANT: Turn OFF the "Proxy status" (Orange cloud) – set it to "DNS only".',
+                'Click "Save".'
+            ]
+        },
+        general: {
+            name: 'Other Providers',
+            steps: [
+                'Log in to your domain registrar\'s control panel.',
+                'Find the DNS Management or Name Server Settings section.',
+                'Add new CNAME, TXT, or MX records as shown in the table above.',
+                'Ensure the "Host" or "Name" matches exactly.',
+                'Wait up to 24 hours for DNS propagation (usually faster).'
+            ]
+        }
+    };
+
+    return (
+        <SectionCard title="Setup Guide">
+            <div className="space-y-6">
+                <div className="flex flex-wrap gap-2">
+                    {(Object.keys(guides) as Array<keyof typeof guides>).map((k) => (
+                        <button
+                            key={k}
+                            onClick={() => setProvider(k)}
+                            className={`rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
+                                provider === k 
+                                    ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent)]/20' 
+                                    : 'bg-[var(--bg-hover)] text-[var(--text-muted)] hover:bg-[var(--bg-secondary)]'
+                            }`}
+                        >
+                            {guides[k].name}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-hover)]/30 p-6">
+                    <h4 className="mb-4 text-sm font-black text-[var(--text-primary)] flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
+                        How to add records on {guides[provider].name}
+                    </h4>
+                    <ul className="space-y-4">
+                        {guides[provider].steps.map((step, idx) => (
+                            <li key={idx} className="flex gap-4">
+                                <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[var(--bg-card)] text-[10px] font-black text-[var(--accent)] border border-[var(--border)]">
+                                    {idx + 1}
+                                </span>
+                                <p className="text-xs leading-relaxed text-[var(--text-muted)]">
+                                    {step}
+                                </p>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                <div className="flex items-center gap-3 p-4 rounded-[var(--radius-lg)] bg-blue-500/5 border border-blue-500/10">
+                    <Clock className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                    <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                        DNS changes can take anywhere from <span className="text-[var(--text-primary)] font-bold">5 minutes to 24 hours</span> to propagate worldwide. Most providers update within 15 minutes.
+                    </p>
+                </div>
+            </div>
+        </SectionCard>
+    );
+}
+
 export default function DomainSettingsPage() {
     const { token, user } = useAuth();
     const router = useRouter();
@@ -127,7 +224,7 @@ export default function DomainSettingsPage() {
    FRANCHISE VIEW (Read-Only Fork)
    ============================================================ */
 function FranchiseDomainView({ domains }: any) {
-    const [expandedId, setExpandedId] = useState<string | null>(domains[0]?.id || null);
+    const [expandedId, setExpandedId] = useState<string | null>(null);
 
     return (
         <div className="mx-auto max-w-6xl space-y-8 pb-20">
@@ -268,7 +365,7 @@ function MainDomainManagement({ domains, selectedDomain, setSelectedDomain, refr
     const [conflictInfo, setConflictInfo] = useState<any>(null);
     const [requesting, setRequesting] = useState(false);
     const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
-    const [expandedId, setExpandedId] = useState<string | null>(domains[0]?.id || null);
+    const [expandedId, setExpandedId] = useState<string | null>(null);
     const [showDnsRecords, setShowDnsRecords] = useState(false);
     const [pendingRequests, setPendingRequests] = useState<any[]>([]);
     const [requestedWorkspaceName, setRequestedWorkspaceName] = useState('');
@@ -660,6 +757,8 @@ function MainDomainManagement({ domains, selectedDomain, setSelectedDomain, refr
                     })}
                 </div>
             )}
+
+            {domains.length > 0 && <DNSSetupGuide />}
 
             {showAddModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
