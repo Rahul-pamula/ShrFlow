@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 import httpx
@@ -18,8 +18,9 @@ load_dotenv(dotenv_path=ROOT_ENV, override=True)
 
 # Structured logging
 import logging
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
@@ -71,7 +72,7 @@ async def _run_scheduler():
                     contacts, _ = fetch_contacts_for_target(
                         supabase=db.client,
                         tenant_id=tid,
-                        target=camp.get("audience_target") or "all",
+                        target=str(camp.get("audience_target") or "all"),
                         exclude_suppressed=True,
                     )
                     if not contacts:
