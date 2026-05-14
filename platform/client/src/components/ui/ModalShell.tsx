@@ -8,6 +8,8 @@ interface ModalShellProps extends HTMLAttributes<HTMLDivElement> {
     description?: string;
     maxWidthClass?: string;
     headerAction?: ReactNode;
+    children?: ReactNode;
+    className?: string;
 }
 
 function ModalShell({

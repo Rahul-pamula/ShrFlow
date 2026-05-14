@@ -65,13 +65,22 @@ function ConfirmModal({
         }
     }, [onClose, isLoading]);
 
+    // Handle keyboard listener
+    useEffect(() => {
+        if (isOpen) {
+            document.addEventListener('keydown', handleKeyDown);
+            return () => document.removeEventListener('keydown', handleKeyDown);
+        }
+    }, [isOpen, handleKeyDown]);
+
+    // Handle modal lifecycle (overflow and initial focus)
     useEffect(() => {
         if (isOpen) {
             triggerRef.current = document.activeElement as HTMLElement | null;
-            document.addEventListener('keydown', handleKeyDown);
             document.body.style.overflow = 'hidden';
             
             // Prefer a user-input field when present so typed confirmations work naturally.
+            // We only do this ONCE when the modal opens.
             const timeoutId = setTimeout(() => {
                 const preferredInput = modalRef.current?.querySelector<HTMLElement>(
                     'input:not([disabled]), textarea:not([disabled]), select:not([disabled])'
@@ -87,17 +96,16 @@ function ConfirmModal({
                     cancelBtnRef.current?.focus();
                 }
             }, 10);
-            return () => clearTimeout(timeoutId);
-        } else {
-            document.removeEventListener('keydown', handleKeyDown);
-            document.body.style.overflow = '';
-            
-            // Restore focus
-            if (triggerRef.current) {
-                triggerRef.current.focus();
-            }
+            return () => {
+                clearTimeout(timeoutId);
+                document.body.style.overflow = '';
+                // Restore focus
+                if (triggerRef.current) {
+                    triggerRef.current.focus();
+                }
+            };
         }
-    }, [isOpen, handleKeyDown]);
+    }, [isOpen]);
 
     if (!isOpen) return null;
 

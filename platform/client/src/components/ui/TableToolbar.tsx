@@ -5,6 +5,8 @@ interface TableToolbarProps extends HTMLAttributes<HTMLDivElement> {
     description?: string;
     leading?: ReactNode;
     trailing?: ReactNode;
+    children?: ReactNode;
+    className?: string;
 }
 
 function TableToolbar({

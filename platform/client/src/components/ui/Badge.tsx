@@ -22,10 +22,10 @@ const badgeVariants = cva(
     }
 );
 
-interface BadgeProps
-    extends HTMLAttributes<HTMLSpanElement>,
-    VariantProps<typeof badgeVariants> {
+interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
+    variant?: 'default' | 'success' | 'warning' | 'danger' | 'info' | 'accent' | 'purple' | 'outline';
     children?: ReactNode;
+    className?: string;
 }
 
 function Badge({ className = '', variant, children, ...props }: BadgeProps) {

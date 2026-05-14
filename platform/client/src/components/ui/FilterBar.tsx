@@ -3,6 +3,8 @@ import { HTMLAttributes, ReactNode } from 'react';
 interface FilterBarProps extends HTMLAttributes<HTMLDivElement> {
     leading?: ReactNode;
     trailing?: ReactNode;
+    children?: ReactNode;
+    className?: string;
 }
 
 function FilterBar({ leading, trailing, className = '', children, ...props }: FilterBarProps) {

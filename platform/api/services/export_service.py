@@ -10,12 +10,14 @@ from utils.supabase_client import db
 
 logger = logging.getLogger("email_engine.export")
 
-async def process_csv_export(job_id: str, tenant_id: str, batch_id: str = None) -> None:
+from typing import Optional
+
+async def process_contact_export(job_id: str, tenant_id: str, batch_id: Optional[str] = None, export_format: str = "csv") -> None:
     """
-    Process a CSV export job inside the API process.
+    Process a contact export job (CSV or Excel) inside the API process.
     Updates the `jobs` table with progress and finally sets the result URL.
     """
-    logger.info(f"[{job_id}] CSV export started for tenant {tenant_id}")
+    logger.info(f"[{job_id}] {export_format} export started for tenant {tenant_id}")
 
     # Mark job as processing
     db.client.table("jobs").update({
@@ -27,14 +29,23 @@ async def process_csv_export(job_id: str, tenant_id: str, batch_id: str = None) 
     try:
         # Yield to allow HTTP response to return
         await asyncio.sleep(0.1)
-
-        import gzip
         
-        # 1. Fetch CSV data
-        csv_data = ContactService.export_contacts(tenant_id, batch_id=batch_id)
+        # 1. Fetch data
+        data = ContactService.export_contacts(tenant_id, batch_id=batch_id, export_format=export_format)
         
-        # 2. Compress the data with gzip
-        csv_bytes = gzip.compress(csv_data.encode('utf-8'))
+        # 2. Handle compression and content type
+        if export_format == "excel":
+            # Don't compress Excel as it's already a compressed format (zip based)
+            file_bytes = data
+            content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ext = "xlsx"
+        else:
+            import gzip
+            if isinstance(data, str):
+                data = data.encode('utf-8')
+            file_bytes = gzip.compress(data)
+            content_type = "application/gzip"
+            ext = "csv.gz"
 
         db.client.table("jobs").update({
             "progress": 50,
@@ -46,17 +57,19 @@ async def process_csv_export(job_id: str, tenant_id: str, batch_id: str = None) 
             db.client.storage.get_bucket("exports")
         except Exception:
             try:
-                db.client.storage.create_bucket("exports", public=False)
+                db.client.storage.create_bucket("exports", options={"public": False})
             except Exception as e:
                 logger.warning(f"Bucket exports might already exist or failed to create: {e}")
 
-        # 4. Upload to Supabase Storage as .gz
-        file_name = f"{tenant_id}/export_batch_{batch_id}_{job_id}.csv.gz" if batch_id else f"{tenant_id}/export_{job_id}.csv.gz"
+        # 4. Upload to Supabase Storage
+        file_name = f"{tenant_id}/export_{job_id}.{ext}"
+        if batch_id:
+            file_name = f"{tenant_id}/export_batch_{batch_id}_{job_id}.{ext}"
         
         res = db.client.storage.from_("exports").upload(
             file_name, 
-            csv_bytes,
-            {"content-type": "application/gzip", "upsert": "true"}
+            file_bytes,
+            {"content-type": content_type, "upsert": "true"}
         )
 
         db.client.table("jobs").update({
@@ -73,7 +86,7 @@ async def process_csv_export(job_id: str, tenant_id: str, batch_id: str = None) 
         if not download_url:
             raise Exception("Failed to generate signed URL")
 
-        # 5. Finalise job with the URL stored in error_log for simplicity
+        # 5. Finalise job
         import json
         db.client.table("jobs").update({
             "status": "completed",
@@ -82,10 +95,10 @@ async def process_csv_export(job_id: str, tenant_id: str, batch_id: str = None) 
             "updated_at": "now()",
         }).eq("id", job_id).execute()
 
-        logger.info(f"[{job_id}] CSV export finished successfully.")
+        logger.info(f"[{job_id}] {export_format} export finished successfully.")
 
     except Exception as e:
-        logger.error(f"[{job_id}] CSV export failed: {e}")
+        logger.error(f"[{job_id}] {export_format} export failed: {e}")
         import json
         db.client.table("jobs").update({
             "status": "failed",

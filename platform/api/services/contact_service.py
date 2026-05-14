@@ -10,8 +10,9 @@ Production Hardened:
 - Structured logging
 - Contact status management (subscribed/unsubscribed/bounced/complained)
 """
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 from utils.supabase_client import db  # type: ignore
+from postgrest.types import CountMethod
 import re
 import logging
 from collections import Counter
@@ -76,7 +77,7 @@ class ContactService:
         """
         # Get current count
         result = db.client.table("contacts")\
-            .select("id", count="exact")\
+            .select("id", count=CountMethod.exact)\
             .eq("tenant_id", tenant_id)\
             .execute()
         
@@ -90,17 +91,24 @@ class ContactService:
             .execute()
         
         # Default fallback to 500 (Free plan limit) if relation is totally broken
-        max_contacts = 500
-        if tenant.data and tenant.data.get("plans"):
-            max_contacts = tenant.data["plans"].get("max_contacts", 500)
+        max_contacts: int = 500
+        if tenant.data and isinstance(tenant.data, dict):
+            plans_data = tenant.data.get("plans")
+            if isinstance(plans_data, dict):
+                max_contacts = int(plans_data.get("max_contacts", 500))
+            elif isinstance(plans_data, list) and plans_data:
+                # Handle case where it might be returned as a list
+                first_plan = plans_data[0]
+                if isinstance(first_plan, dict):
+                    max_contacts = int(first_plan.get("max_contacts", 500))
             
         can_add = (current_count + additional_count) <= max_contacts
         
         return can_add, {
-            "current": current_count,
-            "limit": max_contacts,
-            "available": max_contacts - current_count,
-            "requested": additional_count
+            "current": int(current_count),
+            "limit": int(max_contacts),
+            "available": int(max_contacts - current_count),
+            "requested": int(additional_count)
         }
     
     @staticmethod
@@ -117,7 +125,7 @@ class ContactService:
         for i in range(0, len(emails), 100):
             batch = emails[i:i+100]  # type: ignore
             result = db.client.table("contacts")\
-                .select("email", count="exact")\
+                .select("email", count=CountMethod.exact)\
                 .eq("tenant_id", tenant_id)\
                 .in_("email", batch)\
                 .execute()
@@ -138,9 +146,11 @@ class ContactService:
                 .eq("tenant_id", tenant_id)\
                 .in_("email", batch)\
                 .execute()
-            for row in result.data or []:
-                if row.get("email"):
-                    existing.add(row["email"])
+            for row in (result.data or []):
+                if isinstance(row, dict):
+                    email_val = row.get("email")
+                    if email_val:
+                        existing.add(str(email_val))
         return existing
 
     @staticmethod
@@ -159,7 +169,7 @@ class ContactService:
         offset = (page - 1) * limit
         
         query = db.client.table("contacts")\
-            .select("id, email, email_domain, first_name, last_name, full_name, custom_fields, tags, status, created_at", count="exact")\
+            .select("id, email, email_domain, first_name, last_name, full_name, custom_fields, tags, status, created_at", count=CountMethod.exact)\
             .eq("tenant_id", tenant_id)
 
         from utils.jwt_middleware import apply_data_isolation
@@ -500,7 +510,7 @@ class ContactService:
         offset = (page - 1) * limit
         
         result = db.client.table("contacts")\
-            .select("id, email, first_name, last_name, status, bounce_reason, created_at", count="exact")\
+            .select("id, email, first_name, last_name, status, bounce_reason, created_at", count=CountMethod.exact)\
             .eq("tenant_id", tenant_id)\
             .in_("status", ["bounced", "unsubscribed", "complained"])
             
@@ -545,14 +555,14 @@ class ContactService:
             if row.get("email_domain")
         ]
         counts = Counter(domains)
-        top_domains = [
-            {
+        top_domains = []
+        for domain, count in counts.most_common(limit):
+            suggestion = ContactService.suggest_domain_correction(domain, list(counts.keys())) or {}
+            top_domains.append({
                 "domain": domain,
                 "count": count,
-                **(ContactService.suggest_domain_correction(domain, list(counts.keys())) or {})
-            }
-            for domain, count in counts.most_common(limit)
-        ]
+                **suggestion
+            })
 
         return {
             "data": top_domains,
@@ -563,10 +573,11 @@ class ContactService:
         }
 
     @staticmethod
-    def export_contacts(tenant_id: str, batch_id: Optional[str] = None) -> str:
-        """Fetch all contacts for export and return CSV format string."""
+    def export_contacts(tenant_id: str, batch_id: Optional[str] = None, export_format: str = "csv") -> Any:
+        """Fetch all contacts for export and return CSV format string or Excel bytes."""
         import csv
         import io
+        import pandas as pd
         
         query = db.client.table("contacts")\
             .select("email, first_name, last_name, status, bounce_reason, custom_fields, tags, created_at")\
@@ -588,29 +599,45 @@ class ContactService:
         
         custom_keys = sorted(list(all_custom_keys))
         
-        # Build headers
-        headers = ["Email", "First Name", "Last Name", "Status", "Bounce Reason", "Tags", "Date Added"] + custom_keys
-        
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(headers)
-        
+        # Prepare list of dicts for export
+        export_data = []
         for c in contacts:
-            row = [
-                c.get("email", ""),
-                c.get("first_name", ""),
-                c.get("last_name", ""),
-                c.get("status", ""),
-                c.get("bounce_reason", ""),
-                ", ".join(c.get("tags") or []),
-                c.get("created_at", "")
-            ]
-            
-            # Append custom fields dynamically
-            c_custom = c.get("custom_fields") or {}
-            for key in custom_keys:
-                row.append(c_custom.get(key, ""))
+            if not isinstance(c, dict):
+                continue
                 
-            writer.writerow(row)
-            
-        return output.getvalue()
+            row = {
+                "Email": str(c.get("email", "") or ""),
+                "First Name": str(c.get("first_name", "") or ""),
+                "Last Name": str(c.get("last_name", "") or ""),
+                "Status": str(c.get("status", "") or ""),
+                "Bounce Reason": str(c.get("bounce_reason", "") or ""),
+                "Tags": ", ".join(c.get("tags") or []) if isinstance(c.get("tags"), list) else "",
+                "Date Added": str(c.get("created_at", "") or "")
+            }
+            # Add custom fields
+            c_custom = c.get("custom_fields")
+            if not isinstance(c_custom, dict):
+                c_custom = {}
+                
+            for key in custom_keys:
+                row[key] = str(c_custom.get(key, "") or "")
+            export_data.append(row)
+
+        if export_format == "excel":
+            df = pd.DataFrame(export_data)
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='Contacts')
+            return output.getvalue()
+
+        # Default CSV
+        output = io.StringIO()
+        if not export_data:
+            # Still return headers if empty
+            headers = ["Email", "First Name", "Last Name", "Status", "Bounce Reason", "Tags", "Date Added"] + custom_keys
+            writer = csv.writer(output)
+            writer.writerow(headers)
+            return output.getvalue()
+
+        df = pd.DataFrame(export_data)
+        return df.to_csv(index=False)

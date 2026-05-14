@@ -124,7 +124,8 @@ function deriveImportCounts(job: any, fallbackTotal: number) {
 // ===== ErrorRow Component =====
 function ErrorRow({ err, idx, batchId, token, colors, onResolved }: {
     err: any; idx: number; batchId: string; token: string;
-    colors: any; onResolved: () => void;
+    colors: any; onResolved: () => void | Promise<void>;
+    key?: string | number;
 }) {
     const { success, error } = useToast();
     const [email, setEmail] = useState(err.email || "");
@@ -336,6 +337,10 @@ export default function ContactsPage() {
     const [importResult, setImportResult] = useState<any>(null);
     const [uploading, setUploading] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [showExportModal, setShowExportModal] = useState(false);
+    const [showBatchExportModal, setShowBatchExportModal] = useState<Batch | null>(null);
+    const [exportFormat, setExportFormat] = useState<'csv' | 'excel'>('csv');
+    const [showSampleDropdown, setShowSampleDropdown] = useState(false);
     const [downloadingBatch, setDownloadingBatch] = useState<string | null>(null);
 
     // Phase 7.5: Job progress polling
@@ -582,7 +587,8 @@ export default function ContactsPage() {
         try {
             // Build custom field mappings
             const customMappings: Record<string, string> = {};
-            Object.entries(columnMappings).forEach(([csvCol, target]) => {
+            Object.entries(columnMappings).forEach(([csvCol, targetValue]) => {
+                const target = targetValue as string;
                 if (target.startsWith("custom:")) {
                     const fieldName = target.replace("custom:", "");
                     customMappings[fieldName] = csvCol;
@@ -896,31 +902,80 @@ export default function ContactsPage() {
         }
     }, [batchSearch, batchDomainFilter, expandedBatch]);
 
-    const handleExportBatch = async (batchId: string, fileName: string) => {
+    const handleExportBatch = async (batchId: string, fileName: string, format: 'csv' | 'excel' = 'csv') => {
+        setDownloadingBatch(batchId);
         try {
-            const res = await fetch(`${API_BASE}/contacts/export?batch_id=${batchId}`, {
+            const res = await fetch(`${API_BASE}/contacts/export?batch_id=${batchId}&format=${format}`, {
                 headers: apiHeaders(token!)
             });
             const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `export_${fileName.replace(/\.[^/.]+$/, "")}.csv`;
+            const ext = format === 'excel' ? 'xlsx' : 'csv';
+            a.download = `export_${fileName.replace(/\.[^/.]+$/, "")}.${ext}`;
             document.body.appendChild(a);
             a.click();
             a.remove();
+            setShowBatchExportModal(null);
+            success(`Exported batch ${fileName}.`);
         } catch (e) {
             error("Failed to export batch.");
+        } finally {
+            setDownloadingBatch(null);
         }
+    };
+
+    const handleDownloadSample = (format: 'csv' | 'excel') => {
+        const headers = ["First Name", "Last Name", "Email", "Phone"];
+        if (format === 'csv') {
+            const content = headers.join(",") + "\n";
+            const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "contacts_sample.csv";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } else {
+            // Basic HTML table for Excel
+            const content = `
+                <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+                <head><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Sheet 1</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+                <body>
+                    <table>
+                        <tr>
+                            ${headers.map(h => `<th>${h}</th>`).join('')}
+                        </tr>
+                    </table>
+                </body>
+                </html>
+            `;
+            const blob = new Blob([content], { type: "application/vnd.ms-excel" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "contacts_sample.xls";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        setShowSampleDropdown(false);
     };
 
     const handleExport = async () => {
         if (!token) return;
         setIsExporting(true);
+        setShowExportModal(false);
+        success("Export started");
         try {
             const res = await fetch(`${API_BASE}/contacts/export/async`, { 
                 method: "POST",
-                headers: apiHeaders(token) 
+                headers: { ...apiHeaders(token), "Content-Type": "application/json" },
+                body: JSON.stringify({ format: exportFormat })
             });
             if (res.ok) {
                 const data = await res.json();
@@ -940,7 +995,8 @@ export default function ContactsPage() {
                                     } catch (e) {}
                                     if (url) {
                                         const workspacePrefix = user?.fullName?.split(' ')[0] || user?.email?.split('@')[0] || "workspace";
-                                        const exportFilename = `${workspacePrefix.toLowerCase()}_contacts.csv.gz`;
+                                        const ext = exportFormat === 'excel' ? 'xlsx' : 'csv';
+                                        const exportFilename = `${workspacePrefix.toLowerCase()}_contacts.${ext}${url.includes('.gz') ? '.gz' : ''}`;
                                         const finalUrl = url + (url.includes('?') ? '&' : '?') + `download=${encodeURIComponent(exportFilename)}`;
                                         
                                         const a = document.createElement("a");
@@ -1049,9 +1105,39 @@ export default function ContactsPage() {
                 subtitle="Import, filter, tag, and maintain audience health without leaving the operational workspace."
                 action={
                     <div className="flex flex-wrap gap-3">
-                        <Button onClick={handleExport} disabled={isExporting} variant="outline">
-                            {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                            {isExporting ? "Preparing Export..." : "Export CSV"}
+                        <div className="relative">
+                            <Button 
+                                onClick={() => setShowSampleDropdown(!showSampleDropdown)} 
+                                variant="outline"
+                            >
+                                <Download className="h-4 w-4" />
+                                Download Sample
+                            </Button>
+                            {showSampleDropdown && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setShowSampleDropdown(false)} />
+                                    <div className="absolute left-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-card)] shadow-xl animate-in fade-in slide-in-from-top-1">
+                                        <button 
+                                            onClick={() => handleDownloadSample('csv')}
+                                            className="flex w-full items-center gap-3 px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+                                        >
+                                            <FileText className="h-4 w-4 text-[var(--text-muted)]" />
+                                            Download CSV Template
+                                        </button>
+                                        <button 
+                                            onClick={() => handleDownloadSample('excel')}
+                                            className="flex w-full items-center gap-3 px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+                                        >
+                                            <FileSpreadsheet className="h-4 w-4 text-[var(--text-muted)]" />
+                                            Download Excel Template
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                        <Button onClick={() => setShowExportModal(true)} disabled={isExporting} variant="outline">
+                            {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+                            {isExporting ? "Preparing Export..." : "Export Contacts"}
                         </Button>
                         <Button
                             onClick={() => stats && stats.usage_percent < 100 ? setShowUpload(true) : null}
@@ -1417,7 +1503,7 @@ export default function ContactsPage() {
                                         <td className="px-5 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 <button 
-                                                    onClick={(e) => { e.stopPropagation(); handleExportBatch(b.id, b.file_name); }}
+                                                    onClick={(e) => { e.stopPropagation(); setShowBatchExportModal(b); }}
                                                     className="rounded-[var(--radius)] p-1 text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--accent)]"
                                                     title="Export this batch"
                                                 >
@@ -1876,13 +1962,16 @@ export default function ContactsPage() {
                                     </div>
                                     <div className="mt-4 border-t border-[var(--border)] pt-4">
                                         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-primary)]">Field Mappings</p>
-                                        {Object.entries(columnMappings).map(([csvCol, target]) => (
-                                            <p key={csvCol} className="mb-1 text-xs text-[var(--text-muted)]">
-                                                {csvCol} → <span className="font-medium text-[var(--text-primary)]">
-                                                    {target === "email" ? "📧 Email" : `📋 ${target.replace("custom:", "")}`}
-                                                </span>
-                                            </p>
-                                        ))}
+                                        {Object.entries(columnMappings).map(([csvCol, targetValue]) => {
+                                            const target = targetValue as string;
+                                            return (
+                                                <p key={csvCol} className="mb-1 text-xs text-[var(--text-muted)]">
+                                                    {csvCol} → <span className="font-medium text-[var(--text-primary)]">
+                                                        {target === "email" ? "📧 Email" : `📋 ${target.replace("custom:", "")}`}
+                                                    </span>
+                                                </p>
+                                            );
+                                        })}
                                     </div>
                                 </SectionCard>
                                 <div className="mt-4 flex gap-2">
@@ -2037,6 +2126,94 @@ export default function ContactsPage() {
                 confirmLabel="Delete Batch"
                 variant="danger"
             />
+
+            {/* ===== MODAL: Export Contacts ===== */}
+            <ModalShell
+                isOpen={showExportModal}
+                onClose={() => setShowExportModal(false)}
+                title="Export Contacts"
+                description="Select your preferred format for the export."
+                maxWidthClass="max-w-xs"
+            >
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                        <button
+                            onClick={() => setExportFormat('csv')}
+                            className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 p-4 transition-all ${
+                                exportFormat === 'csv' 
+                                ? 'border-[var(--accent)] bg-[var(--accent)]/5 text-[var(--accent)]' 
+                                : 'border-[var(--border)] hover:border-[var(--text-muted)]'
+                            }`}
+                        >
+                            <FileText className="h-6 w-6" />
+                            <span className="text-sm font-medium">CSV</span>
+                        </button>
+                        <button
+                            onClick={() => setExportFormat('excel')}
+                            className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 p-4 transition-all ${
+                                exportFormat === 'excel' 
+                                ? 'border-[var(--accent)] bg-[var(--accent)]/5 text-[var(--accent)]' 
+                                : 'border-[var(--border)] hover:border-[var(--text-muted)]'
+                            }`}
+                        >
+                            <FileSpreadsheet className="h-6 w-6" />
+                            <span className="text-sm font-medium">Excel</span>
+                        </button>
+                    </div>
+                    <Button 
+                        onClick={handleExport} 
+                        className="w-full justify-center"
+                        disabled={isExporting}
+                    >
+                        {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                        {isExporting ? "Start Export" : "Export"}
+                    </Button>
+                </div>
+            </ModalShell>
+
+            {/* ===== MODAL: Export Contacts (Batch) ===== */}
+            <ModalShell
+                isOpen={!!showBatchExportModal}
+                onClose={() => setShowBatchExportModal(null)}
+                title="Export Batch"
+                description={`Export contacts from ${showBatchExportModal?.file_name}`}
+                maxWidthClass="max-w-xs"
+            >
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                        <button
+                            onClick={() => setExportFormat('csv')}
+                            className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 p-4 transition-all ${
+                                exportFormat === 'csv' 
+                                ? 'border-[var(--accent)] bg-[var(--accent)]/5 text-[var(--accent)]' 
+                                : 'border-[var(--border)] hover:border-[var(--text-muted)]'
+                            }`}
+                        >
+                            <FileText className="h-6 w-6" />
+                            <span className="text-sm font-medium">CSV</span>
+                        </button>
+                        <button
+                            onClick={() => setExportFormat('excel')}
+                            className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 p-4 transition-all ${
+                                exportFormat === 'excel' 
+                                ? 'border-[var(--accent)] bg-[var(--accent)]/5 text-[var(--accent)]' 
+                                : 'border-[var(--border)] hover:border-[var(--text-muted)]'
+                            }`}
+                        >
+                            <FileSpreadsheet className="h-6 w-6" />
+                            <span className="text-sm font-medium">Excel</span>
+                        </button>
+                    </div>
+                    <Button 
+                        onClick={() => showBatchExportModal && handleExportBatch(showBatchExportModal.id, showBatchExportModal.file_name, exportFormat)} 
+                        className="w-full justify-center"
+                        disabled={!!downloadingBatch}
+                    >
+                        {downloadingBatch ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                        {downloadingBatch ? "Exporting..." : "Export Batch"}
+                    </Button>
+                </div>
+            </ModalShell>
 
             {/* ===== MODAL: Bulk Tag ===== */}
             <ModalShell

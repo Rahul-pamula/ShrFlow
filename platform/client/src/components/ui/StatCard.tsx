@@ -8,6 +8,7 @@ interface StatCardProps {
     trendLabel?: string;          // "vs last month"
     icon?: ReactNode;
     className?: string;
+    key?: string | number;
 }
 
 function StatCard({ label, value, trend, trendLabel, icon, className = '' }: StatCardProps) {

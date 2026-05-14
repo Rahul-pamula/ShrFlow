@@ -3,8 +3,9 @@ Contacts API Routes
 Handles contact listing, stats, CSV/Excel upload, and lifecycle management.
 """
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Response
-from typing import Optional, Dict, List, Any, cast
+from typing import Optional, Dict, List, Any, cast, Union
 from pydantic import BaseModel
+from postgrest.types import CountMethod
 from datetime import datetime, timezone
 import pandas as pd
 import logging
@@ -94,6 +95,11 @@ class ImportProcessResponse(BaseModel):
     job_id: str
     status: str
     message: str
+
+
+class ExportAsyncRequest(BaseModel):
+    batch_id: Optional[str] = None
+    format: str = "csv"
 
 
 # ===== STATS & LIST =====
@@ -374,7 +380,7 @@ async def process_import_signal(
 
     # 3. Publish to RabbitMQ
     try:
-        job_data = cast(Dict[str, Any], job)
+        job_data = job
         task_payload = {
             "task_type": "contact_import",
             "job_id": job_id,
@@ -674,7 +680,7 @@ async def resolve_error(
             "errors": json_lib.dumps(errors),
             "failed_count": new_failed,
             "imported_count": db.client.table("contacts")
-                .select("id", count="exact")
+                .select("id", count=CountMethod.exact)
                 .eq("import_batch_id", body.batch_id)
                 .eq("tenant_id", tenant_id)
                 .execute().count
@@ -698,6 +704,96 @@ async def get_suppressed_contacts(
 ):
     """List contacts that bounced, unsubscribed, or complained"""
     return ContactService.get_suppression_list(tenant_id, jwt_payload, page, limit)
+
+# ===== EXPORT OPERATIONS (MUST be before dynamic /{contact_id}) =====
+
+@router.post("/export/async")
+async def export_contacts_async(
+    background_tasks: BackgroundTasks,
+    payload: Optional[ExportAsyncRequest] = None,
+    tenant_id: str = Depends(require_active_tenant),
+    _ = Depends(require_permission("contacts:import"))
+):
+    """Start an async background task to export all contacts for the tenant"""
+    try:
+        from utils.redis_client import redis_client
+        lock_key = f"tenant:{tenant_id}:export_running"
+        if not await redis_client.client.set(lock_key, "1", nx=True, ex=3600):
+            raise HTTPException(status_code=429, detail="An export is already running for this workspace.")
+
+        job_id = str(uuid.uuid4())
+        
+        # 1. Create the persistent Job record
+        db.client.table("jobs").insert({
+            "id": job_id,
+            "tenant_id": tenant_id,
+            "type": "csv_export",
+            "status": "pending",
+            "progress": 0,
+            "total_items": 0,
+        }).execute()
+        
+        # 2. Schedule the background task
+        from services.export_service import process_contact_export
+        batch_id_arg: Optional[str] = payload.batch_id if payload else None
+        export_format = payload.format if payload else "csv"
+        background_tasks.add_task(process_contact_export, job_id=job_id, tenant_id=tenant_id, batch_id=batch_id_arg, export_format=export_format)
+        
+        return {
+            "status": "accepted",
+            "job_id": job_id,
+            "message": "Export started. Poll /contacts/jobs/{job_id} for progress."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to queue export: {str(e)}")
+
+@router.get("/export")
+async def export_contacts(
+    batch_id: Optional[str] = None,
+    format: str = "csv",
+    tenant_id: str = Depends(require_active_tenant), 
+    _ = Depends(require_permission("contacts:import"))
+):
+    """Export all contacts for the tenant as a CSV or Excel file"""
+    try:
+        data = ContactService.export_contacts(tenant_id, batch_id=batch_id, export_format=format)
+        if format == "excel":
+            return Response(
+                content=data,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": "attachment; filename=contacts_export.xlsx"}
+            )
+        return Response(
+            content=data,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=contacts_export.csv"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
+@router.get("/export/batch/{batch_id}")
+async def export_batch_contacts_sync(
+    batch_id: str,
+    format: str = "csv",
+    tenant_id: str = Depends(require_active_tenant),
+    _ = Depends(require_permission("contacts:import"))
+):
+    """Fast synchronous export for a specific import batch — no job queue, no polling."""
+    import gzip as _gzip
+    try:
+        data = ContactService.export_contacts(tenant_id, batch_id=batch_id, export_format=format)
+        ext = "xlsx" if format == "excel" else "csv"
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        compressed = _gzip.compress(data)
+        return Response(
+            content=compressed,
+            media_type="application/gzip",
+            headers={"Content-Disposition": f"attachment; filename=batch_{batch_id}.{ext}.gz"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Batch export failed: {str(e)}")
 
 @router.get("/{contact_id}")
 async def get_contact(
@@ -777,80 +873,7 @@ async def update_contact(
         raise HTTPException(status_code=500, detail=f"Failed to update contact: {str(e)}")
 
 
-class ExportAsyncRequest(BaseModel):
-    batch_id: Optional[str] = None
 
-@router.post("/export/async")
-async def export_contacts_async(
-    background_tasks: BackgroundTasks,
-    payload: Optional[ExportAsyncRequest] = None,
-    tenant_id: str = Depends(require_active_tenant),
-    _ = Depends(require_permission("contacts:import"))
-):
-    """Start an async background task to export all contacts for the tenant"""
-    try:
-        from utils.redis_client import redis_client
-        lock_key = f"tenant:{tenant_id}:export_running"
-        if not await redis_client.client.set(lock_key, "1", nx=True, ex=3600):
-            raise HTTPException(status_code=429, detail="An export is already running for this workspace.")
-
-        job_id = str(uuid.uuid4())
-        
-        # 1. Create the persistent Job record
-        db.client.table("jobs").insert({
-            "id": job_id,
-            "tenant_id": tenant_id,
-            "type": "csv_export",
-            "status": "pending",
-            "progress": 0,
-            "total_items": 0,
-        }).execute()
-        
-        # 2. Schedule the background task
-        from services.export_service import process_csv_export
-        batch_id_arg: Optional[str] = payload.batch_id if payload else None
-        background_tasks.add_task(process_csv_export, job_id=job_id, tenant_id=tenant_id, batch_id=batch_id_arg)
-        
-        return {
-            "status": "accepted",
-            "job_id": job_id,
-            "message": "Export started. Poll /contacts/jobs/{job_id} for progress."
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to queue export: {str(e)}")
-
-@router.get("/export")
-async def export_contacts(tenant_id: str = Depends(require_active_tenant), _ = Depends(require_permission("contacts:import"))):
-    """Export all contacts for the tenant as a CSV file"""
-    try:
-        csv_data = ContactService.export_contacts(tenant_id)
-        return Response(
-            content=csv_data,
-            media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=contacts_export.csv"}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
-
-
-@router.get("/export/batch/{batch_id}")
-async def export_batch_contacts_sync(
-    batch_id: str,
-    tenant_id: str = Depends(require_active_tenant),
-    _ = Depends(require_permission("contacts:import"))
-):
-    """Fast synchronous export for a specific import batch — no job queue, no polling."""
-    import gzip as _gzip
-    try:
-        csv_data = ContactService.export_contacts(tenant_id, batch_id=batch_id)
-        compressed = _gzip.compress(csv_data.encode("utf-8"))
-        return Response(
-            content=compressed,
-            media_type="application/gzip",
-            headers={"Content-Disposition": f"attachment; filename=batch_{batch_id}.csv.gz"}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Batch export failed: {str(e)}")
 
 
 @router.delete("/{contact_id}")
