@@ -235,6 +235,19 @@ function getBatchMeta(batch: Batch) {
     return batch.meta;
 }
 
+function getBatchErrors(batch: Batch): any[] {
+    if (!batch.errors) return [];
+    if (typeof batch.errors === 'string') {
+        try {
+            const parsed = JSON.parse(batch.errors);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    }
+    return Array.isArray(batch.errors) ? batch.errors : [];
+}
+
 function BatchStatusBadge({ status }: { status: string }) {
     if (status === "completed") {
         return <Badge variant="success" className="gap-1"><CheckCircle2 className="h-3.5 w-3.5" />Done</Badge>;
@@ -1567,7 +1580,7 @@ export default function ContactsPage() {
                                                     </div>
 
                                                     <div className="fade-in">
-                                                        {!showFailedList ? (
+                                                        {!(showFailedList && b.failed_count > 0) ? (
                                                             /* Left Column: Contact List & Search */
                                                             <div>
                                                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
@@ -1673,11 +1686,15 @@ export default function ContactsPage() {
                                                                             </tr>
                                                                         </thead>
                                                                         <tbody>
-                                                                            {(b.errors || []).map((err: any, idx: number) => (
+                                                                            {getBatchErrors(b).map((err: any, idx: number) => (
                                                                                 <ErrorRow 
                                                                                     key={idx} err={err} idx={idx} 
                                                                                     batchId={b.id} token={token!} 
-                                                                                    colors={colors} onResolved={fetchBatches} 
+                                                                                    colors={colors} onResolved={() => {
+                                                                                        fetchBatches();
+                                                                                        fetchContacts();
+                                                                                        fetchStats();
+                                                                                    }} 
                                                                                 />
                                                                             ))}
                                                                         </tbody>

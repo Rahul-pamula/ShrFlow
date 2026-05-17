@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 def process_spintax(text: str) -> str:
     if not text:
         return ""
-    pattern = r"\{([^{}]+)\}"
+    pattern = r"(?<!\{)\{([^{}]+)\}(?!\})"
     def replace_spintax(match):
         return random.choice(match.group(1).split("|"))
     while re.search(pattern, text):
@@ -40,12 +40,80 @@ def process_spintax(text: str) -> str:
 def process_merge_tags(text: str, contact: dict) -> str:
     if not text:
         return ""
-    pattern = r"\{\{(\w+)(?:\|([^}]+))?\}\}"
-    def replace_tag(match):
-        field = match.group(1)
-        fallback = match.group(2) or ""
-        return str(contact.get(field, fallback) or fallback)
-    return re.sub(pattern, replace_tag, text)
+        
+    # 1. Backend Enrichment & Fallbacks
+    raw_first = contact.get("first_name") or ""
+    raw_last = contact.get("last_name") or ""
+    
+    first_str = str(raw_first).strip()
+    last_str = str(raw_last).strip()
+    
+    enriched_first = first_str if first_str else "there"
+    enriched_last = last_str if last_str else "Customer"
+    
+    if first_str and last_str:
+        enriched_full = f"{first_str} {last_str}"
+    elif first_str:
+        enriched_full = first_str
+    elif last_str:
+        enriched_full = last_str
+    else:
+        enriched_full = "Valued Customer"
+        
+    enriched_contact = {k: v for k, v in contact.items()}
+    enriched_contact["first_name"] = enriched_first
+    enriched_contact["last_name"] = enriched_last
+    enriched_contact["full_name"] = enriched_full
+    
+    # 2. Tag Regex for matching {{ ... }} with re.DOTALL to handle multiline tags
+    tag_pattern = re.compile(r"\{\{(.*?)\}\}", re.DOTALL)
+    
+    def replace_tag(match) -> str:
+        inner = match.group(1)
+        
+        # Strip all HTML tags inside the curly braces
+        clean_inner = re.sub(r"<[^>]+>", "", inner)
+        
+        # Normalize whitespace
+        clean_inner = " ".join(clean_inner.split())
+        
+        if not clean_inner:
+            return ""
+            
+        # Parse static fallback if any
+        parts = clean_inner.split("|", 1)
+        dynamic_chain_str = parts[0]
+        static_fallback = parts[1].strip() if len(parts) > 1 else None
+        
+        # Parse dynamic candidates (e.g. first_name || full_name)
+        candidates = [c.strip().lower() for c in dynamic_chain_str.split("||")]
+        
+        for candidate in candidates:
+            if not candidate:
+                continue
+                
+            orig_val = contact.get(candidate)
+            orig_val_str = str(orig_val).strip() if orig_val is not None else ""
+            
+            if candidate == "full_name":
+                if first_str or last_str:
+                    return f"{first_str} {last_str}".strip()
+            else:
+                if orig_val_str:
+                    return orig_val_str
+                    
+        # Exhausted all dynamic candidates without finding a valid string
+        if static_fallback is not None:
+            return static_fallback
+            
+        # If no static fallback was provided, use the default enrichment fallback of the PRIMARY candidate
+        primary_candidate = candidates[0] if candidates else ""
+        if primary_candidate in {"first_name", "last_name", "full_name"}:
+            return str(enriched_contact[primary_candidate])
+            
+        return ""
+            
+    return tag_pattern.sub(replace_tag, text)
 
 def _get_api_base() -> str:
     load_dotenv(override=True)
@@ -227,7 +295,8 @@ class EmailHandler:
                                 c.email      AS c_email,
                                 c.first_name AS c_first_name,
                                 c.last_name  AS c_last_name,
-                                tn.company_name, tn.business_address
+                                tn.company_name, tn.business_address, tn.business_city,
+                                tn.business_state, tn.business_zip, tn.business_country
                             FROM email_tasks t
                             JOIN contacts c  ON t.contact_id      = c.id
                             JOIN tenants  tn ON t.tenant_id::uuid  = tn.id
@@ -369,7 +438,46 @@ class EmailHandler:
                 body_html = process_merge_tags(process_spintax(snap_res.data[0]["body_snapshot"]), contact_data)
                 subject   = process_merge_tags(process_spintax(snap_res.data[0]["subject_snapshot"]), contact_data)
 
-                body_html = _inject_email_footer(body_html, contact_data["id"], str(campaign_id), self.unsub_secret)
+                company_name = task_row.get("company_name")
+                business_address = task_row.get("business_address")
+                business_city = task_row.get("business_city")
+                business_state = task_row.get("business_state")
+                business_zip = task_row.get("business_zip")
+                business_country = task_row.get("business_country")
+
+                footer_parts = []
+                if company_name:
+                    footer_parts.append(company_name)
+                if business_address:
+                    footer_parts.append(business_address)
+
+                city_state_zip = ""
+                if business_city:
+                    city_state_zip += business_city
+                if business_state:
+                    if city_state_zip:
+                        city_state_zip += f", {business_state}"
+                    else:
+                        city_state_zip += business_state
+                if business_zip:
+                    if city_state_zip:
+                        city_state_zip += f" {business_zip}"
+                    else:
+                        city_state_zip += business_zip
+                if city_state_zip:
+                    footer_parts.append(city_state_zip)
+                if business_country:
+                    footer_parts.append(business_country)
+
+                tenant_footer_text = " &bull; ".join(footer_parts) if footer_parts else None
+
+                body_html = _inject_email_footer(
+                    body_html,
+                    contact_data["id"],
+                    str(campaign_id),
+                    self.unsub_secret,
+                    tenant_footer_text=tenant_footer_text
+                )
                 body_html = _inject_tracking_pixel(body_html, str(dispatch_id), self.tracking_secret)
 
                 # 8. Build From Address from Campaign Sender Identity (not recipient domain!)

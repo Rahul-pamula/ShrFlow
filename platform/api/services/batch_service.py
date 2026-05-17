@@ -38,13 +38,26 @@ class BatchService:
         """
         List all import batches for a tenant, newest first.
         """
+        import json as json_lib
         result = db.client.table("import_batches")\
             .select("id, file_name, total_rows, imported_count, failed_count, errors, status, created_at")\
             .eq("tenant_id", tenant_id)\
             .order("created_at", desc=True)\
             .execute()
 
-        return result.data or []
+        batches = result.data or []
+        for b in batches:
+            if "errors" in b and b["errors"]:
+                if isinstance(b["errors"], str):
+                    try:
+                        b["errors"] = json_lib.loads(b["errors"])
+                    except Exception:
+                        b["errors"] = []
+                elif not isinstance(b["errors"], list):
+                    b["errors"] = []
+            else:
+                b["errors"] = []
+        return batches
 
     @staticmethod
     def delete_batch(tenant_id: str, batch_id: str) -> int:
