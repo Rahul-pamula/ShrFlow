@@ -239,7 +239,7 @@ export const DEFAULT_BRAND_KITS: BrandKit[] = [
                 id: "c4", name: "Customer Quote", category: "testimonial", isLocked: true,
                 block: { id: "b4", type: "layout", props: { layoutType: "1-col", columns: [{ blocks: [
                     { id: "t3", type: "text", props: { content: "<p><i>\"This system transformed our workflow entirely.\"</i></p>", fontSize: 18, align: "center", color: "#6366F1" } },
-                    { id: "t4", type: "text", props: { content: "<b>— Jane Doe, CEO</b>", fontSize: 14, align: "center" } }
+                    { id: "t4", type: "text", props: { content: "<b>— Sri Krishna, CEO</b>", fontSize: 14, align: "center" } }
                 ] }] } }
             },
             { 

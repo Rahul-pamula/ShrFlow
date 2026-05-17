@@ -138,7 +138,7 @@ export default function Step1Details({ data, updateData, onNext }: any) {
                             <label className={labelClasses}>Sender Name (From Name) *</label>
                             <input
                                 type="text"
-                                placeholder="e.g. John from MyCompany"
+                                placeholder="e.g. Krishna from Dwaraka Corp"
                                 value={data.from_name || ''}
                                 onChange={(e) => { updateData({ from_name: e.target.value }); setErrors((p: any) => ({ ...p, from_name: '' })); }}
                                 className={inputClasses(!!errors.from_name)}

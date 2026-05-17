@@ -680,9 +680,9 @@ async def preview_campaign(campaign_id: str, sample_contact: Optional[dict] = No
     campaign_data = res_data[0]
     
     contact = sample_contact or {
-        "email": "preview@example.com",
-        "first_name": "John",
-        "last_name": "Doe"
+        "email": "krishna@dwaraka.in",
+        "first_name": "Sri",
+        "last_name": "Krishna"
     }
     
     body_html = str(campaign_data.get("body_html", ""))
@@ -690,7 +690,7 @@ async def preview_campaign(campaign_id: str, sample_contact: Optional[dict] = No
         try:
             import json
             from services.compile_service import compile_design_json
-            body_html = compile_design_json(json.loads(body_html), template_id=campaign_id)
+            body_html = compile_design_json(json.loads(body_html))
         except Exception:
             pass
 
@@ -730,7 +730,7 @@ async def send_test_email(campaign_id: str, request: TestEmailRequest, tenant_id
         try:
             import json
             from services.compile_service import compile_design_json
-            body_html = compile_design_json(json.loads(body_html), template_id=campaign_id)
+            body_html = compile_design_json(json.loads(body_html))
         except Exception:
             pass
 

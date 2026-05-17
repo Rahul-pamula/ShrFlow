@@ -127,7 +127,7 @@ export default function SignupPage() {
                             label="First name"
                             value={formData.first_name}
                             onChange={handleChange}
-                            placeholder="Jane"
+                            placeholder="Sri"
                             icon={<User className="h-4 w-4" />}
                             className="border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                         />
@@ -137,7 +137,7 @@ export default function SignupPage() {
                             label="Last name"
                             value={formData.last_name}
                             onChange={handleChange}
-                            placeholder="Smith"
+                            placeholder="Krishna"
                             className="border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                         />
                     </div>
@@ -151,7 +151,7 @@ export default function SignupPage() {
                             label="Company or workspace name"
                             value={formData.tenant_name}
                             onChange={handleChange}
-                            placeholder="Acme Corp"
+                            placeholder="Dwaraka Corp"
                             icon={<Building2 className="h-4 w-4" />}
                             className="border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                         />
@@ -165,7 +165,7 @@ export default function SignupPage() {
                         label="Work email"
                         value={formData.email}
                         onChange={handleChange}
-                        placeholder="jane@acme.com"
+                        placeholder="krishna@dwaraka.in"
                         icon={<Mail className="h-4 w-4" />}
                         className="border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                     />
