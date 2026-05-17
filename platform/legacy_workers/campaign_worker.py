@@ -14,7 +14,7 @@ logger = logging.getLogger("CampaignWorker")
 def process_spintax(text: str) -> str:
     """Process Spintax: {Hello|Hi|Hey} -> randomly picks one"""
     if not text: return ""
-    pattern = r'\{([^{}]+)\}'
+    pattern = r"(?<!\{)\{([^{}]+)\}(?!\})"
     def replace_spintax(match):
         options = match.group(1).split('|')
         return random.choice(options)
@@ -59,51 +59,44 @@ def process_merge_tags(text: str, contact: dict) -> str:
         # Strip all HTML tags inside the curly braces
         clean_inner = re.sub(r"<[^>]+>", "", inner)
         
-        # Normalize whitespace (replace newlines and multiple spaces with a single space, then strip)
+        # Normalize whitespace
         clean_inner = " ".join(clean_inner.split())
         
         if not clean_inner:
             return ""
             
-        # Parse fallback if any
+        # Parse static fallback if any
         parts = clean_inner.split("|", 1)
-        tag_name = parts[0].strip().lower()
-        fallback_value = parts[1].strip() if len(parts) > 1 else None
+        dynamic_chain_str = parts[0]
+        static_fallback = parts[1].strip() if len(parts) > 1 else None
         
-        # Original value in raw contact
-        orig_val = contact.get(tag_name)
-        orig_val_str = str(orig_val).strip() if orig_val is not None else ""
+        # Parse dynamic candidates (e.g. first_name || full_name)
+        candidates = [c.strip().lower() for c in dynamic_chain_str.split("||")]
         
-        # Standard enrichment fields
-        standard_fields = {"first_name", "last_name", "full_name"}
-        
-        if tag_name in standard_fields:
-            # Check if original value was blank
-            if tag_name == "full_name":
-                orig_has_value = bool(first_str or last_str)
-            else:
-                orig_has_value = bool(orig_val_str)
+        for candidate in candidates:
+            if not candidate:
+                continue
                 
-            if not orig_has_value:
-                if fallback_value is not None:
-                    return fallback_value
-                return str(enriched_contact[tag_name])
-            else:
-                if tag_name == "full_name":
-                    return f"{first_str} {last_str}".strip()
-                return orig_val_str
-                
-        # For non-standard but allowed fields present in contact
-        elif tag_name in enriched_contact:
-            if not orig_val_str:
-                if fallback_value is not None:
-                    return fallback_value
-                return ""
-            return orig_val_str
+            orig_val = contact.get(candidate)
+            orig_val_str = str(orig_val).strip() if orig_val is not None else ""
             
-        # For completely unknown fields
-        else:
-            return fallback_value if fallback_value is not None else ""
+            if candidate == "full_name":
+                if first_str or last_str:
+                    return f"{first_str} {last_str}".strip()
+            else:
+                if orig_val_str:
+                    return orig_val_str
+                    
+        # Exhausted all dynamic candidates without finding a valid string
+        if static_fallback is not None:
+            return static_fallback
+            
+        # If no static fallback was provided, use the default enrichment fallback of the PRIMARY candidate
+        primary_candidate = candidates[0] if candidates else ""
+        if primary_candidate in {"first_name", "last_name", "full_name"}:
+            return str(enriched_contact[primary_candidate])
+            
+        return ""
             
     return tag_pattern.sub(replace_tag, text)
 
