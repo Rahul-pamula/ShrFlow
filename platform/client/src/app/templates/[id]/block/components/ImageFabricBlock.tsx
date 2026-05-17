@@ -36,6 +36,10 @@ export const ImageFabricBlock = ({ block, isSelected, onUpdate }: ImageFabricBlo
 
                 if (!existingImg) {
                     fabric.Image.fromURL(src, (img) => {
+                        if (!img || img.isError) {
+                            console.error("Failed to load image:", src);
+                            return;
+                        }
                         img.set({
                             name: "main-image",
                             left: left,
@@ -45,7 +49,6 @@ export const ImageFabricBlock = ({ block, isSelected, onUpdate }: ImageFabricBlo
                             angle: angle,
                             selectable: true,
                             hasControls: true,
-                            crossOrigin: "anonymous",
                         });
                         
                         // Center if no position
@@ -56,7 +59,7 @@ export const ImageFabricBlock = ({ block, isSelected, onUpdate }: ImageFabricBlo
                         canvas.add(img);
                         if (isSelected) canvas.setActiveObject(img);
                         canvas.renderAll();
-                    }, { crossOrigin: "anonymous" });
+                    });
                 } else {
                     // Sync props if changed from outside (e.g. Inspector)
                     if (existingImg.getSrc() !== src) {

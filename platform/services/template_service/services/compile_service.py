@@ -30,12 +30,21 @@ def _render_text(props: Dict[str, Any]) -> str:
     align = props.get("align", "left")
     font_size = props.get("fontSize", 16)
     color = props.get("color", "#000000")
+    line_height = props.get("lineHeight")
+    letter_spacing = props.get("letterSpacing")
+    font_weight = props.get("fontWeight")
+    
+    # Optional attributes
+    lh_attr = f'line-height="{line_height}" ' if line_height else ""
+    ls_attr = f'letter-spacing="{letter_spacing}px" ' if letter_spacing else ""
+    fw_attr = f'font-weight="{font_weight}" ' if font_weight else ""
+    
     bold_open = "<b>" if props.get("bold") else ""
     bold_close = "</b>" if props.get("bold") else ""
     content = props.get("content", props.get("html", ""))
     return (
         f'<mj-text align="{align}" font-size="{font_size}px" color="{_esc(color)}" '
-        f'padding="10px 0px">'
+        f'{lh_attr}{ls_attr}{fw_attr}padding="10px 0px">'
         f'{bold_open}{content}{bold_close}'
         f'</mj-text>'
     )
@@ -45,10 +54,22 @@ def _render_image(props: Dict[str, Any]) -> str:
     src = _esc(props.get("src", props.get("url", "")))
     alt = _esc(props.get("alt", "Image"))
     width = props.get("width", "")
-    width_attr = f'width="{width}px"' if width and str(width) != "100%" else ""
+    fluid = "true" if props.get("fluidOnMobile", True) else "false"
+    
+    # Sanitize width: force numeric or percentage
+    width_val = str(width).lower()
+    if not width_val or width_val in ["auto", "fit-content"]:
+        width_attr = ""
+    else:
+        # If numeric, add px
+        if width_val.isdigit():
+            width_attr = f'width="{width_val}px"'
+        else:
+            width_attr = f'width="{width_val}"'
+
     return (
         f'<mj-image align="{align}" src="{src}" alt="{alt}" {width_attr} '
-        f'padding="10px 0px" />'
+        f'fluid-on-mobile="{fluid}" padding="10px 0px" />'
     )
 
 def _render_button(props: Dict[str, Any]) -> str:
@@ -222,26 +243,63 @@ BLOCK_RENDERERS: Dict[str, Any] = {
 }
 
 def render_block(block: Dict[str, Any]) -> str:
+    # Used only for isolated blocks or fallback. render_zone handles grouping.
     b_type = block.get("type", "")
     props = block.get("props", {})
     renderer = BLOCK_RENDERERS.get(b_type)
     if not renderer:
         return ""
-    mjml_content = renderer(props)
-    return (
-        f'<mj-section padding="0px">\n'
-        f'  <mj-column width="100%">\n'
-        f'    {mjml_content}\n'
-        f'  </mj-column>\n'
-        f'</mj-section>'
-    )
+    return renderer(props)
 
-def render_zone(blocks: List[Dict[str, Any]], zone_name: str) -> str:
+def render_zone(blocks: List[Dict[str, Any]], zone_name: str, bg_color: str, padding: int = 0) -> str:
     if not blocks:
         return ""
+    
     parts = [f'<!-- {zone_name.upper()} ZONE -->']
+    parts.append(f'<mj-wrapper background-color="{_esc(bg_color)}" padding="{padding}px 0px">')
+    
+    standard_blocks = []
+    
+    def flush():
+        if standard_blocks:
+            content = "\n    ".join(standard_blocks)
+            parts.append(
+                f'  <mj-section padding="0px">\n'
+                f'    <mj-column width="100%">\n'
+                f'      {content}\n'
+                f'    </mj-column>\n'
+                f'  </mj-section>'
+            )
+            standard_blocks.clear()
+
     for b in blocks:
-        parts.append(render_block(b))
+        b_type = b.get("type", "")
+        props = b.get("props", {})
+        renderer = BLOCK_RENDERERS.get(b_type)
+        if not renderer:
+            continue
+        
+        mjml_content = renderer(props)
+        hide_on_mobile = props.get("hideOnMobile")
+        
+        if b_type == "layout" or hide_on_mobile:
+            flush()
+            if b_type == "layout":
+                parts.append(mjml_content)
+            else:
+                css_class = ' css-class="hide-on-mobile"' if hide_on_mobile else ""
+                parts.append(
+                    f'  <mj-section padding="0px"{css_class}>\n'
+                    f'    <mj-column width="100%">\n'
+                    f'      {mjml_content}\n'
+                    f'    </mj-column>\n'
+                    f'  </mj-section>'
+                )
+        else:
+            standard_blocks.append(mjml_content)
+            
+    flush()
+    parts.append("</mj-wrapper>")
     return "\n".join(parts)
 
 def render_design(design_json: Dict[str, Any]) -> str:
@@ -249,9 +307,17 @@ def render_design(design_json: Dict[str, Any]) -> str:
     bg = theme.get("background", "#f3f4f6")
     width = theme.get("contentWidth", 600)
     font = _esc(theme.get("fontFamily", "Arial, sans-serif"))
-    header_mjml = render_zone(design_json.get("headerBlocks", []), "header")
-    body_mjml = render_zone(design_json.get("bodyBlocks", []), "body")
-    footer_mjml = render_zone(design_json.get("footerBlocks", []), "footer")
+    
+    header_bg = theme.get("headerBackground", "#ffffff")
+    body_bg = theme.get("bodyBackground", "#ffffff")
+    footer_bg = theme.get("footerBackground", "#ffffff")
+    
+    header_padding = theme.get("headerPadding", 20)
+    footer_padding = theme.get("footerPadding", 20)
+    
+    header_mjml = render_zone(design_json.get("headerBlocks", []), "header", header_bg, header_padding)
+    body_mjml = render_zone(design_json.get("bodyBlocks", []), "body", body_bg, 0)
+    footer_mjml = render_zone(design_json.get("footerBlocks", []), "footer", footer_bg, footer_padding)
 
     return f"""<mjml>
   <mj-head>
@@ -261,6 +327,11 @@ def render_design(design_json: Dict[str, Any]) -> str:
       <mj-button border-radius="{theme.get('borderRadius', 8)}px" />
       <mj-image padding="0px" border-radius="{theme.get('borderRadius', 0)}px" />
     </mj-attributes>
+    <mj-style>
+      @media only screen and (max-width:480px) {{
+        .hide-on-mobile {{ display: none !important; }}
+      }}
+    </mj-style>
   </mj-head>
   <mj-body background-color="{_esc(bg)}" width="{width}px">
 {header_mjml}

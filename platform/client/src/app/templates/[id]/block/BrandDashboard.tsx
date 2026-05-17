@@ -91,17 +91,38 @@ export const BrandDashboard = ({
         setBrandKits(prev => prev.map(b => b.id === activeBrandId ? updater(b) : b));
     };
 
-    const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const url = e.target?.result as string;
+        const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const token = localStorage.getItem("token");
+        
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const res = await fetch(`${API}/assets/upload`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${token}`
+                },
+                body: formData,
+            });
+            
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                let detail = errorData.detail || "Upload failed";
+                throw new Error(detail);
+            }
+            
+            const data = await res.json();
+            const fullUrl = data.url.startsWith("http") ? data.url : `${API}${data.url}`;
+
             const newAsset: BrandAsset = {
                 id: uid(),
                 name: file.name.split('.')[0],
-                url: url,
+                url: fullUrl,
                 type: "image",
                 variant: "primary",
                 suggestedFor: ["body"]
@@ -110,8 +131,10 @@ export const BrandDashboard = ({
                 ...b,
                 assets: [newAsset, ...b.assets]
             }));
-        };
-        reader.readAsDataURL(file);
+        } catch (e) {
+            console.error("Upload failed", e);
+            alert("Failed to upload image.");
+        }
     };
 
     const addColor = (group: "Primary" | "Secondary" | "Accent", hex: string = "#000000") => {

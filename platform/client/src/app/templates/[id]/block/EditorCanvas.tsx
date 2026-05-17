@@ -320,14 +320,37 @@ function FloatingToolbar({ block, onUpdate, position, onDuplicate, onDelete }: {
                         const input = document.createElement("input");
                         input.type = "file";
                         input.accept = "image/*";
-                        input.onchange = (e: any) => {
+                        input.onchange = async (e: any) => {
                             const file = e.target.files[0];
                             if (file) {
-                                // For now, we'll just log or set a placeholder.
-                                // In a real app, this would upload to S3/Supabase.
-                                const reader = new FileReader();
-                                reader.onload = (rev: any) => onUpdate("src", rev.target.result);
-                                reader.readAsDataURL(file);
+                                const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+                                const token = localStorage.getItem("token");
+                                
+                                const formData = new FormData();
+                                formData.append("file", file);
+
+                                try {
+                                    const res = await fetch(`${API}/assets/upload`, {
+                                        method: "POST",
+                                        headers: {
+                                            "Authorization": `Bearer ${token}`
+                                        },
+                                        body: formData,
+                                    });
+                                    
+                                    if (!res.ok) {
+                                        const errorData = await res.json().catch(() => ({}));
+                                        let detail = errorData.detail || "Upload failed";
+                                        throw new Error(detail);
+                                    }
+                                    
+                                    const data = await res.json();
+                                    const fullUrl = data.url.startsWith("http") ? data.url : `${API}${data.url}`;
+                                    onUpdate("src", fullUrl);
+                                } catch (err) {
+                                    console.error("Upload failed", err);
+                                    alert("Failed to upload image.");
+                                }
                             }
                         };
                         input.click();

@@ -40,12 +40,21 @@ def _render_text(props: Dict[str, Any]) -> str:
     align = props.get("align", "left")
     font_size = props.get("fontSize", 16)
     color = props.get("color", "#000000")
+    line_height = props.get("lineHeight")
+    letter_spacing = props.get("letterSpacing")
+    font_weight = props.get("fontWeight")
+    
+    # Optional attributes
+    lh_attr = f'line-height="{line_height}" ' if line_height else ""
+    ls_attr = f'letter-spacing="{letter_spacing}px" ' if letter_spacing else ""
+    fw_attr = f'font-weight="{font_weight}" ' if font_weight else ""
+    
     bold_open = "<b>" if props.get("bold") else ""
     bold_close = "</b>" if props.get("bold") else ""
     content = props.get("content", props.get("html", ""))
     return (
         f'<mj-text align="{align}" font-size="{font_size}px" color="{_esc(color)}" '
-        f'padding="10px 0px">'
+        f'{lh_attr}{ls_attr}{fw_attr}padding="10px 0px">'
         f'{bold_open}{content}{bold_close}'
         f'</mj-text>'
     )
@@ -55,22 +64,11 @@ def _render_image(props: Dict[str, Any]) -> str:
     align = props.get("align", "center")
     src = _esc(props.get("src", props.get("url", "")))
     alt = _esc(props.get("alt", "Image"))
-    width = props.get("width", "")
-    
-    # Sanitize width: force numeric or percentage
-    width_val = str(width).lower()
-    if not width_val or width_val in ["auto", "fit-content"]:
-        width_attr = ""
-    else:
-        # If numeric, add px
-        if width_val.isdigit():
-            width_attr = f'width="{width_val}px"'
-        else:
-            width_attr = f'width="{width_val}"'
 
+    # Force 100% width inheritance from the parent column and section grid.
     return (
-        f'<mj-image align="{align}" src="{src}" alt="{alt}" {width_attr} '
-        f'padding="10px 0px" />'
+        f'<mj-image align="{align}" src="{src}" alt="{alt}" width="100%" '
+        f'fluid-on-mobile="true" padding="0" />'
     )
 
 
@@ -262,39 +260,66 @@ BLOCK_RENDERERS: Dict[str, Any] = {
 # ---------------------------------------------------------------------------
 
 def render_block(block: Dict[str, Any]) -> str:
-    """Renders a block into a complete MJML section/component."""
+    """Renders a block. render_zone handles grouping standard blocks."""
     b_type = block.get("type", "")
     props = block.get("props", {})
     renderer = BLOCK_RENDERERS.get(b_type)
     if not renderer:
         return ""
-    
-    mjml_content = renderer(props)
-    
-    # Special case: layout blocks manage their own mj-section
-    if b_type == "layout":
-        return mjml_content
-
-    # Standard blocks get wrapped in a section/column
-    css_class = ' css-class="hide-on-mobile"' if props.get("hideOnMobile") else ""
-    return (
-        f'<mj-section padding="0px"{css_class}>\n'
-        f'  <mj-column width="100%">\n'
-        f'    {mjml_content}\n'
-        f'  </mj-column>\n'
-        f'</mj-section>'
-    )
+    return renderer(props)
 
 
-def render_zone(blocks: List[Dict[str, Any]], zone_name: str) -> str:
-    """Renders all blocks in a zone and joins them."""
+def render_zone(blocks: List[Dict[str, Any]], zone_name: str, bg_color: str, padding: int = 0) -> str:
+    """Renders all blocks in a zone, grouped into sections for efficiency."""
     if not blocks:
         return ""
     
     parts = [f'<!-- {zone_name.upper()} ZONE -->']
-    for b in blocks:
-        parts.append(render_block(b))
+    parts.append(f'<mj-wrapper background-color="{_esc(bg_color)}" padding="{padding}px 0px">')
     
+    standard_blocks = []
+    
+    def flush():
+        if standard_blocks:
+            content = "\n    ".join(standard_blocks)
+            parts.append(
+                f'  <mj-section padding="0px 24px">\n'
+                f'    <mj-column width="100%">\n'
+                f'      {content}\n'
+                f'    </mj-column>\n'
+                f'  </mj-section>'
+            )
+            standard_blocks.clear()
+
+    for b in blocks:
+        b_type = b.get("type", "")
+        props = b.get("props", {})
+        renderer = BLOCK_RENDERERS.get(b_type)
+        if not renderer:
+            continue
+        
+        mjml_content = renderer(props)
+        hide_on_mobile = props.get("hideOnMobile")
+        
+        # layout returns its own mj-section, so flush standard blocks
+        if b_type == "layout" or hide_on_mobile:
+            flush()
+            if b_type == "layout":
+                parts.append(mjml_content)
+            else:
+                css_class = ' css-class="hide-on-mobile"' if hide_on_mobile else ""
+                parts.append(
+                    f'  <mj-section padding="0px 24px"{css_class}>\n'
+                    f'    <mj-column width="100%">\n'
+                    f'      {mjml_content}\n'
+                    f'    </mj-column>\n'
+                    f'  </mj-section>'
+                )
+        else:
+            standard_blocks.append(mjml_content)
+            
+    flush()
+    parts.append("</mj-wrapper>")
     return "\n".join(parts)
 
 
@@ -304,11 +329,18 @@ def render_design(design_json: Dict[str, Any]) -> str:
     bg = theme.get("background", "#f3f4f6")
     width = theme.get("contentWidth", 600)
     font = _esc(theme.get("fontFamily", "Arial, sans-serif"))
+    
+    header_bg = theme.get("headerBackground", "#ffffff")
+    body_bg = theme.get("bodyBackground", "#ffffff")
+    footer_bg = theme.get("footerBackground", "#ffffff")
+    
+    header_padding = theme.get("headerPadding", 20)
+    footer_padding = theme.get("footerPadding", 20)
 
     # Render each zone
-    header_mjml = render_zone(design_json.get("headerBlocks", []), "header")
-    body_mjml = render_zone(design_json.get("bodyBlocks", []), "body")
-    footer_mjml = render_zone(design_json.get("footerBlocks", []), "footer")
+    header_mjml = render_zone(design_json.get("headerBlocks", []), "header", header_bg, header_padding)
+    body_mjml = render_zone(design_json.get("bodyBlocks", []), "body", body_bg, 0)
+    footer_mjml = render_zone(design_json.get("footerBlocks", []), "footer", footer_bg, footer_padding)
 
     return f"""<mjml>
   <mj-head>

@@ -9,6 +9,502 @@ export interface TemplatePreset {
 }
 
 export const TEMPLATE_PRESETS: TemplatePreset[] = [
+    // ── FlowBoard Minimal SaaS Newsletter (Prepended) ──────────────────
+    {
+        id: "minimal-saas-newsletter",
+        name: "Release Notes",
+        description: "Minimal SaaS Newsletter for FlowBoard. Clean layout, typography focus.",
+        thumbnail: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=800&q=80",
+        design: {
+            "rows": [],
+            "theme": {
+                "primaryColor": "#111827",
+                "paragraphColor": "#374151",
+                "borderRadius": 6,
+                "background": "#ffffff",
+                "contentWidth": 600,
+                "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                "headerBackground": "#ffffff",
+                "bodyBackground": "#ffffff",
+                "footerBackground": "#ffffff",
+                "headerPadding": 48,
+                "footerPadding": 48
+            },
+            "headerBlocks": [
+                {
+                    "id": "fb_hdr",
+                    "type": "text",
+                    "props": {
+                        "content": "FlowBoard",
+                        "fontSize": 16,
+                        "fontWeight": "600",
+                        "align": "left",
+                        "color": "#09090B",
+                        "letterSpacing": -0.3
+                    }
+                }
+            ],
+            "bodyBlocks": [
+                {
+                    "id": "fb_hero_img",
+                    "type": "image",
+                    "props": {
+                        "src": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1120&q=80",
+                        "alt": "Dashboard preview",
+                        "borderRadius": 6,
+                        "align": "left",
+                        "width": "100%",
+                        "fluidOnMobile": true
+                    }
+                },
+                {
+                    "id": "fb_sp1", "type": "spacer", "props": { "height": 48 }
+                },
+                {
+                    "id": "fb_label", "type": "text", "props": {
+                        "content": "MAY 2026 &bull; UPDATE 2.14",
+                        "fontSize": 11,
+                        "fontWeight": "600",
+                        "color": "#71717A",
+                        "letterSpacing": 1.2,
+                        "align": "left"
+                    }
+                },
+                {
+                    "id": "fb_sp2", "type": "spacer", "props": { "height": 16 }
+                },
+                {
+                    "id": "fb_h1", "type": "text", "props": {
+                        "content": "Changelog: Issue Triage & GitHub Sync",
+                        "fontSize": 32,
+                        "fontWeight": "700",
+                        "color": "#09090B",
+                        "lineHeight": 1.15,
+                        "letterSpacing": -0.6,
+                        "align": "left"
+                    }
+                },
+                {
+                    "id": "fb_sp3", "type": "spacer", "props": { "height": 24 }
+                },
+                {
+                    "id": "fb_sub", "type": "text", "props": {
+                        "content": "We’ve overhauled the issue routing pipeline. By analyzing stack traces and PR descriptions, FlowBoard now automatically assigns incoming bugs to the correct engineering pod. Plus, we've shipped native bi-directional GitHub syncing.",
+                        "fontSize": 16,
+                        "color": "#52525B",
+                        "lineHeight": 1.7,
+                        "align": "left"
+                    }
+                },
+                {
+                    "id": "fb_sp4", "type": "spacer", "props": { "height": 32 }
+                },
+                {
+                    "id": "fb_cta", "type": "button", "props": {
+                        "text": "Read the full changelog",
+                        "url": "https://flowboard.com/changelog",
+                        "backgroundColor": "#09090B",
+                        "color": "#ffffff",
+                        "borderRadius": 6,
+                        "paddingV": 14,
+                        "paddingH": 28,
+                        "align": "left",
+                        "fontSize": 14,
+                        "fontWeight": "500"
+                    }
+                },
+                {
+                    "id": "fb_sp5", "type": "spacer", "props": { "height": 64 }
+                },
+                {
+                    "id": "fb_div1", "type": "divider", "props": { "thickness": 1, "color": "#E4E4E7" }
+                },
+                {
+                    "id": "fb_sp6", "type": "spacer", "props": { "height": 64 }
+                },
+                {
+                    "id": "fb_img_2", "type": "image", "props": {
+                        "src": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1120&q=80",
+                        "alt": "Analytics visualization showing team velocity",
+                        "borderRadius": 6,
+                        "align": "left",
+                        "width": "100%",
+                        "fluidOnMobile": true
+                    }
+                },
+                {
+                    "id": "fb_sp7", "type": "spacer", "props": { "height": 32 }
+                },
+                {
+                    "id": "fb_h2_2", "type": "text", "props": {
+                        "content": "DORA Metrics & Deploy Tracking",
+                        "fontSize": 22,
+                        "fontWeight": "600",
+                        "color": "#09090B",
+                        "lineHeight": 1.3,
+                        "letterSpacing": -0.2,
+                        "align": "left"
+                    }
+                },
+                {
+                    "id": "fb_sp8", "type": "spacer", "props": { "height": 12 }
+                },
+                {
+                    "id": "fb_feat_2", "type": "text", "props": {
+                        "content": "We've added native support for DORA metrics. You can now track deployment frequency, lead time for changes, and MTTR directly from the insights dashboard. Engineering managers can easily identify PR review bottlenecks before they block the release.",
+                        "fontSize": 16,
+                        "color": "#52525B",
+                        "lineHeight": 1.7,
+                        "align": "left"
+                    }
+                },
+                {
+                    "id": "fb_sp9", "type": "spacer", "props": { "height": 24 }
+                },
+                {
+                    "id": "fb_link_2", "type": "text", "props": {
+                        "content": "<a href='https://flowboard.com/docs/analytics' style='color:#09090B; text-decoration:none;'>Read the documentation &rarr;</a>",
+                        "fontSize": 14,
+                        "fontWeight": "500",
+                        "align": "left"
+                    }
+                }
+            ],
+            "footerBlocks": [
+                {
+                    "id": "fb_sp12", "type": "spacer", "props": { "height": 64 }
+                },
+                {
+                    "id": "fb_div2", "type": "divider", "props": { "thickness": 1, "color": "#E4E4E7" }
+                },
+                {
+                    "id": "fb_sp13", "type": "spacer", "props": { "height": 32 }
+                },
+                {
+                    "id": "fb_sign", "type": "text", "props": {
+                        "content": "Shipped by the FlowBoard Engineering Team",
+                        "fontSize": 14,
+                        "color": "#71717A",
+                        "align": "left",
+                        "lineHeight": 1.7
+                    }
+                },
+                {
+                    "id": "fb_sp14", "type": "spacer", "props": { "height": 24 }
+                },
+                {
+                    "id": "fb_address", "type": "text", "props": {
+                        "content": "Sent by FlowBoard, Inc. &nbsp;&bull;&nbsp; 382 NE 191st St, Miami, FL 33179",
+                        "fontSize": 12,
+                        "color": "#71717A",
+                        "align": "left",
+                        "lineHeight": 1.5
+                    }
+                },
+                {
+                    "id": "fb_sp15", "type": "spacer", "props": { "height": 8 }
+                },
+                {
+                    "id": "fb_unsub", "type": "text", "props": {
+                        "content": "You received this because you are subscribed to product updates. <a href='{{unsubscribe_url}}' style='color:#71717A; text-decoration:underline;' aria-label='Unsubscribe from newsletter'>Unsubscribe</a>",
+                        "fontSize": 12,
+                        "color": "#71717A",
+                        "align": "left",
+                        "lineHeight": 1.5
+                    }
+                }
+            ],
+            "settings": DEFAULT_SETTINGS
+        }
+    },
+    // ── Product Pulse ── PREMIUM SAAS TEMPLATE ──────────────────
+    {
+        id: "tpl_saas_newsletter_v1",
+        name: "Product Pulse",
+        description: "A calm, editorial product update email inspired by Linear, Stripe, and Vercel. Typography-first, generous whitespace, and built for SaaS teams.",
+        thumbnail: "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80",
+        design: {
+            "rows": [],
+            "theme": {
+                "primaryColor": "#6366f1",
+                "paragraphColor": "#374151",
+                "borderRadius": 8,
+                "background": "#f8fafc",
+                "contentWidth": 560,
+                "fontFamily": "Inter",
+                "headerBackground": "#ffffff",
+                "bodyBackground": "#ffffff",
+                "footerBackground": "#f8fafc",
+                "headerPadding": 44,
+                "footerPadding": 44
+            },
+            "headerBlocks": [
+                {
+                    "id": "saas_h1",
+                    "type": "text",
+                    "props": {
+                        "content": "Acme",
+                        "fontSize": 17,
+                        "fontWeight": "700",
+                        "align": "left",
+                        "color": "#18181b",
+                        "letterSpacing": -0.2
+                    }
+                }
+            ],
+            "bodyBlocks": [
+                {
+                    "id": "saas_divider_top",
+                    "type": "divider",
+                    "props": {
+                        "thickness": 1,
+                        "color": "#f0f0f0"
+                    }
+                },
+                {
+                    "id": "saas_spacer_1",
+                    "type": "spacer",
+                    "props": { "height": 64 }
+                },
+                {
+                    "id": "saas_tag",
+                    "type": "text",
+                    "props": {
+                        "content": "MAY 2025",
+                        "fontSize": 10,
+                        "fontWeight": "600",
+                        "align": "left",
+                        "color": "#6366f1",
+                        "letterSpacing": 2.5
+                    }
+                },
+                {
+                    "id": "saas_spacer_2",
+                    "type": "spacer",
+                    "props": { "height": 12 }
+                },
+                {
+                    "id": "saas_headline",
+                    "type": "text",
+                    "props": {
+                        "content": "Ship faster with your team.",
+                        "fontSize": 32,
+                        "fontWeight": "700",
+                        "align": "left",
+                        "color": "#111111",
+                        "lineHeight": 1.2,
+                        "letterSpacing": -0.6
+                    }
+                },
+                {
+                    "id": "saas_spacer_3",
+                    "type": "spacer",
+                    "props": { "height": 20 }
+                },
+                {
+                    "id": "saas_body_text",
+                    "type": "text",
+                    "props": {
+                        "content": "We've been heads-down on the things you've been asking for. This month: real-time collaboration, a redesigned sidebar, and keyboard shortcuts that actually feel fast. Here's what's live.",
+                        "fontSize": 15,
+                        "align": "left",
+                        "color": "#374151",
+                        "lineHeight": 1.65,
+                        "letterSpacing": 0
+                    }
+                },
+                {
+                    "id": "saas_spacer_pre_cta",
+                    "type": "spacer",
+                    "props": { "height": 36 }
+                },
+                {
+                    "id": "saas_cta",
+                    "type": "button",
+                    "props": {
+                        "text": "See what's new →",
+                        "backgroundColor": "#111111",
+                        "color": "#ffffff",
+                        "borderRadius": 6,
+                        "align": "left",
+                        "paddingV": 14,
+                        "paddingH": 32
+                    }
+                },
+                {
+                    "id": "saas_spacer_5",
+                    "type": "spacer",
+                    "props": { "height": 48 }
+                },
+                {
+                    "id": "saas_product_img",
+                    "type": "image",
+                    "props": {
+                        "src": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1120&q=80",
+                        "borderRadius": 10
+                    }
+                },
+                {
+                    "id": "saas_spacer_img",
+                    "type": "spacer",
+                    "props": { "height": 56 }
+                },
+                {
+                    "id": "saas_divider_mid",
+                    "type": "divider",
+                    "props": {
+                        "thickness": 1,
+                        "color": "#f0f0f0"
+                    }
+                },
+                {
+                    "id": "saas_spacer_6",
+                    "type": "spacer",
+                    "props": { "height": 44 }
+                },
+                {
+                    "id": "saas_feature_label",
+                    "type": "text",
+                    "props": {
+                        "content": "IN THIS UPDATE",
+                        "fontSize": 10,
+                        "fontWeight": "600",
+                        "align": "left",
+                        "color": "#b0b7c3",
+                        "letterSpacing": 2.5
+                    }
+                },
+                {
+                    "id": "saas_spacer_7",
+                    "type": "spacer",
+                    "props": { "height": 32 }
+                },
+                {
+                    "id": "saas_feature_1_title",
+                    "type": "text",
+                    "props": {
+                        "content": "Real-time collaboration",
+                        "fontSize": 16,
+                        "fontWeight": "600",
+                        "align": "left",
+                        "color": "#111111",
+                        "lineHeight": 1.4
+                    }
+                },
+                {
+                    "id": "saas_feature_1_spacer",
+                    "type": "spacer",
+                    "props": { "height": 8 }
+                },
+                {
+                    "id": "saas_feature_1_body",
+                    "type": "text",
+                    "props": {
+                        "content": "See your teammates' cursors, edits, and comments as they happen. No refreshing, no conflicts — just your team working together in the same place.",
+                        "fontSize": 15,
+                        "align": "left",
+                        "color": "#52586a",
+                        "lineHeight": 1.65
+                    }
+                },
+                {
+                    "id": "saas_spacer_8",
+                    "type": "spacer",
+                    "props": { "height": 32 }
+                },
+                {
+                    "id": "saas_feature_sep",
+                    "type": "divider",
+                    "props": {
+                        "thickness": 1,
+                        "color": "#f4f4f5"
+                    }
+                },
+                {
+                    "id": "saas_spacer_8b",
+                    "type": "spacer",
+                    "props": { "height": 32 }
+                },
+                {
+                    "id": "saas_feature_2_title",
+                    "type": "text",
+                    "props": {
+                        "content": "A sidebar that stays out of your way",
+                        "fontSize": 16,
+                        "fontWeight": "600",
+                        "align": "left",
+                        "color": "#111111",
+                        "lineHeight": 1.4
+                    }
+                },
+                {
+                    "id": "saas_feature_2_spacer",
+                    "type": "spacer",
+                    "props": { "height": 8 }
+                },
+                {
+                    "id": "saas_feature_2_body",
+                    "type": "text",
+                    "props": {
+                        "content": "We rebuilt navigation from scratch. Projects, teammates, settings — everything is where you'd expect it. And it collapses cleanly when you just need to focus.",
+                        "fontSize": 15,
+                        "align": "left",
+                        "color": "#52586a",
+                        "lineHeight": 1.65
+                    }
+                },
+                {
+                    "id": "saas_spacer_9",
+                    "type": "spacer",
+                    "props": { "height": 56 }
+                },
+                {
+                    "id": "saas_divider_bottom",
+                    "type": "divider",
+                    "props": {
+                        "thickness": 1,
+                        "color": "#f0f0f0"
+                    }
+                }
+            ],
+            "footerBlocks": [
+                {
+                    "id": "saas_footer_spacer_top",
+                    "type": "spacer",
+                    "props": { "height": 24 }
+                },
+                {
+                    "id": "saas_footer_text",
+                    "type": "text",
+                    "props": {
+                        "content": "You're receiving this because you signed up for product updates from Acme.",
+                        "fontSize": 12,
+                        "align": "center",
+                        "color": "#6b7280",
+                        "lineHeight": 1.65
+                    }
+                },
+                {
+                    "id": "saas_footer_spacer_mid",
+                    "type": "spacer",
+                    "props": { "height": 10 }
+                },
+                {
+                    "id": "saas_footer_links",
+                    "type": "text",
+                    "props": {
+                        "content": "Unsubscribe · View in browser · Acme, Inc. · 340 Pine Street, San Francisco CA 94104",
+                        "fontSize": 11,
+                        "align": "center",
+                        "color": "#9ca3af",
+                        "lineHeight": 1.6
+                    }
+                }
+            ],
+            "settings": DEFAULT_SETTINGS
+        }
+    },
+    // ── End of Product Pulse ──────────────────────────────────────────────────
     {
         id: "tpl_kn14pla1",
         name: "Back in Stock 1",

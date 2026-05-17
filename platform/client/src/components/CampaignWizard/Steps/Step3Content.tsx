@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { LayoutTemplate, PenLine, Check, Search, Loader2, X, Paperclip, Upload } from "lucide-react";
+import { LayoutTemplate, PenLine, Check, Search, Loader2, X, Paperclip, Upload, FileText } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button, FilterBar, Input, SectionCard } from "@/components/ui";
 
@@ -21,6 +21,50 @@ const MODES = [
         description: "Pick a saved design from your template library.",
     },
 ];
+const TemplatePreview = ({ html, name, theme }: { html: string, name: string, theme?: any }) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [scale, setScale] = useState(0.26);
+    const [loaded, setLoaded] = useState(false);
+
+    useEffect(() => {
+        if (!containerRef.current) return;
+        const updateScale = () => {
+            const width = containerRef.current?.offsetWidth || 160;
+            setScale(width / 600);
+        };
+        updateScale();
+        const observer = new ResizeObserver(updateScale);
+        observer.observe(containerRef.current);
+        return () => observer.disconnect();
+    }, []);
+
+    return (
+        <div ref={containerRef} className="h-full w-full relative overflow-hidden flex justify-center transition-all duration-700" style={{ background: theme?.background || "#fff", opacity: loaded ? 1 : 0.6 }}>
+            {html ? (
+                <div style={{
+                    width: "600px",
+                    height: `${containerRef.current?.offsetHeight ? containerRef.current.offsetHeight / scale : 800}px`, 
+                    transform: `scale(${scale})`,
+                    transformOrigin: "top center",
+                    pointerEvents: "none",
+                    position: "absolute",
+                    top: 0,
+                }}>
+                    <iframe 
+                        srcDoc={html} 
+                        onLoad={() => setLoaded(true)}
+                        title={`Preview ${name}`}
+                        style={{ width: "100%", height: "100%", border: "none" }}
+                    />
+                </div>
+            ) : (
+                <div className="h-full w-full bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-muted)]">
+                    <FileText size={48} strokeWidth={1} className="opacity-10" />
+                </div>
+            )}
+        </div>
+    );
+};
 
 export default function Step3Content({ data, updateData, onNext, onBack }: any) {
     const { token } = useAuth();
@@ -36,9 +80,12 @@ export default function Step3Content({ data, updateData, onNext, onBack }: any) 
         if (mode !== "template" || !token) return;
         setLoadingTemplates(true);
         const API_BASE = process.env.NEXT_PUBLIC_API_URL;
-        fetch(`${API_BASE}/templates/`, { headers: { Authorization: `Bearer ${token}` } })
+        fetch(`${API_BASE}/templates?page=1&limit=50`, { headers: { Authorization: `Bearer ${token}` } })
             .then((r) => (r.ok ? r.json() : { data: [] }))
-            .then((json) => setTemplates(Array.isArray(json.data) ? json.data : []))
+            .then((json) => {
+                const fetchedTemplates = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
+                setTemplates(fetchedTemplates);
+            })
             .catch(() => setTemplates([]))
             .finally(() => setLoadingTemplates(false));
     }, [mode, token]);
@@ -229,10 +276,10 @@ export default function Step3Content({ data, updateData, onNext, onBack }: any) 
                                                 : "border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--text-muted)]"
                                         }`}
                                     >
-                                        <div className="flex aspect-[16/9] items-center justify-center bg-black/40">
-                                            <LayoutTemplate className="h-5 w-5 text-[var(--text-muted)]" />
+                                        <div className="flex aspect-[16/9] items-center justify-center bg-black/40 overflow-hidden relative">
+                                            <TemplatePreview html={t.compiled_html} name={t.name} theme={t.design_json?.theme} />
                                             {isSelected && (
-                                                <div className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)] text-white">
+                                                <div className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)] text-white z-10">
                                                     <Check className="h-2.5 w-2.5" />
                                                 </div>
                                             )}
