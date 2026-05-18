@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Bell, ChevronDown, Lock, LogOut, Settings, User } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
-import { UserAvatar } from '@/components/ui';
+import { UserAvatar, Logo } from '@/components/ui';
 
 interface AccountShellProps {
     children: React.ReactNode;
@@ -36,11 +36,9 @@ export default function AccountShell({ children }: AccountShellProps) {
                 <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between px-6">
                     {/* Left side: Logo + Breadcrumb */}
                     <div className="flex items-center gap-4">
-                        <div className="w-8 h-8 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg flex items-center justify-center shadow-sm">
-                            <div className="w-4 h-4 border-2 border-[var(--accent)] rounded-sm" />
-                        </div>
+                        <Logo className="w-8 h-auto" />
                         <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-[var(--accent)]">ShrFlow</span>
+                            <span className="text-sm font-semibold text-[var(--text-primary)]">ShrFlow</span>
                             <span className="text-sm font-medium text-[var(--text-muted)]">/</span>
                             <span className="text-sm font-medium text-[var(--text-primary)]">Account Center</span>
                         </div>

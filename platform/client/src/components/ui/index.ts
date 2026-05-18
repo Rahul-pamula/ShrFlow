@@ -12,6 +12,7 @@ export { LoadingSpinner, PageLoader } from './LoadingSpinner';
 export { Input } from './Input';
 export { Card } from './Card';
 export { UserAvatar } from './UserAvatar';
+export { Logo } from './Logo';
 
 /**
  * MOLECULES — Combined atoms

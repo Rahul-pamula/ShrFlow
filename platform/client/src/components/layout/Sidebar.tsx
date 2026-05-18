@@ -10,6 +10,7 @@ import {
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { can, Action } from '@/utils/permissions';
+import { Logo } from '@/components/ui';
 
 /* ============================================================
    SIDEBAR — Main application sidebar
@@ -77,10 +78,8 @@ export default function Sidebar({ mobileMenuOpen, setMobileMenuOpen }: SidebarPr
                 {/* Logo */}
                 <div className="h-[64px] shrink-0 flex items-center justify-between px-4 border-b border-[var(--border)]">
                     {!collapsed && (
-                        <div className="flex items-center gap-3">
-                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[var(--accent)] to-[var(--ai-accent)] flex items-center justify-center shadow-lg shadow-[var(--accent)]/20">
-                                <Mail className="w-3.5 h-3.5 text-white" />
-                            </div>
+                        <div className="flex items-center gap-2 px-1">
+                            <Logo className="w-8 h-auto" />
                             <span className="heading-3">
                                 ShrFlow
                             </span>
@@ -88,9 +87,7 @@ export default function Sidebar({ mobileMenuOpen, setMobileMenuOpen }: SidebarPr
                     )}
                     {collapsed && (
                         <div className="w-full flex justify-center">
-                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[var(--accent)] to-[var(--ai-accent)] flex items-center justify-center shadow-lg shadow-[var(--accent)]/20">
-                                <Mail className="w-3.5 h-3.5 text-white" />
-                            </div>
+                            <Logo className="w-8 h-auto" />
                         </div>
                     )}
                     {!collapsed && (

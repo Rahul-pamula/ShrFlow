@@ -14,6 +14,7 @@ import {
   Workflow,
   Zap,
 } from 'lucide-react';
+import { Logo } from '@/components/ui';
 
 const integrations = ['Node.js', 'Python', 'React', 'Shopify', 'Stripe', 'Segment', 'Next.js', 'Webhook'];
 
@@ -173,10 +174,8 @@ export default function LandingPage() {
         }`}
       >
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-3">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--accent-gradient)] text-white shadow-[var(--shadow-lg)]">
-              <Mail className="h-5 w-5" />
-            </span>
+          <Link href="/" className="flex items-center gap-2">
+            <Logo className="h-8 w-auto" />
             <span className="text-base font-semibold tracking-tight text-[var(--text-primary)]">ShrFlow</span>
           </Link>
 
@@ -412,10 +411,8 @@ export default function LandingPage() {
       <footer className="relative z-10 border-t border-[var(--border)] bg-[var(--bg-card)]/85 py-16 backdrop-blur-sm">
         <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
           <div>
-            <div className="mb-5 flex items-center gap-3">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--accent-gradient)] text-white">
-                <Mail className="h-4 w-4" />
-              </span>
+            <div className="mb-5 flex items-center gap-2">
+              <Logo className="h-7 w-auto" />
               <span className="text-base font-semibold text-[var(--text-primary)]">ShrFlow</span>
             </div>
             <p className="text-sm leading-7 text-[var(--text-muted)]">

@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { ReactNode } from 'react';
-import { Mail } from 'lucide-react';
 
-import { SectionCard } from '@/components/ui';
+import { SectionCard, Logo } from '@/components/ui';
 
 interface AuthShellProps {
     title: string;
@@ -31,9 +30,7 @@ function AuthShell({
             <div className="relative z-10 mx-auto grid min-h-screen max-w-7xl items-center gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8">
                 <section className="hidden lg:block">
                     <div className="max-w-xl space-y-8">
-                        <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent)] text-white shadow-[var(--shadow-lg)]">
-                            <Mail className="h-7 w-7" />
-                        </div>
+                        <Logo className="h-12 w-auto" />
 
                         <div className="space-y-4">
                             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
@@ -69,10 +66,8 @@ function AuthShell({
                         className="border-[var(--border-strong)] bg-[var(--bg-card)] shadow-[var(--shadow-lg)]"
                     >
                         <div className="mb-8 text-center sm:text-left">
-                            <Link href="/" className="mb-6 inline-flex items-center gap-3 text-[var(--text-primary)]">
-                                <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--accent)] text-white shadow-[var(--shadow-md)]">
-                                    <Mail className="h-5 w-5" />
-                                </span>
+                            <Link href="/" className="mb-6 inline-flex items-center gap-2 text-[var(--text-primary)]">
+                                <Logo className="h-8 w-auto" />
                                 <span className="text-lg font-semibold tracking-tight">ShrFlow</span>
                             </Link>
                             <h2 className="text-3xl font-semibold tracking-tight text-[var(--text-primary)]">
